@@ -112,7 +112,7 @@ export interface RegistrationApplication {
   guardianName?: string;
   medicalClearance: boolean;
   category: ApplicantCategory;
-  subscriptionType: SubscriptionType;
+  subscriptionType: string;
   agreementName?: string;
   pool: string;
   photoUrl?: string;
@@ -180,6 +180,24 @@ export interface Agreement {
   status: 'نشطة' | 'منتهية';
   discountPct?: number;
   createdAt: string;
+}
+
+/** نوع اشتراك قابل للتكوين من لوحة تحكم المسير (الاسم + القيمة + المدة) */
+export interface SubscriptionTier {
+  id: string;
+  name: string;
+  periodLabel: string;
+  amount: number;
+}
+
+/** إعدادات الاشتراك والوصل التي يضبطها المسير/الرئيس */
+export interface ClubSettings {
+  season: string;
+  subscriptionTypes: SubscriptionTier[];
+  insuranceFee: number;
+  transportFee: number;
+  kitFee: number;
+  defaultDiscountPct: number;
 }
 
 export interface AttendanceRecord {

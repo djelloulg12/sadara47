@@ -5,6 +5,7 @@ import {
   Athlete,
   AttendanceRecord,
   ClubActivity,
+  ClubSettings,
   DisciplinaryCase,
   Gender,
   MembershipStatus,
@@ -18,6 +19,7 @@ import {
   UserRole,
 } from './types';
 import { calculateAge, getAgeCategory } from './utils/helpers';
+import { DEFAULT_CLUB_SETTINGS } from './constants';
 
 const KEYS = {
   athletes: 'sadara47_athletes',
@@ -34,6 +36,7 @@ const KEYS = {
   printData: 'sadara47_print_data',
   regOpen: 'sadara47_registration_open',
   seeded: 'sadara47_seeded_v1',
+  settings: 'sadara47_club_settings',
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -449,6 +452,24 @@ export const saveAgreements = (v: Agreement[]) => saveValue(KEYS.agreements, v);
 export const saveAttendance = (v: AttendanceRecord[]) => saveValue(KEYS.attendance, v);
 export const saveNotifications = (v: AppNotification[]) => saveValue(KEYS.notifications, v);
 
+export const getClubSettings = (): ClubSettings => {
+  const saved = load<Partial<ClubSettings>>(KEYS.settings, {});
+  return {
+    season: saved.season || DEFAULT_CLUB_SETTINGS.season,
+    subscriptionTypes:
+      Array.isArray(saved.subscriptionTypes) && saved.subscriptionTypes.length > 0
+        ? saved.subscriptionTypes
+        : DEFAULT_CLUB_SETTINGS.subscriptionTypes,
+    insuranceFee: typeof saved.insuranceFee === 'number' ? saved.insuranceFee : DEFAULT_CLUB_SETTINGS.insuranceFee,
+    transportFee: typeof saved.transportFee === 'number' ? saved.transportFee : DEFAULT_CLUB_SETTINGS.transportFee,
+    kitFee: typeof saved.kitFee === 'number' ? saved.kitFee : DEFAULT_CLUB_SETTINGS.kitFee,
+    defaultDiscountPct:
+      typeof saved.defaultDiscountPct === 'number' ? saved.defaultDiscountPct : DEFAULT_CLUB_SETTINGS.defaultDiscountPct,
+  };
+};
+
+export const saveClubSettings = (settings: ClubSettings): void => saveValue(KEYS.settings, settings);
+
 export interface PrintData {
   name: string;
   lastName: string;
@@ -467,6 +488,7 @@ export interface PrintData {
   swimStyle?: string[];
   category?: string;
   subscriptionType?: string;
+  subscriptionPeriod?: string;
   agreementName?: string;
   pool?: string;
   photoUrl?: string;
@@ -478,9 +500,16 @@ export interface PrintData {
   username?: string;
   password?: string;
   transport?: boolean;
+  kit?: boolean;
   discountPct?: number;
   receiptNumber?: string;
   paymentMethod?: string;
+  season?: string;
+  membershipNumber?: string;
+  subscriptionAmount?: number;
+  insuranceFee?: number;
+  transportFee?: number;
+  kitFee?: number;
 }
 
 export const setPrintData = (data: PrintData): void => saveValue(KEYS.printData, data);

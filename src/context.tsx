@@ -5,6 +5,7 @@ import {
   Athlete,
   AttendanceRecord,
   ClubActivity,
+  ClubSettings,
   DisciplinaryCase,
   PersonalRecord,
   RegistrationApplication,
@@ -20,6 +21,7 @@ import {
   saveApplications,
   saveAthletes,
   saveAttendance,
+  saveClubSettings,
   saveDisciplinary,
   saveNotifications,
   savePlans,
@@ -28,6 +30,7 @@ import {
   saveValue,
   getSession,
   getRegistrationOpen,
+  getClubSettings,
   setRegistrationOpenValue,
 } from './data';
 import { calculateAge, getAgeCategory, uid } from './utils/helpers';
@@ -149,6 +152,8 @@ interface DataContextType {
   attendance: AttendanceRecord[];
   notifications: AppNotification[];
   registrationOpen: boolean;
+  clubSettings: ClubSettings;
+  updateClubSettings: (settings: ClubSettings) => void;
   setRegistrationOpen: (open: boolean) => void;
   addAthlete: (data: Omit<Athlete, 'id' | 'age' | 'category'>) => Athlete;
   updateAthlete: (id: string, data: Partial<Athlete>) => void;
@@ -194,6 +199,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(initialState.attendance);
   const [notifications, setNotifications] = useState<AppNotification[]>(initialState.notifications);
   const [registrationOpen, setRegistrationOpenState] = useState<boolean>(() => getRegistrationOpen());
+  const [clubSettings, setClubSettings] = useState<ClubSettings>(() => getClubSettings());
 
   useEffect(() => saveAthletes(athletes), [athletes]);
   useEffect(() => savePlans(plans), [plans]);
@@ -208,6 +214,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const setRegistrationOpen = useCallback((open: boolean) => {
     setRegistrationOpenState(open);
     setRegistrationOpenValue(open);
+  }, []);
+
+  const updateClubSettings = useCallback((settings: ClubSettings) => {
+    setClubSettings(settings);
+    saveClubSettings(settings);
   }, []);
 
   const addAthlete = useCallback(
@@ -355,6 +366,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         attendance,
         notifications,
         registrationOpen,
+        clubSettings,
+        updateClubSettings,
         setRegistrationOpen,
         addAthlete,
         updateAthlete,

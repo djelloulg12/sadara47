@@ -379,149 +379,184 @@ export interface FeeBreakdown {
   base: number;
   insurance: number;
   transport: number;
+  kit: number;
+  gross: number;
   discountPct: number;
   discount: number;
   net: number;
 }
 
-/** احتساب تفصيل الحقوق: اشتراك أساسي + تأمين إجباري + نقل مشروط، ثم خصم الاتفاقية والمجموع الصافي */
+/** احتساب تفصيل الوصل: اشتراك عضوية (نوع مُكوَّن من لوحة المسير) + تأمين + نقل/بدلة عند التفعيل ثم خصم الاتفاقية */
 export function computeFees(d: PrintData): FeeBreakdown {
-  const base = (BASE_FEES[d.category as 'أصاغر' | 'أكابر']?.[d.pool ?? ''] as number | undefined) ?? 0;
-  const insurance = INSURANCE_FEE;
-  const transportFee = d.transport ? TRANSPORT_FEE : 0;
-  const discountPct = d.subscriptionType === 'ضمن اتفاقية معتمدة' ? (d.discountPct ?? DEFAULT_DISCOUNT_PCT) : 0;
-  const gross = base + insurance + transportFee;
+  const base =
+    typeof d.subscriptionAmount === 'number' && d.subscriptionAmount > 0
+      ? d.subscriptionAmount
+      : ((BASE_FEES[d.category as 'أصاغر' | 'أكابر']?.[d.pool ?? ''] as number | undefined) ?? 0);
+  const insurance = Number(d.insuranceFee ?? INSURANCE_FEE);
+  const transport = d.transport ? Number(d.transportFee ?? TRANSPORT_FEE) : 0;
+  const kit = d.kit ? Number(d.kitFee ?? 0) : 0;
+  const discountPct = /اتفاقية/.test(d.subscriptionType ?? '') ? (d.discountPct ?? DEFAULT_DISCOUNT_PCT) : 0;
+  const gross = base + insurance + transport + kit;
   const discount = Math.round(gross * discountPct * 0.01);
-  return { base, insurance, transport: transportFee, discountPct, discount, net: gross - discount };
+  return { base, insurance, transport, kit, gross, discountPct, discount, net: gross - discount };
 }
 
-/** تصيير قسيمة وصل حقوق الاشتراك والتأمين على ورقة A4 عمودية (مع رمز QR للمصادقة) */
+/** تصيير وصل حقوق الاشتراك والتأمين بتصميم النادي (رقم أخضر مؤطر + بيانات العضو + جدول الرسوم + المجموع الصافي) */
 export async function renderReceiptCanvas(d: PrintData): Promise<HTMLCanvasElement> {
   await document.fonts.ready;
-  const W = 794;
-  const H = 1123;
+  const W = 620;
+  const H = 880;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
   const fees = computeFees(d);
-  const ink = '#0F2440';
-  const gold = '#D4AF37';
-  const muted = '#6B7280';
-  const pct = (v: number, base = W) => (v / 100) * base;
 
-  const font = (size: number, weight = 700, unit = 1.4) => `${weight} ${Math.round(size * unit)}px Tajawal, Arial, sans-serif`;
-  const right = (text: string, xp: number, yp: number, size: number, color = ink, weight = 700, unit = 1.4) => {
-    ctx.font = font(size, weight, unit);
+  const navy = '#0f172a';
+  const slate = '#334155';
+  const muted = '#64748b';
+  const border = '#e2e8f0';
+  const green = '#16a34a';
+  const greenDark = '#15803d';
+  const greenBg = '#f0fdf4';
+  const boxBg = '#f8fafc';
+  const band = '#f1f5f9';
+
+  const font = (size: number, weight = 700) => `${weight} ${size}px Tajawal, Arial, sans-serif`;
+  const fmt = (v: number, suffix = true) => `${(v || 0).toLocaleString('fr-DZ')}${suffix ? ' دج' : ''}`;
+  const text = (t: string, x: number, y: number, size: number, color = navy, weight = 700, align: CanvasTextAlign = 'right') => {
+    ctx.font = font(size, weight);
     ctx.fillStyle = color;
-    ctx.textAlign = 'right';
+    ctx.textAlign = align;
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, pct(xp), pct(yp, H));
+    ctx.fillText(t, x, y);
   };
-  const left = (text: string, xp: number, yp: number, size: number, color = ink, weight = 700, unit = 1.4) => {
-    ctx.font = font(size, weight, unit);
-    ctx.fillStyle = color;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, pct(xp), pct(yp, H));
-  };
-  const center = (text: string, xp: number, yp: number, size: number, color = ink, weight = 700, unit = 1.4) => {
-    ctx.font = font(size, weight, unit);
-    ctx.fillStyle = color;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, pct(xp), pct(yp, H));
-  };
-  const line = (x1: number, y1: number, x2: number, y2: number, color = '#E5E7EB', width = 1.2) => {
+  const center = (t: string, y: number, size: number, color = navy, weight = 700) => text(t, W / 2, y, size, color, weight, 'center');
+  const right = (t: string, x: number, y: number, size: number, color = navy, weight = 700) => text(t, x, y, size, color, weight, 'right');
+  const left = (t: string, x: number, y: number, size: number, color = navy, weight = 700) => text(t, x, y, size, color, weight, 'left');
+  const cc = (t: string, x: number, y: number, size: number, color = navy, weight = 700) => text(t, x, y, size, color, weight, 'center');
+  const dashed = (y: number, color = border) => {
     ctx.strokeStyle = color;
-    ctx.lineWidth = width;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 6]);
     ctx.beginPath();
-    ctx.moveTo(pct(x1), pct(y1, H));
-    ctx.lineTo(pct(x2), pct(y2, H));
+    ctx.moveTo(40, y);
+    ctx.lineTo(W - 40, y);
     ctx.stroke();
+    ctx.setLineDash([]);
+  };
+  const rrect = (x: number, y: number, w: number, h: number, r: number, fill?: string, strokeW = 0, strokeColor = border) => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    if (fill) {
+      ctx.fillStyle = fill;
+      ctx.fill();
+    }
+    if (strokeW > 0) {
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = strokeW;
+      ctx.stroke();
+    }
   };
 
-  ctx.fillStyle = '#ffffff';
+  /* خلفية الصفحة وبطاقة الوصل */
+  ctx.fillStyle = '#f1f5f9';
   ctx.fillRect(0, 0, W, H);
+  rrect(16, 14, W - 32, H - 28, 18, '#ffffff', 1.5, border);
 
-  /* رأس القسيمة */
-  line(5, 14, 95, 14, gold, 4);
-  center('كشكول حقوق الاشتراك والتأمين السنوي', 50, 6.2, 23, ink, 800);
-  center('نادي الصدارة - Ghardaïa', 50, 9.2, 12, muted, 600);
-  center('رقم الوصل: ' + (d.receiptNumber || '—'), 50, 12.2, 11, ink, 700);
-  left('تاريخ الدفع: ' + new Date().toLocaleDateString('fr-DZ'), 6, 12.2, 10, muted, 600);
-  left('الساعة: ' + new Date().toLocaleTimeString('fr-DZ', { hour: '2-digit', minute: '2-digit' }), 30, 12.2, 10, muted, 600);
+  /* ترويسة النادي ورقم الوصل المؤطر بالأخضر */
+  center('نادي الصدارة الرياضي', 52, 26, navy, 800);
+  center('وصل سداد اشتراك / تجديد عضوية', 80, 14, muted, 600);
+  dashed(100);
+  const badgeText = 'رقم الوصل: ' + (d.receiptNumber || '—');
+  ctx.font = font(15, 700);
+  const tw = ctx.measureText(badgeText).width;
+  const bw = tw + 44;
+  const bh = 34;
+  const bx = (W - bw) / 2;
+  const by = 118;
+  rrect(bx, by, bw, bh, 20, greenBg, 2, green);
+  text(badgeText, W / 2, by + bh / 2, 15, greenDark, 700, 'center');
 
-  /* بيانات العضو */
-  const member: Array<[string, string]> = [
-    ['اسم المنخرط', `${d.name} ${d.lastName}`],
-    ['التخصص / الرياضة', `${d.sport}${(d.swimStyle ?? []).length ? ' • ' + (d.swimStyle ?? []).join(' / ') : ''}`],
-    ['الفئة', d.category || '—'],
-    ['نوع الاشتراك', d.subscriptionType || '—'],
-    ['بيان الاتفاقية', d.agreementName || '—'],
-    ['المنشأة (المسبح)', d.pool || '—'],
-    ['رقم الرياضي', d.nin || '—'],
+  /* بيانات العضو والاشتراك */
+  const miY = 168;
+  const miL = 40;
+  const miR = W - 40;
+  const miH = 160;
+  rrect(miL - 8, miY, miR - miL + 16, miH, 12, boxBg);
+  const row = (label: string, value: string, y: number, x = miR) => {
+    right(`${label}:`, x - 190, y, 12.5, muted, 600);
+    right(value, x, y, 13, navy, 700);
+  };
+  row('اسم المنخرط', `${d.name} ${d.lastName}`, miY + 26);
+  left('رقم العضوية: ' + (d.membershipNumber || '—'), miL, miY + 26, 13, navy, 700);
+  let mv = miY + 26;
+  const memberRows: Array<[string, string, 'full' | 'left']> = [
+    ['الفرع / النشاط', `${d.sport}${(d.swimStyle ?? []).length ? ' • ' + (d.swimStyle ?? []).join(' / ') : ''} ${d.category ? ' - ' + d.category : ''}`, 'full'],
+    ['نوع الاشتراك', `${d.subscriptionType || '—'}${d.agreementName ? ' (' + d.agreementName + ')' : ''}`, 'full'],
   ];
-  let my = 18.5;
-  member.forEach(([k, v]) => {
-    right(k + ':', 40, my, 11, muted, 600);
-    right(v, 94, my, 12, ink, 700);
-    my += 3.1;
+  memberRows.forEach(([label, value]) => {
+    mv += 26;
+    row(label, value, mv);
+  });
+  mv += 26;
+  row('فترة الاشتراك', d.season || '—', mv);
+  left('طريقة الدفع: ' + (d.paymentMethod || '—'), miL, mv, 13, navy, 700);
+  mv += 26;
+  row('تاريخ التسديد', new Date().toLocaleDateString('fr-DZ'), mv);
+  left('الساعة: ' + new Date().toLocaleTimeString('fr-DZ', { hour: '2-digit', minute: '2-digit' }), miL, mv, 12.5, muted, 600);
+
+  /* جدول الرسوم والخدمات */
+  const thY = miY + miH + 26;
+  const tLeft = miL - 8;
+  const tRight = miR + 8;
+  const tW = tRight - tLeft;
+  const colMoney = 56;
+  const colPeriod = tLeft + (tW - colMoney) * 0.45;
+  const colDesc = tLeft + (tW - colMoney) * 0.18;
+  rrect(tLeft, thY, tW, 34, 10, band);
+  right('البيان', tRight, thY + 17, 12.5, '#475569', 700);
+  cc('المدة', colPeriod + colMoney / 2, thY + 17, 12.5, '#475569', 700);
+  left('المبلغ', tLeft + colMoney, thY + 17, 12.5, '#475569', 700);
+
+  const itemRows: Array<[string, string, number, string?]> = [
+    [`اشتراك العضوية (${d.subscriptionType || '—'})`, d.subscriptionPeriod || 'موسم', fees.base],
+    ['قسط التأمين السنوي الإجباري', 'سنة', fees.insurance],
+  ];
+  if (fees.transport > 0) itemRows.push(['خدمة النقل', d.subscriptionPeriod || 'موسم', fees.transport]);
+  if (fees.kit > 0) itemRows.push(['البدلة الرياضية الرسمية', 'طقم', fees.kit]);
+  if (fees.discount > 0) itemRows.push([`خصم الاتفاقية (${fees.discountPct}%)`, '—', -fees.discount, greenDark]);
+
+  let iy = thY + 34 + 15;
+  itemRows.forEach(([label, period, amount, color]) => {
+    right(label, tRight, iy, 12.5, slate, 700);
+    cc(period, colPeriod + colMoney / 2, iy, 12, slate, 600);
+    left(fmt(amount), tLeft + colMoney, iy, 12.5, color || navy, 700);
+    dashed(iy + 15, '#f1f5f9');
+    iy += 30;
   });
 
-  /* جدول التفصيل */
-  const rows: Array<[string, number]> = [
-    ['حقوق الاشتراك الأساسية (' + (d.category || '—') + ')', fees.base],
-    ['قسط التأمين السنوي الإجباري', fees.insurance],
-    ['خدمة النقل', fees.transport],
+  /* المجاميع */
+  const totY = iy + 8;
+  dashed(totY);
+  const totals: Array<[string, string, string?]> = [
+    ['المبلغ الإجمالي المستحق', fmt(fees.gross)],
+    ['المبلغ المدفوع', fmt(fees.net)],
+    ['المبلغ المتبقي', '0.00 دج (خالص)', greenDark],
   ];
-  const tY = 42;
-  const top = (v: number) => pct(tY + v, H);
-
-  ctx.fillStyle = '#0B121E';
-  ctx.fillRect(0, top(0) - pct(0.8, H), W, pct(1.6, H) + pct(0.8, H));
-  center('التفصيل', 6, top(0), 12, '#ffffff', 800);
-
-  let ry = 2.3;
-  rows.forEach(([label, amount]) => {
-    right(label + ':', 40, top(ry), 11, muted, 600);
-    left(fmtDA(amount), 50, top(ry), 12, ink, 700);
-    line(6, top(ry + 1.2), 94, top(ry + 1.2));
-    ry += 2.3;
+  let ty = totY + 18;
+  totals.forEach(([label, value, color]) => {
+    right(label, tRight, ty, 13, slate, 700);
+    left(value, tLeft + colMoney, ty, 13, color || navy, 700);
+    ty += 26;
   });
 
-  if (fees.discountPct > 0) {
-    right('خصم الاتفاقية (' + fees.discountPct + '%) :', 40, top(ry), 11, '#007377', 600);
-    left('- ' + fmtDA(fees.discount), 50, top(ry), 12, '#007377', 700);
-    line(6, top(ry + 1.2), 94, top(ry + 1.2));
-    ry += 2.3;
-  }
-
-  ctx.fillStyle = '#0F2440';
-  ctx.fillRect(0, top(ry) - pct(1.4, H), W, pct(2.9, H));
-  right('المجموع الصافي: ' + fmtDA(fees.net), 88, top(ry), 17, '#ffffff', 800);
-  line(4, top(ry + 2.0), 96, top(ry + 2.0), '#D4AF37', 3);
-
-  const payY = tY + ry + 7;
-  const payRows: Array<[string, string]> = [
-    ['طريقة الدفع', d.paymentMethod || '—'],
-    ['أمين المال / الإدارة', 'الاسم: ................................  التوقيع: ....................'],
-  ];
-  let py = 1.0;
-  payRows.forEach(([k, v]) => {
-    right(k + ':', 40, top(payY - tY + py), 11, muted, 600);
-    right(v, 94, top(payY - tY + py), 11, ink, 700);
-    py += 3.2;
-  });
-
-  /* توقيع وخاتم أمين المال */
-  const sigY = 63;
-  line(60, sigY + 12, 94, sigY + 12);
-  right('توقيع وخاتم أمين المال', 94, sigY + 14.5, 11, muted, 600);
-  line(4, sigY + 12, 40, sigY + 12);
-  right('توقيع المنخرط / الولي', 40, sigY + 14.5, 11, muted, 600);
-
-  /* رمز QR للمصادقة */
+  /* رمز QR للتحقق + تذييل أمانة الصندوق */
   const qrText = [
     'SADARA47:RECEIPT',
     'N:' + (d.receiptNumber || ''),
@@ -531,24 +566,25 @@ export async function renderReceiptCanvas(d: PrintData): Promise<HTMLCanvasEleme
   ].join('|');
   let qr: string | null = null;
   try {
-    qr = await QRCode.toDataURL(qrText, { width: 128, margin: 1, errorCorrectionLevel: 'M' });
+    qr = await QRCode.toDataURL(qrText, { width: 96, margin: 1, errorCorrectionLevel: 'M' });
   } catch {
     qr = null;
   }
+  const footY = H - 150;
   if (qr) {
     const img = new Image();
     await new Promise<void>((res) => {
       img.onload = () => res();
       img.src = qr!;
     });
-    const qs = pct(16, H);
-    ctx.drawImage(img, pct(72), pct(64, H), qs, qs);
-    center('رمز QR للمصادقة', 80, pct(83.5, H), 10, muted, 600);
+    const qs = 62;
+    ctx.drawImage(img, tLeft + colMoney - 4, footY - 8, qs, qs);
+    left('رمز QR للمصادقة', tLeft + colMoney + 64, footY + 23, 10.5, muted, 600);
   }
-
-  line(5, 88, 95, 88, gold, 4);
-  center('قسيمة تُرفق ملف المنخرط وتُسلَّم مع الاستمارة', 50, 96.5, 11, muted, 600);
-  center('مكتب التحفيظ - نادي الصدارة 2026', 50, 98.5, 10, muted, 600);
+  dashed(footY - 40, '#e2e8f0');
+  center('يرجى الاستظهار بهذا الوصل أو بطاقة الانخراط عند الدخول للتدريبات.', footY + 18, 11.5, muted, 600);
+  center('أمانة صندوق النادي — ختم وإمضاء', footY + 44, 13.5, navy, 800);
+  center('نادي الصدارة • غرداية • ' + (d.season || 'موسم 2026 / 2027'), H - 26, 10, muted, 600);
 
   return canvas;
 }

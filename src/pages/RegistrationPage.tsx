@@ -20,8 +20,9 @@ import {
 } from 'lucide-react';
 import { useAppContext, useData } from '@/context';
 import { setPrintData } from '@/data';
-import { Gender, SkillLevel, Sport, SwimStyle, ApplicantCategory, SubscriptionType } from '@/types';
+import { Gender, SkillLevel, Sport, SwimStyle, ApplicantCategory } from '@/types';
 import { WILAYAS } from '@/constants';
+import { fmtDA } from '@/utils/helpers';
 import logo from '@/assets/logo.png';
 import { cropResizePhoto, downloadFormImage, downloadFormPdf, renderBackCanvas, renderFormCanvas, buildUsername, randomPassword } from '@/services/formService';
 
@@ -29,7 +30,7 @@ const STEPS = ['الاختيار الرياضي', 'البيانات الشخصي
 
 const RegistrationPage: React.FC = () => {
   const { setRoute } = useAppContext();
-  const { addApplication, agreements, registrationOpen } = useData();
+  const { addApplication, agreements, registrationOpen, clubSettings } = useData();
 
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -45,10 +46,12 @@ const RegistrationPage: React.FC = () => {
     sport: Sport.SWIMMING,
     swimStyle: [SwimStyle.FREE] as SwimStyle[],
     category: 'أصاغر' as ApplicantCategory,
-    subscriptionType: 'اشتراك حر' as SubscriptionType,
+    subscriptionType: 'اشتراك حر',
     agreementName: '',
     pool: 'المسبح الأولمبي',
     transport: false,
+    kit: false,
+    paymentMethod: 'نقداً',
     nin: '',
     certNumber: '',
     birthPlace: '',
@@ -104,6 +107,8 @@ const RegistrationPage: React.FC = () => {
   );
 
   const agreement = agreements.find((a) => a.name === f.agreementName) || undefined;
+  const isAgreementType = /اتفاقية/.test(f.subscriptionType);
+  const selectedTier = clubSettings.subscriptionTypes.find((t) => t.name === f.subscriptionType);
 
   const printData = useMemo(
     () => ({
@@ -124,6 +129,15 @@ const RegistrationPage: React.FC = () => {
       swimStyle: f.sport === Sport.SWIMMING ? f.swimStyle : undefined,
       category: f.category,
       subscriptionType: f.subscriptionType,
+      subscriptionPeriod: selectedTier?.periodLabel,
+      subscriptionAmount: selectedTier?.amount,
+      insuranceFee: clubSettings.insuranceFee,
+      transportFee: clubSettings.transportFee,
+      kitFee: clubSettings.kitFee,
+      kit: f.kit,
+      season: clubSettings.season,
+      membershipNumber: (effNin || '').slice(-6),
+      paymentMethod: f.paymentMethod,
       agreementName: f.agreementName,
       pool: f.pool,
       photoUrl: f.photoUrl || undefined,
@@ -135,10 +149,10 @@ const RegistrationPage: React.FC = () => {
       username,
       password,
       transport: f.transport,
-      discountPct: f.subscriptionType === 'ضمن اتفاقية معتمدة' ? agreement?.discountPct ?? undefined : undefined,
+      discountPct: isAgreementType ? agreement?.discountPct ?? undefined : undefined,
       receiptNumber: `RC-${new Date().getFullYear()}-${(effNin || '').slice(-6) || '000000'}`,
     }),
-    [f, effNin, username, password, agreement],
+    [f, effNin, username, password, agreement, isAgreementType, selectedTier, clubSettings],
   );
 
   const ninValid =
@@ -225,7 +239,7 @@ const RegistrationPage: React.FC = () => {
       medicalClearance: f.medicalClearance,
       category: f.category,
       subscriptionType: f.subscriptionType,
-      agreementName: f.subscriptionType === 'ضمن اتفاقية معتمدة' ? f.agreementName || undefined : undefined,
+      agreementName: isAgreementType ? f.agreementName || undefined : undefined,
       pool: f.pool,
       photoUrl: f.photoUrl || undefined,
       filledFormUrl: filledFormUrl || undefined,
@@ -402,22 +416,24 @@ const RegistrationPage: React.FC = () => {
                   <Handshake className="text-[#007377]" size={22} /> نوع الاشتراك
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(['اشتراك حر', 'ضمن اتفاقية معتمدة'] as SubscriptionType[]).map((t) => (
-                    <button type="button" key={t} onClick={() => set('subscriptionType', t)} className={selectCls(f.subscriptionType === t)}>
-                      <span className="font-black text-[#0B121E]">{t}</span>
-                      <p className="text-[11px] text-gray-400 mt-1">
-                        {t === 'اشتراك حر' ? 'الاشتراك الفردي المباشر' : 'انضمام عبر اتفاقية مؤسسية معتمدة من الإدارة'}
-                      </p>
-                      {f.subscriptionType === t && t === 'ضمن اتفاقية معتمدة' && (
-                        <select value={f.agreementName} onChange={(e) => set('agreementName', e.target.value)} className="w-full mt-4 bg-white border border-[#D4AF37]/30 rounded-xl px-3 py-2 text-xs font-bold outline-none" required>
-                          <option value="">— اختر الاتفاقية —</option>
-                          {agreements.filter((a) => a.status === 'نشطة').map((a) => (
-                            <option key={a.id} value={a.name}>{a.name}</option>
-                          ))}
-                        </select>
-                      )}
-                    </button>
-                  ))}
+                  {clubSettings.subscriptionTypes.map((t, i) => {
+                    const active = f.subscriptionType === t.name;
+                    const agreementType = /اتفاقية/.test(t.name);
+                    return (
+                      <button type="button" key={t.id} onClick={() => set('subscriptionType', t.name)} className={selectCls(active)}>
+                        <span className="font-black text-[#0B121E] text-sm">{t.name}</span>
+                        <p className="text-[11px] text-gray-400 mt-1">{t.amount.toLocaleString('fr-DZ')} دج • {t.periodLabel}</p>
+                        {active && agreementType && (
+                          <select value={f.agreementName} onChange={(e) => set('agreementName', e.target.value)} onClick={(e) => e.stopPropagation()} className="w-full mt-4 bg-white border border-[#D4AF37]/30 rounded-xl px-3 py-2 text-xs font-bold outline-none" required>
+                            <option value="">— اختر الاتفاقية —</option>
+                            {agreements.filter((a) => a.status === 'نشطة').map((a) => (
+                              <option key={a.id} value={a.name}>{a.name}</option>
+                            ))}
+                          </select>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -432,9 +448,44 @@ const RegistrationPage: React.FC = () => {
                   <input type="checkbox" checked={f.transport} onChange={(e) => set('transport', e.target.checked)} className="w-5 h-5 accent-[#007377]" />
                   <span className="text-sm font-bold text-[#0B121E]">
                     الاستفادة من خدمة النقل
-                    <span className="block text-[11px] text-gray-400 font-bold mt-0.5">تُحتسب رسوم النقل في وصل الاشتراك فقط إذا أجازتها الإدارة.</span>
+                    <span className="block text-[11px] text-gray-400 font-bold mt-0.5">تُحتسب رسوم النقل في وصل الاشتراك فقط إذا أجازتها الإدارة ({clubSettings.transportFee.toLocaleString('fr-DZ')} دج).</span>
                   </span>
                 </label>
+                <label className="flex items-center gap-3 mt-3 bg-gray-50 border border-gray-100 rounded-2xl p-4 cursor-pointer hover:border-[#007377]/40 transition-all">
+                  <input type="checkbox" checked={f.kit} onChange={(e) => set('kit', e.target.checked)} className="w-5 h-5 accent-[#007377]" />
+                  <span className="text-sm font-bold text-[#0B121E]">
+                    البدلة الرياضية الرسمية
+                    <span className="block text-[11px] text-gray-400 font-bold mt-0.5">طقم رسمي واحد ({clubSettings.kitFee.toLocaleString('fr-DZ')} دج) يُضاف إلى الوصل.</span>
+                  </span>
+                </label>
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2 md:col-span-1">
+                    <label className={labelCls}>طريقة الدفع</label>
+                    <select value={f.paymentMethod} onChange={(e) => set('paymentMethod', e.target.value)} className={inputCls}>
+                      <option value="نقداً">نقداً</option>
+                      <option value="صك بريدي">صك بريدي</option>
+                      <option value="حوالة بريدية">حوالة بريدية</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2 bg-[#0B121E] rounded-2xl p-5 text-white flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">قيمة الوصل المتوقعة</p>
+                      <p className="text-xl font-black text-[#D4AF37] mt-1">
+                        {fmtDA(
+                          (selectedTier?.amount ?? 0) +
+                            clubSettings.insuranceFee +
+                            (f.transport ? clubSettings.transportFee : 0) +
+                            (f.kit ? clubSettings.kitFee : 0),
+                        )}
+                      </p>
+                    </div>
+                    <p className="text-[10px] text-white/40 font-bold text-left leading-relaxed">
+                      {selectedTier?.periodLabel || '—'}
+                      <br />
+                      {isAgreementType ? `خصم اتفاقية ${agreement?.discountPct ?? clubSettings.defaultDiscountPct}%` : 'بدون خصم'}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           )}

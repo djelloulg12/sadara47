@@ -1,5 +1,5 @@
 import React from 'react';
-import { AgeCategory, MembershipStatus, SkillLevel, Sport, UserRole } from './types';
+import { AgeCategory, ClubSettings, MembershipStatus, SkillLevel, Sport, UserRole } from './types';
 
 export const ROLES_LABEL: Record<UserRole, string> = {
   [UserRole.PRESIDENT]: 'رئيس النادي',
@@ -162,3 +162,15 @@ export const BASE_FEES: Record<'أصاغر' | 'أكابر', Record<string, numbe
 export const INSURANCE_FEE = 600; // قسط التأمين السنوي الإجباري (دج)
 export const TRANSPORT_FEE = 900; // خدمة النقل السنوية عند التفعيل (دج)
 export const DEFAULT_DISCOUNT_PCT = 15; // خصم الاتفاقية الافتراضي (%)
+export const DEFAULT_CLUB_SETTINGS: ClubSettings = {
+  season: 'موسم 2026 / 2027',
+  subscriptionTypes: [
+    { id: 'free', name: 'اشتراك حر', periodLabel: 'موسم', amount: 3000 },
+    { id: 'quarterly', name: 'اشتراك فصلي (3 أشهر)', periodLabel: 'فصل 1', amount: 1000 },
+    { id: 'agreement', name: 'ضمن اتفاقية معتمدة', periodLabel: 'موسم', amount: 3000 },
+  ],
+  insuranceFee: 600,
+  transportFee: 900,
+  kitFee: 2500,
+  defaultDiscountPct: 15,
+};
