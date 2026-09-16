@@ -1,16 +1,20 @@
 import React, { useMemo, useState } from 'react';
-import { Bus, Eye, MapPin, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
+import { Bus, Eye, Lock, MapPin, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
 import Avatar from '@/components/Avatar';
 import AthleteForm, { AthleteFormValues } from '@/components/AthleteForm';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
-import { useData } from '@/context';
+import { useAuth, useData } from '@/context';
 import { BadgeChip, CATEGORY_STYLE, LEVEL_STYLE, STATUS_STYLE } from '@/constants';
-import { Athlete, MembershipStatus, Sport } from '@/types';
+import { Athlete, MembershipStatus, Sport, UserRole } from '@/types';
 import { maskNin } from '@/utils/helpers';
 
 const AthletesPage: React.FC<{ onOpenProfile: (athleteId: string) => void }> = ({ onOpenProfile }) => {
+  const { user } = useAuth();
   const { athletes, addAthlete, updateAthlete, deleteAthlete } = useData();
+  const isCoach = user?.role === UserRole.COACH;
+  const isAdmin = user?.role === UserRole.PRESIDENT || user?.role === UserRole.MANAGER;
+  const isStaff = isCoach || isAdmin;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCoach, setFilterCoach] = useState('All');
@@ -32,6 +36,7 @@ const AthletesPage: React.FC<{ onOpenProfile: (athleteId: string) => void }> = (
   const filtered = useMemo(
     () =>
       athletes.filter((a) => {
+        if (isCoach && user?.name && a.assignedCoach && a.assignedCoach !== user.name) return false;
         const q = searchQuery.trim().toLowerCase();
         const matchesSearch =
           !q ||
@@ -45,7 +50,7 @@ const AthletesPage: React.FC<{ onOpenProfile: (athleteId: string) => void }> = (
           (filterTransport === 'No' && !a.transport);
         return matchesSearch && matchesCoach && matchesLocation && matchesTransport;
       }),
-    [athletes, searchQuery, filterCoach, filterLocation, filterTransport],
+    [athletes, searchQuery, filterCoach, filterLocation, filterTransport, isCoach, user],
   );
 
   const handleSubmit = (values: AthleteFormValues) => {
@@ -84,7 +89,8 @@ const AthletesPage: React.FC<{ onOpenProfile: (athleteId: string) => void }> = (
             setEditing(null);
             setFormOpen(true);
           }}
-          className="luxury-gradient-gold text-[#0B121E] px-8 py-4 rounded-2xl font-black shadow-lg gold-glow flex items-center gap-3 active:scale-95 transition-all"
+          disabled={!isAdmin}
+          className="luxury-gradient-gold text-[#0B121E] px-8 py-4 rounded-2xl font-black shadow-lg gold-glow flex items-center gap-3 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Plus size={20} /> إضافة رياضي
         </button>
@@ -193,23 +199,32 @@ const AthletesPage: React.FC<{ onOpenProfile: (athleteId: string) => void }> = (
                         <button onClick={() => onOpenProfile(a.id)} className="p-2.5 bg-gray-50 text-gray-400 rounded-xl hover:text-[#007377] hover:bg-white transition-all" title="ملف الرياضي">
                           <Eye size={16} />
                         </button>
-                        <button
-                          onClick={() => {
-                            setEditing(a);
-                            setFormOpen(true);
-                          }}
-                          className="p-2.5 bg-gray-50 text-gray-400 rounded-xl hover:text-[#D4AF37] hover:bg-white transition-all"
-                          title="تعديل"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        <button
-                          onClick={() => setToDelete(a)}
-                          className="p-2.5 bg-gray-50 text-gray-400 rounded-xl hover:text-red-500 hover:bg-white transition-all"
-                          title="حذف"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {isAdmin && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setEditing(a);
+                                setFormOpen(true);
+                              }}
+                              className="p-2.5 bg-gray-50 text-gray-400 rounded-xl hover:text-[#D4AF37] hover:bg-white transition-all"
+                              title="تعديل"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button
+                              onClick={() => setToDelete(a)}
+                              className="p-2.5 bg-gray-50 text-gray-400 rounded-xl hover:text-red-500 hover:bg-white transition-all"
+                              title="حذف"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        )}
+                        {isStaff && (
+                          <span className="p-2.5 text-gray-200" title="قراءة فقط">
+                            <Lock size={16} />
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>

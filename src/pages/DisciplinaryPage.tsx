@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, FileText, Gavel, Plus, ShieldAlert, Trash2, User } from 'lucide-react';
+import { Calendar, Eye, EyeOff, FileText, Gavel, Plus, ShieldAlert, Trash2, User } from 'lucide-react';
 import Modal from '@/components/Modal';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
@@ -17,18 +17,18 @@ const DisciplinaryPage: React.FC = () => {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<DisciplinaryCase | null>(null);
-  const [form, setForm] = useState({ targetName: '', targetId: 'a', targetRole: 'ATHLETE' as 'ATHLETE' | 'COACH', reporterName: '', reason: '', date: '', status: 'REPORTED' as DisciplinaryCase['status'] });
+  const [form, setForm] = useState({ targetName: '', targetId: 'a', targetRole: 'ATHLETE' as 'ATHLETE' | 'COACH', reporterName: '', reason: '', date: '', status: 'REPORTED' as DisciplinaryCase['status'], internal: false, finalDecision: '' });
   const [toDelete, setToDelete] = useState<DisciplinaryCase | null>(null);
 
   const openAdd = () => {
     setEditing(null);
-    setForm({ targetName: '', targetId: 'a', targetRole: 'ATHLETE', reporterName: '', reason: '', date: new Date().toISOString().slice(0, 10), status: 'REPORTED' });
+    setForm({ targetName: '', targetId: 'a', targetRole: 'ATHLETE', reporterName: '', reason: '', date: new Date().toISOString().slice(0, 10), status: 'REPORTED', internal: false, finalDecision: '' });
     setModalOpen(true);
   };
 
   const openEdit = (c: DisciplinaryCase) => {
     setEditing(c);
-    setForm({ targetName: c.targetName, targetId: c.targetId, targetRole: c.targetRole, reporterName: c.reporterName, reason: c.reason, date: c.date, status: c.status });
+    setForm({ targetName: c.targetName, targetId: c.targetId, targetRole: c.targetRole, reporterName: c.reporterName, reason: c.reason, date: c.date, status: c.status, internal: !!c.internal, finalDecision: c.finalDecision || '' });
     setModalOpen(true);
   };
 
@@ -81,14 +81,19 @@ const DisciplinaryPage: React.FC = () => {
           return (
             <div key={c.id} className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden">
               <div className={`absolute top-0 right-0 w-2 h-full ${barColor}`}></div>
-              <div className="flex items-center gap-6">
+              <div className="flex items-center gap-6 flex-1">
                 <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center text-red-600 font-black text-xl border border-gray-100">!</div>
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-1 flex-wrap">
                     <h4 className="text-xl font-black text-[#0B121E]">{c.targetName}</h4>
                     <span className="text-[10px] font-black px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md">
                       {c.targetRole === 'ATHLETE' ? 'رياضي' : 'كادر فني'}
                     </span>
+                    {c.internal && (
+                      <span className="text-[10px] font-black px-2 py-0.5 bg-[#0B121E] text-[#D4AF37] rounded-md uppercase tracking-widest flex items-center gap-1">
+                        <EyeOff size={10} /> داخلي · سري
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-gray-500 font-medium max-w-xl">{c.reason}</p>
                   <div className="flex gap-4 mt-3">
@@ -173,6 +178,21 @@ const DisciplinaryPage: React.FC = () => {
               ))}
             </div>
           </div>
+          {form.status === 'FINAL' && (
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-gray-400 px-2 uppercase tracking-widest">القرار النهائي</label>
+              <textarea rows={2} value={form.finalDecision} onChange={(e) => setForm({ ...form, finalDecision: e.target.value })} placeholder="القرار الصادر (إيقاف، إنذار، دفع، فسخ...)" className={inputCls}></textarea>
+            </div>
+          )}
+          <label className="flex items-center gap-3 p-4 bg-[#0B121E]/[0.03] rounded-2xl cursor-pointer hover:bg-[#0B121E]/[0.05] transition-colors">
+            <input type="checkbox" checked={form.internal} onChange={(e) => setForm({ ...form, internal: e.target.checked })} className="w-5 h-5 accent-[#0B121E]" />
+            <div className="flex-1">
+              <p className="text-sm font-black text-[#0B121E] flex items-center gap-2">
+                {form.internal ? <EyeOff size={15} /> : <Eye size={15} />} ملاحظة داخلية سرية
+              </p>
+              <p className="text-[11px] text-gray-400 font-bold mt-0.5">تظهر للإدارة فقط ولا يطّلع عليها الرياضي أو وليّه.</p>
+            </div>
+          </label>
           <button type="submit" className="w-full py-5 bg-red-600 text-white rounded-[1.5rem] font-black shadow-xl hover:bg-red-700 active:scale-95 transition-all mt-2">
             {editing ? 'حفظ التعديلات' : 'تأكيد تسجيل المخالفة'}
           </button>

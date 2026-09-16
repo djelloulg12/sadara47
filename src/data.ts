@@ -1,6 +1,9 @@
 import {
   AgeCategory,
+  Agreement,
+  AppNotification,
   Athlete,
+  AttendanceRecord,
   ClubActivity,
   DisciplinaryCase,
   Gender,
@@ -24,6 +27,9 @@ const KEYS = {
   records: 'sadara47_records',
   activities: 'sadara47_activities',
   disciplinary: 'sadara47_disciplinary',
+  agreements: 'sadara47_agreements',
+  attendance: 'sadara47_attendance',
+  notifications: 'sadara47_notifications',
   session: 'sadara47_session',
   printData: 'sadara47_print_data',
   regOpen: 'sadara47_registration_open',
@@ -223,6 +229,15 @@ const seedApplications = (): RegistrationApplication[] => [
     bloodType: 'A+',
     guardianName: 'بلحاج الطاهر',
     medicalClearance: true,
+    category: 'أصاغر',
+    subscriptionType: 'اشتراك حر',
+    pool: 'المسبح الأولمبي',
+    guardianBirthDate: '1980-05-14',
+    guardianBirthPlace: 'غرداية',
+    idCardNumber: '10987654321',
+    idIssueDate: '2019-01-20',
+    idIssueAuthority: 'غرداية',
+    consent18_07: true,
     submittedAt: '2026-09-10',
   },
   {
@@ -240,6 +255,16 @@ const seedApplications = (): RegistrationApplication[] => [
     bloodType: 'B-',
     guardianName: '',
     medicalClearance: true,
+    category: 'أصاغر',
+    subscriptionType: 'ضمن اتفاقية معتمدة',
+    agreementName: 'اتفاقية المدرسة الوطنية للرياضات الأولمبية',
+    pool: 'الملعب البلدي',
+    guardianBirthDate: '1985-02-09',
+    guardianBirthPlace: 'الجزائر العاصمة',
+    idCardNumber: '10987654322',
+    idIssueDate: '2018-06-11',
+    idIssueAuthority: 'الجزائر العاصمة',
+    consent18_07: true,
     submittedAt: '2026-09-12',
   },
 ];
@@ -317,6 +342,56 @@ const seedDisciplinary = (): DisciplinaryCase[] => [
   },
 ];
 
+const seedAgreements = (): Agreement[] => [
+  {
+    id: 'ag1',
+    name: 'اتفاقية المدرسة الوطنية للرياضات الأولمبية',
+    institution: 'المدرسة الوطنية للرياضات الأولمبية - الجزائر',
+    reference: 'AGR-2026-001',
+    status: 'نشطة',
+    createdAt: '2026-01-10',
+  },
+  {
+    id: 'ag2',
+    name: 'اتفاقية مديرية الشباب والرياضة لولاية غرداية',
+    institution: 'مديرية الشباب والرياضة - غرداية',
+    reference: 'AGR-2026-014',
+    status: 'نشطة',
+    createdAt: '2026-02-01',
+  },
+];
+
+const seedAttendance = (): AttendanceRecord[] => [
+  { id: 'at1', athleteId: 'a1', planId: 'p1', date: '2026-09-14', present: true },
+  { id: 'at2', athleteId: 'a4', planId: 'p1', date: '2026-09-14', present: false, note: 'غياب غير مبرر' },
+  { id: 'at3', athleteId: 'a3', planId: 'p2', date: '2026-09-14', present: true },
+];
+
+const seedNotifications = (): AppNotification[] => [
+  {
+    id: 'n1',
+    type: 'competition',
+    title: 'إشعار تأهل رسمي',
+    body: 'تم إدراج سارة خالد ضمن القائمة الرسمية لبطولة الولاية - سباحة.',
+    fromName: 'الإدارة',
+    date: '2026-09-10',
+    athleteId: 'a4',
+    toUserIds: ['u5'],
+    readBy: [],
+  },
+  {
+    id: 'n2',
+    type: 'disciplinary',
+    title: 'تقرير سلوكي',
+    body: 'تأخر متكرر عن حصص التدريب الصباحية - تم تسجيله في سجل الانضباط.',
+    fromName: 'جلول قندوز',
+    date: '2026-03-01',
+    athleteId: 'a1',
+    toUserIds: ['u4'],
+    readBy: [],
+  },
+];
+
 export interface AppState {
   athletes: Athlete[];
   users: User[];
@@ -325,6 +400,9 @@ export interface AppState {
   records: PersonalRecord[];
   activities: ClubActivity[];
   disciplinary: DisciplinaryCase[];
+  agreements: Agreement[];
+  attendance: AttendanceRecord[];
+  notifications: AppNotification[];
 }
 
 export function getInitialState(): AppState {
@@ -337,6 +415,9 @@ export function getInitialState(): AppState {
       records: seedRecords(),
       activities: seedActivities(),
       disciplinary: seedDisciplinary(),
+      agreements: seedAgreements(),
+      attendance: seedAttendance(),
+      notifications: seedNotifications(),
     };
     Object.entries(state).forEach(([key, value]) => saveValue(`sadara47_${key}`, value));
     localStorage.setItem(KEYS.seeded, '1');
@@ -350,6 +431,9 @@ export function getInitialState(): AppState {
     records: load<PersonalRecord[]>(KEYS.records, []),
     activities: load<ClubActivity[]>(KEYS.activities, []),
     disciplinary: load<DisciplinaryCase[]>(KEYS.disciplinary, []),
+    agreements: load<Agreement[]>(KEYS.agreements, []),
+    attendance: load<AttendanceRecord[]>(KEYS.attendance, []),
+    notifications: load<AppNotification[]>(KEYS.notifications, []),
   };
 }
 
@@ -359,6 +443,9 @@ export const saveApplications = (v: RegistrationApplication[]) => saveValue(KEYS
 export const saveRecords = (v: PersonalRecord[]) => saveValue(KEYS.records, v);
 export const saveActivities = (v: ClubActivity[]) => saveValue(KEYS.activities, v);
 export const saveDisciplinary = (v: DisciplinaryCase[]) => saveValue(KEYS.disciplinary, v);
+export const saveAgreements = (v: Agreement[]) => saveValue(KEYS.agreements, v);
+export const saveAttendance = (v: AttendanceRecord[]) => saveValue(KEYS.attendance, v);
+export const saveNotifications = (v: AppNotification[]) => saveValue(KEYS.notifications, v);
 
 export interface PrintData {
   name: string;
@@ -373,6 +460,16 @@ export interface PrintData {
   nin: string;
   level: string;
   swimStyle?: string;
+  category?: string;
+  subscriptionType?: string;
+  agreementName?: string;
+  pool?: string;
+  photoUrl?: string;
+  guardianBirthDate?: string;
+  guardianBirthPlace?: string;
+  idCardNumber?: string;
+  idIssueDate?: string;
+  idIssueAuthority?: string;
 }
 
 export const setPrintData = (data: PrintData): void => saveValue(KEYS.printData, data);

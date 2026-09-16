@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Activity, Clock, Crown, MapPin, Medal, Sparkles, TrendingUp, Users, Calendar, ClipboardList } from 'lucide-react';
+import { Activity, Bell, Clock, Crown, MapPin, Medal, Sparkles, TrendingUp, UserCheck, UserX, Users, Calendar, ClipboardList } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import StatCard from '@/components/StatCard';
 import { useAuth, useData } from '@/context';
@@ -20,20 +20,39 @@ const CLUB_TREND = [
 
 const DashboardPage: React.FC<{ onNavigate: (page: PageId) => void }> = ({ onNavigate }) => {
   const { user } = useAuth();
-  const { athletes, applications, activities, records } = useData();
+  const { athletes, applications, activities, records, notifications, markNotificationRead, attendance, plans } = useData();
 
   const isPresident = user?.role === UserRole.PRESIDENT;
   const isManager = user?.role === UserRole.MANAGER;
   const isCoach = user?.role === UserRole.COACH;
   const isAthlete = user?.role === UserRole.ATHLETE;
   const isGuardian = user?.role === UserRole.GUARDIAN;
+  const isStaff = isPresident || isManager || isCoach;
 
   const targetAthlete = useMemo(() => {
-    if (isAthlete && user?.athleteId) return athletes.find((a) => a.id === user.athleteId);
-    if (isGuardian && user?.athleteId)
-      return athletes.find((a) => a.id === user.athleteId || a.guardianName?.includes(a.name) || a.id === user.athleteId);
+    if ((isAthlete || isGuardian) && user?.athleteId) {
+      return athletes.find((a) => a.id === user.athleteId);
+    }
     return null;
   }, [isAthlete, isGuardian, user, athletes]);
+
+  const myNotifications = useMemo(() => {
+    if (!user) return [];
+    return notifications
+      .filter((n) => {
+        if (isStaff) return n.toUserIds.length === 0 || n.toUserIds.includes(user.id);
+        return n.athleteId === targetAthlete?.id || n.toUserIds.includes(user.id) || (n.type === 'competition' || n.type === 'general');
+      })
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+  }, [notifications, user, isStaff, targetAthlete]);
+
+  const unreadCount = myNotifications.filter((n) => !n.readBy.includes(user?.id || '')).length;
+
+  const todayAtt = useMemo(() => {
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    return attendance.filter((r) => r.date === todayStr).slice(0, 6);
+  }, [attendance]);
 
   const myRecords = useMemo(
     () =>
@@ -235,6 +254,104 @@ const DashboardPage: React.FC<{ onNavigate: (page: PageId) => void }> = ({ onNav
           </div>
         </div>
       )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-black text-[#0B121E] flex items-center gap-3">
+              <Bell className="text-[#D4AF37]" size={22} /> الإشعارات
+              {unreadCount > 0 && (
+                <span className="px-2.5 py-1 rounded-full bg-red-600 text-white text-[10px] font-black">{unreadCount} جديد</span>
+              )}
+            </h3>
+          </div>
+          {myNotifications.length === 0 && <p className="text-sm text-gray-400">لا توجد إشعارات بعد.</p>}
+          <div className="space-y-3 max-h-96 overflow-y-auto pl-1">
+            {myNotifications.slice(0, 12).map((n) => {
+              const isRead = n.readBy.includes(user?.id || '');
+              const typeBadge: Record<string, string> = {
+                absence: 'bg-amber-100 text-amber-700',
+                health: 'bg-red-100 text-red-700',
+                disciplinary: 'bg-red-100 text-red-700',
+                competition: 'bg-blue-100 text-blue-700',
+                registration: 'bg-green-100 text-green-700',
+                general: 'bg-gray-100 text-gray-600',
+              };
+              return (
+                <button
+                  key={n.id}
+                  onClick={() => user && !isRead && markNotificationRead(n.id, user.id)}
+                  className={`w-full text-right p-4 rounded-2xl border transition-all flex gap-3 ${isRead ? 'bg-white border-gray-100' : 'bg-[#D4AF37]/[0.04] border-[#D4AF37]/25'}`}
+                >
+                  <span className={`shrink-0 mt-1 w-2.5 h-2.5 rounded-full ${isRead ? 'bg-gray-200' : 'bg-[#D4AF37]'}`}></span>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center gap-3">
+                      <p className="font-black text-sm text-[#0B121E]">{n.title}</p>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black ${typeBadge[n.type] || typeBadge.general}`}>
+                        {n.type === 'absence' ? 'غياب' : n.type === 'competition' ? 'فعالية' : n.type === 'registration' ? 'إخراط' : n.type === 'disciplinary' ? 'انضباط' : n.type === 'health' ? 'صحي' : 'عام'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 font-medium mt-1">{n.body}</p>
+                    <p className="text-[10px] text-gray-400 font-bold mt-1.5">{n.fromName} • {formatDateShort(n.date)}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {isStaff ? (
+          <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+            <h3 className="text-xl font-black text-[#0B121E] flex items-center gap-3 mb-6">
+              <Clock className="text-[#007377]" size={22} /> حضور اليوم
+            </h3>
+            {todayAtt.length === 0 && <p className="text-sm text-gray-400">لم يُسجل حضور أي حصة اليوم.</p>}
+            <div className="space-y-3">
+              {todayAtt.map((r) => {
+                const a = athletes.find((x) => x.id === r.athleteId);
+                const plan = plans.find((p) => p.id === r.planId);
+                return (
+                  <div key={r.id} className={`flex items-center justify-between p-4 rounded-2xl border ${r.present ? 'bg-teal-50/50 border-teal-100' : 'bg-red-50/50 border-red-100'}`}>
+                    <div>
+                      <p className="font-black text-[#0B121E] text-sm">{a?.name} {a?.lastName}</p>
+                      <p className="text-[10px] text-gray-400 font-bold mt-0.5">{plan?.title || (r.planId === 'general' ? 'تدريب جماعي' : r.planId)} — {formatDateShort(r.date)}</p>
+                    </div>
+                    <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black ${r.present ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {r.present ? <UserCheck size={12} /> : <UserX size={12} />}
+                      {r.present ? 'حاضر' : r.note ? 'غائب (مبرر)' : 'غائب'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <button onClick={() => onNavigate('training')} className="mt-5 w-full py-3.5 bg-[#007377]/10 text-[#007377] rounded-2xl font-black text-xs hover:bg-[#007377] hover:text-white transition-all">
+              فتح سجل التدريب ←
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+            <h3 className="text-xl font-black text-[#0B121E] flex items-center gap-3 mb-6">
+              <Activity className="text-[#007377]" size={22} /> أهدافي
+            </h3>
+            <div className="space-y-5">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black text-gray-400">الهدف الموسمي</span>
+                  <span className="text-[#D4AF37] font-black">{targetAthlete?.progress ?? 0}%</span>
+                </div>
+                <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#D4AF37] transition-all duration-1000" style={{ width: `${targetAthlete?.progress ?? 0}%` }}></div>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 leading-relaxed italic">
+                {targetAthlete
+                  ? `واصل العمل على ${targetAthlete.sport === 'سباحة' ? 'تقنيات الركلة والسباحة الأنسب لمسافتك' : 'ترتيب أنفاسك والثبات الخطي عند المجهود العالي'} — فريقك يرصد تطورك أسبوعياً.`
+                  : 'أكمل تسجيل ملفك للانضمام إلى برنامج هذا الموسم.'}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

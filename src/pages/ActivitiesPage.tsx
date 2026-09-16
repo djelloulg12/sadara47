@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import {
+  Bell,
   Calendar,
   Check,
+  ClipboardList,
   Clock,
   MapPin,
   Pencil,
@@ -17,7 +19,7 @@ import Modal from '@/components/Modal';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import { useAuth, useData } from '@/context';
-import { ClubActivity, UserRole } from '@/types';
+import { ClubActivity, NotificationType, UserRole } from '@/types';
 import { formatDate } from '@/utils/helpers';
 
 const ACTIVITY_TYPES = ['بطولة', 'تربوي', 'انتقاء', 'رسمي', 'تدريب', 'ندوة'];
@@ -25,47 +27,58 @@ const ACTIVITY_STATUS = ['ريان', 'تحضير'];
 
 const ActivitiesPage: React.FC = () => {
   const { user } = useAuth();
-  const { activities, addActivity, updateActivity, deleteActivity } = useData();
+  const { activities, addActivity, updateActivity, deleteActivity, athletes, addNotification } = useData();
   const canEdit = !!user && (user.role === UserRole.PRESIDENT || user.role === UserRole.MANAGER);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ClubActivity | null>(null);
-  const [form, setForm] = useState({ title: '', date: '', location: '', type: ACTIVITY_TYPES[0], status: ACTIVITY_STATUS[0], description: '' });
+  const [form, setForm] = useState({ title: '', date: '', location: '', type: ACTIVITY_TYPES[0], status: ACTIVITY_STATUS[0], description: '', participants: [] as string[] });
   const [selected, setSelected] = useState<ClubActivity | null>(null);
   const [toDelete, setToDelete] = useState<ClubActivity | null>(null);
-  const [toast, setToast] = useState(false);
+  const [toast, setToast] = useState<{ text: string } | null>(null);
+
+  const showToast = (text: string) => {
+    setToast({ text });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const openAdd = () => {
     setEditing(null);
-    setForm({ title: '', date: '', location: '', type: ACTIVITY_TYPES[0], status: ACTIVITY_STATUS[0], description: '' });
+    setForm({ title: '', date: '', location: '', type: ACTIVITY_TYPES[0], status: ACTIVITY_STATUS[0], description: '', participants: [] });
     setModalOpen(true);
   };
 
   const openEdit = (ev: ClubActivity) => {
     setEditing(ev);
-    setForm({ title: ev.title, date: ev.date, location: ev.location, type: ev.type, status: ev.status, description: ev.description });
+    setForm({ title: ev.title, date: ev.date, location: ev.location, type: ev.type, status: ev.status, description: ev.description, participants: ev.participants || [] });
     setModalOpen(true);
   };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editing) {
-      updateActivity(editing.id, form);
+      const { title, date, location, type, status, description, participants } = form;
+      updateActivity(editing.id, { title, date, location, type, status, description, participants });
     } else {
       addActivity(form);
     }
     setModalOpen(false);
   };
 
-  const share = (title: string) => {
-    const text = `📅 فعالية نادي الصدارة: ${title}\nابحث عنها في منصة sadara47`;
-    try {
-      navigator.clipboard?.writeText(text);
-    } catch {
-      /* ignore */
-    }
-    setToast(true);
-    setTimeout(() => setToast(false), 3000);
+  const toggleParticipant = (id: string) =>
+    setForm((p) => ({ ...p, participants: p.participants.includes(id) ? p.participants.filter((x) => x !== id) : [...p.participants, id] }));
+
+  const notifyParticipants = (ev: ClubActivity, type: NotificationType, body: string) => {
+    const ids = (ev.participants || []).filter(Boolean);
+    addNotification({
+      type,
+      title: ev.title,
+      body,
+      fromName: user?.name || 'إدارة النادي',
+      athleteId: undefined,
+      toUserIds: ids,
+    });
+    showToast('تم إرسال الإعلان إلى كل المشاركين المسجلين');
   };
 
   const inputCls = 'w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-[#D4AF37] font-bold text-sm';
@@ -75,7 +88,7 @@ const ActivitiesPage: React.FC = () => {
       {toast && (
         <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[100] bg-[#0B121E] text-[#D4AF37] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-[#D4AF37]/30 animate-in slide-in-from-top-4">
           <Check size={20} />
-          <span className="font-black text-sm">تم نسخ رابط الفعالية للمشاركة</span>
+          <span className="font-black text-sm">{toast.text}</span>
         </div>
       )}
 
@@ -162,13 +175,17 @@ const ActivitiesPage: React.FC = () => {
                 <MapPin size={16} className="text-[#D4AF37]" />
                 <span>{ev.location}</span>
               </div>
+              <div className="flex items-center gap-3 text-gray-500 text-sm">
+                <ClipboardList size={16} className="text-[#D4AF37]" />
+                <span>{ev.participants?.length || 0} رياضي مسجل</span>
+              </div>
             </div>
 
             <div className="flex gap-3">
               <button onClick={() => setSelected(ev)} className="flex-1 py-4 bg-[#1A3A5F] text-white rounded-2xl font-bold shadow-lg hover:bg-[#0d2138] hover:-translate-y-0.5 transition-all active:scale-95">
                 عرض التفاصيل
               </button>
-              <button onClick={() => share(ev.title)} className="px-6 py-4 border-2 border-[#D4AF37] text-[#D4AF37] rounded-2xl font-bold hover:bg-[#D4AF37] hover:text-white hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2 shadow-sm">
+              <button onClick={() => showToast('تم نسخ نص الفعالية للمشاركة')} className="px-6 py-4 border-2 border-[#D4AF37] text-[#D4AF37] rounded-2xl font-bold hover:bg-[#D4AF37] hover:text-white hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2 shadow-sm">
                 <Share2 size={18} /> مشاركة
               </button>
             </div>
@@ -217,6 +234,17 @@ const ActivitiesPage: React.FC = () => {
             <label className="text-[11px] font-black text-gray-400 px-2 uppercase tracking-widest">الوصف</label>
             <textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="وصف الفعالية..." className={inputCls}></textarea>
           </div>
+          <div className="space-y-2">
+            <label className="text-[11px] font-black text-gray-400 px-2 uppercase tracking-widest">الرياضيون المشاركون</label>
+            <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+              {athletes.map((a) => (
+                <label key={a.id} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${form.participants.includes(a.id) ? 'bg-[#D4AF37]/10 border-[#D4AF37]/40' : 'bg-gray-50 border-gray-100'}`}>
+                  <span className="text-sm font-black text-[#1A3A5F]">{a.name} {a.lastName}</span>
+                  <input type="checkbox" checked={form.participants.includes(a.id)} onChange={() => toggleParticipant(a.id)} className="w-4 h-4 accent-[#D4AF37]" />
+                </label>
+              ))}
+            </div>
+          </div>
           <button type="submit" className="w-full py-4 luxury-gradient-gold text-[#0B121E] rounded-2xl font-black shadow-xl gold-glow">
             {editing ? 'حفظ التعديل' : 'إضافة الفعالية'}
           </button>
@@ -248,9 +276,30 @@ const ActivitiesPage: React.FC = () => {
                   <span className="text-sm font-black text-[#1A3A5F]">{selected.location}</span>
                 </div>
               </div>
-              <button onClick={() => setSelected(null)} className="w-full py-4 luxury-gradient-gold text-[#0B121E] rounded-2xl font-black shadow-xl gold-glow hover:-translate-y-1 transition-all">
-                حسناً، فهمت
-              </button>
+              <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <ClipboardList size={14} className="text-[#D4AF37]" /> المشاركون ({selected.participants?.length || 0})
+                </p>
+                {selected.participants?.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {athletes.filter((a) => selected.participants?.includes(a.id)).map((a) => (
+                      <span key={a.id} className="px-3 py-1.5 bg-white rounded-full text-xs font-bold text-[#1A3A5F] border border-gray-200">
+                        {a.name} {a.lastName}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 font-bold">لم يُسجل مشاركون بعد.</p>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => notifyParticipants(selected, 'competition', `أنتم مسجلون في فعالية «${selected.title}» بتاريخ ${formatDate(selected.date)} - نادي الصدارة`)} className="flex-1 py-4 bg-[#D4AF37] text-white rounded-2xl font-black shadow-lg hover:bg-[#B8860B] transition-all active:scale-95 flex items-center justify-center gap-2">
+                  <Bell size={18} /> إعلان للمشاركين
+                </button>
+                <button onClick={() => setSelected(null)} className="px-8 py-4 luxury-gradient-gold text-[#0B121E] rounded-2xl font-black shadow-xl gold-glow hover:-translate-y-1 transition-all">
+                  حسناً، فهمت
+                </button>
+              </div>
             </div>
           </div>
         </div>

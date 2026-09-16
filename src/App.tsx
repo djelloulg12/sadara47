@@ -13,6 +13,7 @@ import ActivitiesPage from './pages/ActivitiesPage';
 import DisciplinaryPage from './pages/DisciplinaryPage';
 import LegalPage from './pages/LegalPage';
 import SettingsPage from './pages/SettingsPage';
+import AgreementsPage from './pages/AgreementsPage';
 import { UserRole } from './types';
 
 const App: React.FC = () => {
@@ -73,6 +74,8 @@ const MainApp: React.FC = () => {
         return <ApplicationsPage />;
       case 'activities':
         return <ActivitiesPage />;
+      case 'agreements':
+        return <AgreementsPage />;
       case 'disciplinary':
         return <DisciplinaryPage />;
       case 'legal':

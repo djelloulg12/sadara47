@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
+  Agreement,
+  AppNotification,
   Athlete,
+  AttendanceRecord,
   ClubActivity,
   DisciplinaryCase,
   PersonalRecord,
@@ -13,9 +16,12 @@ import {
 import {
   getInitialState,
   saveActivities,
+  saveAgreements,
   saveApplications,
   saveAthletes,
+  saveAttendance,
   saveDisciplinary,
+  saveNotifications,
   savePlans,
   saveRecords,
   saveSession,
@@ -126,6 +132,9 @@ interface DataContextType {
   records: PersonalRecord[];
   activities: ClubActivity[];
   disciplinary: DisciplinaryCase[];
+  agreements: Agreement[];
+  attendance: AttendanceRecord[];
+  notifications: AppNotification[];
   registrationOpen: boolean;
   setRegistrationOpen: (open: boolean) => void;
   addAthlete: (data: Omit<Athlete, 'id' | 'age' | 'category'>) => Athlete;
@@ -147,6 +156,13 @@ interface DataContextType {
   addDisciplinary: (data: Omit<DisciplinaryCase, 'id'>) => void;
   updateDisciplinary: (id: string, data: Partial<DisciplinaryCase>) => void;
   deleteDisciplinary: (id: string) => void;
+  addAgreement: (data: Omit<Agreement, 'id' | 'createdAt'>) => void;
+  updateAgreement: (id: string, data: Partial<Agreement>) => void;
+  deleteAgreement: (id: string) => void;
+  markAttendance: (athleteId: string, planId: string, date: string, present: boolean, note?: string) => void;
+  clearAttendance: (athleteId: string, planId: string, date: string) => void;
+  addNotification: (data: Omit<AppNotification, 'id' | 'date' | 'readBy'>) => void;
+  markNotificationRead: (id: string, userId: string) => void;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -161,6 +177,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [records, setRecords] = useState<PersonalRecord[]>(initialState.records);
   const [activities, setActivities] = useState<ClubActivity[]>(initialState.activities);
   const [disciplinary, setDisciplinary] = useState<DisciplinaryCase[]>(initialState.disciplinary);
+  const [agreements, setAgreements] = useState<Agreement[]>(initialState.agreements);
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>(initialState.attendance);
+  const [notifications, setNotifications] = useState<AppNotification[]>(initialState.notifications);
   const [registrationOpen, setRegistrationOpenState] = useState<boolean>(() => getRegistrationOpen());
 
   useEffect(() => saveAthletes(athletes), [athletes]);
@@ -169,6 +188,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => saveRecords(records), [records]);
   useEffect(() => saveActivities(activities), [activities]);
   useEffect(() => saveDisciplinary(disciplinary), [disciplinary]);
+  useEffect(() => saveAgreements(agreements), [agreements]);
+  useEffect(() => saveAttendance(attendance), [attendance]);
+  useEffect(() => saveNotifications(notifications), [notifications]);
 
   const setRegistrationOpen = useCallback((open: boolean) => {
     setRegistrationOpenState(open);
@@ -265,6 +287,48 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setDisciplinary((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
+  const addAgreement = useCallback((data: Omit<Agreement, 'id' | 'createdAt'>) => {
+    setAgreements((prev) => [{ ...data, id: uid('agr'), createdAt: new Date().toISOString().slice(0, 10) }, ...prev]);
+  }, []);
+
+  const updateAgreement = useCallback((id: string, data: Partial<Agreement>) => {
+    setAgreements((prev) => prev.map((a) => (a.id === id ? { ...a, ...data } : a)));
+  }, []);
+
+  const deleteAgreement = useCallback((id: string) => {
+    setAgreements((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  const markAttendance = useCallback(
+    (athleteId: string, planId: string, date: string, present: boolean, note?: string) => {
+      setAttendance((prev) => {
+        const existing = prev.find((r) => r.athleteId === athleteId && r.planId === planId && r.date === date);
+        if (existing) {
+          return prev.map((r) => (r === existing ? { ...r, present, note } : r));
+        }
+        return [{ id: uid('att'), athleteId, planId, date, present, note }, ...prev];
+      });
+    },
+    [],
+  );
+
+  const clearAttendance = useCallback((athleteId: string, planId: string, date: string) => {
+    setAttendance((prev) => prev.filter((r) => !(r.athleteId === athleteId && r.planId === planId && r.date === date)));
+  }, []);
+
+  const addNotification = useCallback((data: Omit<AppNotification, 'id' | 'date' | 'readBy'>) => {
+    setNotifications((prev) => [
+      { ...data, id: uid('not'), date: new Date().toISOString().slice(0, 10), readBy: [] },
+      ...prev,
+    ]);
+  }, []);
+
+  const markNotificationRead = useCallback((id: string, userId: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, readBy: n.readBy.includes(userId) ? n.readBy : [...n.readBy, userId] } : n)),
+    );
+  }, []);
+
   return (
     <DataContext.Provider
       value={{
@@ -274,6 +338,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         records,
         activities,
         disciplinary,
+        agreements,
+        attendance,
+        notifications,
         registrationOpen,
         setRegistrationOpen,
         addAthlete,
@@ -295,6 +362,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addDisciplinary,
         updateDisciplinary,
         deleteDisciplinary,
+        addAgreement,
+        updateAgreement,
+        deleteAgreement,
+        markAttendance,
+        clearAttendance,
+        addNotification,
+        markNotificationRead,
       }}
     >
       {children}

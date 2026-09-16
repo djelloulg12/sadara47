@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Activity,
+  Building2,
   Calendar,
   Gavel,
   LayoutDashboard,
@@ -9,11 +10,11 @@ import {
   Settings,
   UserCheck,
   Users,
-  Waves,
 } from 'lucide-react';
 import { UserRole } from '@/types';
 import { ROLES_LABEL } from '@/constants';
 import { useAuth } from '@/context';
+import logo from '@/assets/logo.png';
 
 export type PageId =
   | 'dashboard'
@@ -22,6 +23,7 @@ export type PageId =
   | 'training'
   | 'activities'
   | 'disciplinary'
+  | 'agreements'
   | 'legal'
   | 'settings'
   | 'profile';
@@ -56,6 +58,12 @@ const MENU_GROUPS: { title: string; items: NavItem[] }[] = [
         icon: UserCheck,
         roles: [UserRole.PRESIDENT, UserRole.MANAGER],
       },
+      {
+        id: 'agreements',
+        label: 'الاتفاقيات',
+        icon: Building2,
+        roles: [UserRole.PRESIDENT, UserRole.MANAGER],
+      },
     ],
   },
   {
@@ -65,7 +73,7 @@ const MENU_GROUPS: { title: string; items: NavItem[] }[] = [
         id: 'training',
         label: 'التدريب والبرمجة',
         icon: Activity,
-        roles: [UserRole.PRESIDENT, UserRole.MANAGER, UserRole.COACH, UserRole.ATHLETE],
+        roles: [UserRole.PRESIDENT, UserRole.MANAGER, UserRole.COACH, UserRole.ATHLETE, UserRole.GUARDIAN],
       },
     ],
   },
@@ -108,9 +116,9 @@ const Layout: React.FC<{
     <div className="min-h-screen bg-[#FDFBFA] text-[#1F2937] rtl relative">
       <nav className="app-sidebar no-print w-full md:w-80 bg-[#0B121E] flex flex-col p-8 shadow-2xl z-50 border-l border-white/5 md:h-screen md:fixed md:top-0 md:right-0">
         <div className="flex flex-col items-center gap-4 mb-10 text-center">
-          <div className="p-4 luxury-gradient-gold rounded-3xl gold-glow transform transition-transform hover:rotate-6">
-            <Waves className="text-[#0B121E]" size={36} />
-          </div>
+          <button onClick={() => onNavigate('dashboard')} title="العودة إلى اللوحة الرئيسية" className="rounded-full overflow-hidden border-2 border-[#D4AF37] shadow-lg gold-glow transform transition-transform hover:scale-105 hover:rotate-3">
+            <img src={logo} alt="شعار نادي الصدارة" className="w-20 h-20 object-cover" />
+          </button>
           <div>
             <h1 className="text-2xl font-black tracking-tight text-white leading-tight">نادي الصدارة</h1>
             <p className="text-[#D4AF37] text-[10px] font-black uppercase tracking-[0.2em] mt-1 opacity-80">

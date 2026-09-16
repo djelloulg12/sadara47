@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Waves, Lock, UserCircle2, Eye, EyeOff, Info, LogIn, ClipboardList } from 'lucide-react';
+import { Lock, UserCircle2, Eye, EyeOff, Info, LogIn, ClipboardList } from 'lucide-react';
 import { useAuth, useAppContext, useData } from '@/context';
 import { ROLES_LABEL } from '@/constants';
 import { User } from '@/types';
+import logo from '@/assets/logo.png';
 
 const LoginPage: React.FC = () => {
   const { login, users } = useAuth();
@@ -43,9 +44,11 @@ const LoginPage: React.FC = () => {
       <div className="flex flex-col md:flex-row gap-8 items-start relative z-10 w-full max-w-5xl">
         <div className="w-full max-w-lg bg-white border border-[#D4AF37]/20 p-10 rounded-[40px] shadow-2xl border-t-8 border-t-[#D4AF37] animate-fade-up">
           <div className="flex justify-center mb-6">
-            <div className="p-6 luxury-gradient-gold rounded-3xl gold-glow transform transition-transform hover:scale-105">
-              <Waves className="text-[#0B121E]" size={52} />
-            </div>
+            <img
+              src={logo}
+              alt="شعار نادي الصدارة"
+              className="w-28 h-28 rounded-full object-cover border-4 border-[#D4AF37] shadow-xl gold-glow transform transition-transform hover:scale-105"
+            />
           </div>
           <h1 className="text-3xl font-black text-[#1A3A5F] text-center mb-1">نادي الصدارة الرياضي</h1>
           <p className="text-center text-[#D4AF37] font-bold text-sm tracking-[0.2em] mb-4 uppercase">

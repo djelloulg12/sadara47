@@ -1,17 +1,44 @@
-import React from 'react';
-import { Waves, ArrowRight, Printer } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowRight, FileDown, Loader2, Printer, ShieldCheck } from 'lucide-react';
 import { useAppContext } from '@/context';
 import { getPrintData } from '@/data';
-import { formatDate } from '@/utils/helpers';
+import { downloadFormImage, downloadFormPdf, renderFormCanvas } from '@/services/formService';
+import logo from '@/assets/logo.png';
 
 const RegistrationFormDocument: React.FC = () => {
   const { setRoute } = useAppContext();
   const data = getPrintData();
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    if (!data) {
+      setLoading(false);
+      return;
+    }
+    renderFormCanvas(data)
+      .then((canvas) => {
+        if (!alive) return;
+        canvasRef.current = canvas;
+        setDataUrl(canvas.toDataURL('image/jpeg', 0.92));
+      })
+      .catch(() => {
+        if (alive) setDataUrl(null);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [data]);
 
   if (!data) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4 gap-6">
-        <p className="text-gray-500 font-bold">لا توجد بيانات للطباعة.</p>
+        <p className="text-gray-500 font-bold">لا توجد بيانات للعرض.</p>
         <button onClick={() => setRoute('register')} className="px-8 py-4 bg-[#1A3A5F] text-white rounded-2xl font-bold">
           العودة للتسجيل
         </button>
@@ -19,82 +46,66 @@ const RegistrationFormDocument: React.FC = () => {
     );
   }
 
-  const today = new Date().toLocaleDateString('ar-DZ', { year: 'numeric', month: 'long', day: 'numeric' });
-
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-10">
-      <div className="flex justify-end gap-3 mb-6 no-print">
-        <button onClick={() => window.print()} className="flex items-center gap-2 px-6 py-3 bg-[#007377] text-white rounded-2xl font-bold shadow-lg">
-          <Printer size={18} /> طباعة
-        </button>
-        <button onClick={() => setRoute('login')} className="flex items-center gap-2 px-6 py-3 bg-white text-gray-500 rounded-2xl font-bold shadow-sm">
-          <ArrowRight size={18} /> عودة
-        </button>
-      </div>
-
-      <div id="printable-area" className="max-w-3xl mx-auto bg-white p-10 md:p-14 rounded-md shadow-lg relative border-t-8 border-t-[#D4AF37]">
-        <div className="flex items-center justify-between mb-10">
-          <div className="flex items-center gap-4">
-            <div className="p-3 luxury-gradient-gold rounded-2xl">
-              <Waves className="text-[#0B121E]" size={32} />
-            </div>
+      <div className="max-w-5xl mx-auto">
+        <div className="flex flex-wrap justify-between gap-3 mb-6 no-print items-center">
+          <div className="flex items-center gap-3">
+            <img src={logo} alt="شعار النادي" className="w-12 h-12 rounded-full object-cover border-2 border-[#D4AF37]" />
             <div>
-              <h1 className="text-2xl font-black text-[#1A3A5F]">نادي الصدارة الرياضي - غرداية</h1>
-              <p className="text-[10px] text-[#D4AF37] font-black uppercase tracking-[0.2em]">Club Sportif Sadara</p>
+              <p className="font-black text-[#0B121E] text-sm">استمارة الإخراط - نادي الصدارة</p>
+              <p className="text-[10px] text-[#D4AF37] font-black uppercase tracking-[0.2em]">Official Inscription Form</p>
             </div>
           </div>
-          <div className="text-left text-xs font-bold text-gray-400 space-y-1">
-            <p>المرجع: {data.nin ? data.nin.slice(-6) : '---'}</p>
-            <p>التاريخ: {today}</p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => canvasRef.current && downloadFormImage(canvasRef.current)}
+              disabled={loading}
+              className="flex items-center gap-2 px-5 py-3 bg-[#0B121E] text-white rounded-2xl font-bold shadow-lg border-b-4 border-[#D4AF37]"
+            >
+              <FileDown size={18} className="text-[#D4AF37]" /> صورة
+            </button>
+            <button
+              onClick={() => canvasRef.current && downloadFormPdf(canvasRef.current)}
+              disabled={loading}
+              className="flex items-center gap-2 px-5 py-3 bg-[#007377] text-white rounded-2xl font-bold shadow-lg border-b-4 border-green-900"
+            >
+              <FileDown size={18} /> PDF
+            </button>
+            <button onClick={() => window.print()} className="flex items-center gap-2 px-5 py-3 bg-white text-gray-600 rounded-2xl font-bold shadow-sm border border-gray-200">
+              <Printer size={18} /> طباعة
+            </button>
+            <button onClick={() => setRoute('register')} className="flex items-center gap-2 px-5 py-3 bg-white text-gray-400 rounded-2xl font-bold shadow-sm">
+              <ArrowRight size={18} /> عودة
+            </button>
           </div>
         </div>
 
-        <div className="text-center mb-10">
-          <h2 className="text-2xl font-black text-[#0B121E] tracking-wide">استمارة طلب الإخراط</h2>
-          <p className="text-xs text-gray-400 font-bold mt-1">بطاقة معلومات شخصية ورياضية</p>
-          <div className="h-0.5 w-2/3 mx-auto bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent mt-3"></div>
-        </div>
-
-        <div className="space-y-6 text-sm">
-          {[
-            ['الاسم واللقب', `${data.name} ${data.lastName}`],
-            ['رقم التعريف الوطني NIN', data.nin || '---'],
-            ['تاريخ الميلاد', formatDate(data.dob)],
-            ['الجنس', data.gender],
-            ['الرياضة', data.sport],
-            ['الأسلوب المفضل', data.swimStyle || '—'],
-            ['المستوى', data.level],
-            ['الهاتف', data.phone],
-            ['العنوان', data.address],
-            ['فصيلة الدم', data.bloodType],
-            ['ولي الأمر', data.guardianName || '—'],
-          ].map(([label, value]) => (
-            <div key={label} className="flex justify-between items-center border-b border-gray-100 pb-3">
-              <span className="text-gray-400 font-bold">{label}</span>
-              <span className="font-black text-[#0B121E]">{value}</span>
+        <div id="printable-area" className="print-container bg-white shadow-2xl rounded-sm mx-auto max-w-[180mm] relative">
+          <div className="flex items-center justify-center gap-3 py-4 border-b border-gray-100 mb-3">
+            <img src={logo} alt="الشعار" className="w-10 h-10 rounded-full object-cover border border-[#D4AF37]" />
+            <div className="text-center text-[10px] font-bold text-gray-400">
+              <p className="text-xs font-black text-[#0B121E]">نادي الصدارة الرياضي - غرداية</p>
+              <p className="uppercase tracking-widest">Club Sportif Sadara • جمهورية الجزائر</p>
             </div>
-          ))}
-        </div>
-
-        <div className="mt-12 space-y-3">
-          <p className="flex items-center gap-2 text-xs font-bold text-gray-500">
-            <span className="w-5 h-5 bg-green-500 rounded-full text-white flex items-center justify-center text-[10px]">✓</span>
-            أقر بأن جميع المعلومات المذكورة صحيحة وسألتزم بالقوانين الداخلية للنادي.
-          </p>
-          <p className="flex items-center gap-2 text-xs font-bold text-gray-500">
-            <span className="w-5 h-5 bg-[#007377] rounded-full text-white flex items-center justify-center text-[10px]">✓</span>
-            أوافق على معالجة بياناتي وفق القانون 18-07 لحماية المعطيات ذات الطابع الشخصي.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-10 mt-14 text-center">
-          <div className="space-y-2">
-            <div className="h-10"></div>
-            <div className="border-t border-gray-300 pt-2 text-xs font-bold text-gray-500">إمضاء ولي الأمر / المترشح</div>
           </div>
-          <div className="space-y-2">
-            <div className="h-10"></div>
-            <div className="border-t border-gray-300 pt-2 text-xs font-bold text-gray-500">ختم النادي</div>
+
+          {loading ? (
+            <div className="p-20 flex flex-col items-center gap-4 text-gray-400">
+              <Loader2 size={40} className="animate-spin text-[#D4AF37]" />
+              <p className="text-sm font-bold">جاري تجهيز الاستمارة الرسمية...</p>
+            </div>
+          ) : dataUrl ? (
+            <img src={dataUrl} alt="الاستمارة الرسمية" className="w-full h-auto" />
+          ) : (
+            <div className="p-10 text-center">
+              <ShieldCheck className="text-gray-300 mx-auto mb-4" size={48} />
+              <p className="text-sm font-bold text-gray-500">تعذّر توليد الاستمارة في هذا المتصفح.</p>
+            </div>
+          )}
+
+          <div className="p-5 text-center text-[10px] text-gray-400 font-bold pt-2">
+            وثيقة مولّدة رقمياً وفق خريطة الإحداثيات النسبية • تُصادق بتوقيع الطبيب وبلدية غرداية قبل الإرسال
           </div>
         </div>
       </div>

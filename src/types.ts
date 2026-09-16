@@ -77,6 +77,7 @@ export interface Athlete {
   phone: string;
   bloodType: string;
   guardianName?: string;
+  guardianUserId?: string;
   photoUrl?: string;
   location?: string;
   transport?: boolean;
@@ -85,6 +86,9 @@ export interface Athlete {
 }
 
 export type RegistrationStatus = 'pending' | 'approved' | 'rejected';
+
+export type ApplicantCategory = 'أصاغر' | 'أكابر';
+export type SubscriptionType = 'اشتراك حر' | 'ضمن اتفاقية معتمدة';
 
 export interface RegistrationApplication {
   id: string;
@@ -102,6 +106,19 @@ export interface RegistrationApplication {
   bloodType: string;
   guardianName?: string;
   medicalClearance: boolean;
+  category: ApplicantCategory;
+  subscriptionType: SubscriptionType;
+  agreementName?: string;
+  pool: string;
+  photoUrl?: string;
+  filledFormUrl?: string;
+  scanUrl?: string;
+  guardianBirthDate?: string;
+  guardianBirthPlace?: string;
+  idCardNumber?: string;
+  idIssueDate?: string;
+  idIssueAuthority?: string;
+  consent18_07: boolean;
   submittedAt: string;
 }
 
@@ -135,6 +152,7 @@ export interface DisciplinaryCase {
   status: 'REPORTED' | 'APPEALED' | 'FINAL';
   appealText?: string;
   finalDecision?: string;
+  internal?: boolean;
 }
 
 export interface ClubActivity {
@@ -145,4 +163,43 @@ export interface ClubActivity {
   type: string;
   status: string;
   description: string;
+  participants?: string[];
+}
+
+export interface Agreement {
+  id: string;
+  name: string;
+  institution: string;
+  reference: string;
+  status: 'نشطة' | 'منتهية';
+  createdAt: string;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  athleteId: string;
+  planId: string;
+  date: string;
+  present: boolean;
+  note?: string;
+}
+
+export type NotificationType =
+  | 'absence'
+  | 'health'
+  | 'disciplinary'
+  | 'competition'
+  | 'registration'
+  | 'general';
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  fromName: string;
+  date: string;
+  athleteId?: string;
+  toUserIds: string[];
+  readBy: string[];
 }
