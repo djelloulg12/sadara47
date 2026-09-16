@@ -123,7 +123,9 @@ const RegistrationPage: React.FC = () => {
         : step === 2
           ? f.medicalClearance &&
             f.consent18_07 &&
-            (!isMinor || (f.guardianName && guardianNinValid && f.idIssueDate))
+            guardianNinValid &&
+            !!f.idIssueDate &&
+            (!isMinor || !!f.guardianName)
           : !!filledFormUrl && !!scanUrl && f.signatureConfirmed;
 
   const handlePhoto = async (file: File | undefined) => {
@@ -183,11 +185,11 @@ const RegistrationPage: React.FC = () => {
       photoUrl: f.photoUrl || undefined,
       filledFormUrl: filledFormUrl || undefined,
       scanUrl: scanUrl || undefined,
+      idCardNumber: f.idCardNumber,
+      idIssueDate: f.idIssueDate,
+      idIssueAuthority: f.idIssueAuthority,
       guardianBirthDate: isMinor ? f.guardianBirthDate : undefined,
       guardianBirthPlace: isMinor ? f.guardianBirthPlace : undefined,
-      idCardNumber: isMinor ? f.idCardNumber : undefined,
-      idIssueDate: isMinor ? f.idIssueDate : undefined,
-      idIssueAuthority: isMinor ? f.idIssueAuthority : undefined,
       consent18_07: f.consent18_07,
     });
     setPrintData(printData);
@@ -393,7 +395,7 @@ const RegistrationPage: React.FC = () => {
                         </div>
                       </div>
                       <div className="space-y-2 col-span-full">
-                        <label className={labelCls}>رقم التعريف الوطني الناتج</label>
+                        <label className={labelCls}>رمز الرياضي</label>
                         <div className={`${inputCls} bg-[#007377]/5 border-[#007377]/30 text-center tracking-widest ${composedMinorNin ? 'text-[#007377]' : 'text-gray-300'}`} dir="ltr">
                           {composedMinorNin || 'ش.م + سنة + ولاية + 1/0'}
                         </div>
@@ -405,8 +407,10 @@ const RegistrationPage: React.FC = () => {
                   ) : (
                     <div className="space-y-2"><label className={labelCls}>رقم التعريف الوطني NIN *</label><input required minLength={12} value={f.nin} onChange={(e) => set('nin', e.target.value)} placeholder="18 رقم" className={`${inputCls} font-mono`} /></div>
                   )}
-                  <div className="space-y-2"><label className={labelCls}>تاريخ الميلاد *</label><input required type="date" value={f.dob} onChange={(e) => set('dob', e.target.value)} className={inputCls} /></div>
-                  <div className="space-y-2"><label className={labelCls}>الجنس</label><select value={f.gender} onChange={(e) => set('gender', e.target.value)} className={inputCls}>{Object.values(Gender).map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
+                  <div className="space-y-4">
+                        <div className="space-y-2"><label className={labelCls}>تاريخ الميلاد *</label><input required type="date" value={f.dob} onChange={(e) => set('dob', e.target.value)} className={inputCls} /></div>
+                        <div className="space-y-2"><label className={labelCls}>الجنس</label><select value={f.gender} onChange={(e) => set('gender', e.target.value)} className={inputCls}>{Object.values(Gender).map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
+                      </div>
                   <div className="space-y-2"><label className={labelCls}>فصيلة الدم</label><select value={f.bloodType} onChange={(e) => set('bloodType', e.target.value)} className={inputCls}>{['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'].map((b) => <option key={b} value={b}>{b}</option>)}</select></div>
                   <div className="space-y-2"><label className={labelCls}>المستوى الرياضي</label><select value={f.level} onChange={(e) => set('level', e.target.value)} className={inputCls}>{Object.values(SkillLevel).map((l) => <option key={l} value={l}>{l}</option>)}</select></div>
                   <div className="space-y-2"><label className={labelCls}>الهاتف *</label><input required value={f.phone} onChange={(e) => set('phone', e.target.value)} placeholder="05/06..." className={inputCls} /></div>
@@ -468,12 +472,24 @@ const RegistrationPage: React.FC = () => {
                   </div>
                 </>
               ) : (
-                <div className="p-5 bg-teal-50 border border-teal-100 rounded-3xl flex gap-3">
-                  <ShieldCheck className="text-teal-600 shrink-0" size={20} />
-                  <p className="text-xs text-teal-800 font-bold leading-relaxed">
-                    فئة <b>أكابر</b>: الرياضي يحرر التصريح الشخصي بنفسه دون الحاجة لبيانات الولي.
-                  </p>
-                </div>
+                <>
+                  <div>
+                    <h2 className="text-xl font-black text-[#0B121E] flex items-center gap-3 mb-6">
+                      <User className="text-[#007377]" size={22} /> بطاقة التعريف (الرياضي البالغ)
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div className="space-y-2"><label className={labelCls}>رقم بطاقة التعريف *</label><input required minLength={10} value={f.idCardNumber} onChange={(e) => set('idCardNumber', e.target.value)} placeholder="رقم ب.ت" className={`${inputCls} font-mono`} /></div>
+                      <div className="space-y-2"><label className={labelCls}>تاريخ الإصدار *</label><input required type="date" value={f.idIssueDate} onChange={(e) => set('idIssueDate', e.target.value)} className={inputCls} /></div>
+                      <div className="space-y-2 col-span-full"><label className={labelCls}>جهة الإصدار</label><input value={f.idIssueAuthority} onChange={(e) => set('idIssueAuthority', e.target.value)} placeholder="البلدية المصدرة" className={inputCls} /></div>
+                    </div>
+                  </div>
+                  <div className="p-5 bg-teal-50 border border-teal-100 rounded-3xl flex gap-3">
+                    <ShieldCheck className="text-teal-600 shrink-0" size={20} />
+                    <p className="text-xs text-teal-800 font-bold leading-relaxed">
+                      فئة <b>أكابر</b>: الرياضي يحرر التصريح الشخصي بنفسه (بالمصادقة بوطوغرافه ورقم بطاقة التعريف) دون الحاجة لبيانات الولي.
+                    </p>
+                  </div>
+                </>
               )}
 
               <div className="pt-2 space-y-4">

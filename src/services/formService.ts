@@ -36,33 +36,33 @@ export interface FormTextFields {
   childName: string;
 }
 
-/* أ. بيانات المنخرط الأساسية (الجزء العلوي) — خط 20px */
+/* أ. بيانات المنخرط الأساسية (الجزء العلوي) — خط 20px، محاذاة يمين */
 const TOP_FIELDS: FieldBox[] = [
-  { key: 'regNumber', x1: 12, x2: 24, y: 21.5, fontSize: 20, align: 'center', weight: 800 },
-  { key: 'pool', x1: 43, x2: 90, y: 21.5, fontSize: 20, weight: 700 },
-  { key: 'firstName', x1: 30, x2: 82, y: 25.5, fontSize: 20, weight: 700 },
-  { key: 'lastName', x1: 30, x2: 82, y: 29.0, fontSize: 20, weight: 700 },
-  { key: 'birthDate', x1: 30, x2: 82, y: 32.5, fontSize: 20, weight: 700 },
-  { key: 'address', x1: 30, x2: 82, y: 36.0, fontSize: 20, weight: 700 },
-  { key: 'bloodType', x1: 30, x2: 82, y: 39.5, fontSize: 20, weight: 700 },
-  { key: 'phoneNumber', x1: 30, x2: 82, y: 43.0, fontSize: 20, weight: 700 },
+  { key: 'pool', x1: 83, x2: 83, y: 21.4, fontSize: 20, align: 'right', weight: 800 },
+  { key: 'regNumber', x1: 23, x2: 23, y: 21.4, fontSize: 20, align: 'right', weight: 800 },
+  { key: 'firstName', x1: 83, x2: 83, y: 25.5, fontSize: 20, align: 'right', weight: 800 },
+  { key: 'lastName', x1: 83, x2: 83, y: 29.2, fontSize: 20, align: 'right', weight: 800 },
+  { key: 'birthDate', x1: 76, x2: 76, y: 32.8, fontSize: 20, align: 'right', weight: 800 },
+  { key: 'address', x1: 81, x2: 81, y: 36.4, fontSize: 20, align: 'right', weight: 700 },
+  { key: 'bloodType', x1: 79, x2: 79, y: 40.0, fontSize: 20, align: 'right', weight: 700 },
+  { key: 'phoneNumber', x1: 78, x2: 78, y: 43.6, fontSize: 20, align: 'right', weight: 700 },
 ];
 
-/* ب. الشهادة الطبية (الجزء الأوسط) — خط 20px */
-const MEDICAL_FIELDS: FieldBox[] = [{ key: 'doctorName', x1: 30, x2: 71, y: 49.5, fontSize: 20, weight: 700 }];
+/* ب. الشهادة الطبية (الجزء الأوسط) — خط 20px، محاذاة يمين */
+const MEDICAL_FIELDS: FieldBox[] = [{ key: 'doctorName', x1: 70, x2: 70, y: 49.6, fontSize: 20, align: 'right', weight: 700 }];
 
-/* ج. التصريح الأبوي والمصادقة (الجزء السفلي) — خط 16px */
+/* ج. التصريح الأبوي والمصادقة (الجزء السفلي) — خط 16px، محاذاة يمين */
 const GUARDIAN_FIELDS: FieldBox[] = [
-  { key: 'guardianName', x1: 52, x2: 74, y: 70.0, fontSize: 16, weight: 600 },
-  { key: 'guardianBirthDate', x1: 18, x2: 33, y: 70.0, fontSize: 16, weight: 600 },
-  { key: 'guardianBirthPlace', x1: 2, x2: 14, y: 70.0, fontSize: 16, weight: 600 },
-  { key: 'idCardNumber', x1: 51, x2: 70, y: 73.5, fontSize: 16, weight: 600 },
-  { key: 'idIssueDate', x1: 20, x2: 36, y: 73.5, fontSize: 16, weight: 600 },
-  { key: 'idIssueAuthority', x1: 2, x2: 15, y: 73.5, fontSize: 16, weight: 600 },
-  { key: 'childName', x1: 51, x2: 87, y: 76.5, fontSize: 16, weight: 600 },
+  { key: 'guardianName', x1: 74, x2: 74, y: 70.3, fontSize: 18, align: 'right', weight: 700 },
+  { key: 'guardianBirthDate', x1: 37, x2: 37, y: 70.3, fontSize: 18, align: 'right', weight: 700 },
+  { key: 'guardianBirthPlace', x1: 13, x2: 13, y: 70.3, fontSize: 18, align: 'right', weight: 700 },
+  { key: 'idCardNumber', x1: 70, x2: 70, y: 73.8, fontSize: 18, align: 'right', weight: 700 },
+  { key: 'idIssueDate', x1: 38, x2: 38, y: 73.8, fontSize: 18, align: 'right', weight: 700 },
+  { key: 'idIssueAuthority', x1: 13, x2: 13, y: 73.8, fontSize: 18, align: 'right', weight: 700 },
+  { key: 'childName', x1: 85, x2: 85, y: 77.2, fontSize: 18, align: 'right', weight: 700 },
 ];
 
-const PHOTO_BOX = { x1: 10, x2: 28, y1: 22, y2: 38 };
+const PHOTO_BOX = { x1: 10.5, x2: 29, y1: 22.0, y2: 38.0 };
 const DOCTOR_BOX = { x1: 8, x2: 22, y1: 61.5, y2: 66.0 };
 const MUNICIPALITY_BOX = { x1: 5, x2: 25, y1: 83.0, y2: 89.0 };
 
@@ -104,11 +104,11 @@ export function buildFormFields(d: PrintData): FormTextFields {
 
 function drawField(ctx: CanvasRenderingContext2D, text: string, f: FieldBox, W: number, H: number) {
   if (!text) return;
-  const fs = f.fontSize ?? Math.round(W * 0.0105);
+  const fs = f.fontSize ?? Math.round(W * 0.012);
   ctx.save();
-  ctx.fillStyle = '#111827';
+  ctx.fillStyle = '#0F2440';
   ctx.font = `${f.weight ?? 700} ${fs}px Tajawal, Arial, sans-serif`;
-  ctx.textAlign = f.align ?? 'center';
+  ctx.textAlign = f.align ?? 'right';
   ctx.textBaseline = 'middle';
   const x = f.align === 'left' ? (f.x1 / 100) * W : f.align === 'right' ? (f.x2 / 100) * W : ((f.x1 + f.x2) / 200) * W;
   ctx.fillText(text, x, (f.y / 100) * H);
