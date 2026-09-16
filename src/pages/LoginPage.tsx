@@ -1,12 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import { Lock, UserCircle2, Eye, EyeOff, Info, LogIn, ClipboardList, UserPlus } from 'lucide-react';
+import React, { useState } from 'react';
+import { Lock, UserCircle2, Eye, EyeOff, LogIn, ClipboardList, UserPlus } from 'lucide-react';
 import { useAuth, useAppContext, useData } from '@/context';
-import { ROLES_LABEL } from '@/constants';
-import { User } from '@/types';
 import logo from '@/assets/logo.png';
 
 const LoginPage: React.FC = () => {
-  const { login, users } = useAuth();
+  const { login } = useAuth();
   const { setRoute } = useAppContext();
   const { registrationOpen } = useData();
 
@@ -14,33 +12,14 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [showDemo, setShowDemo] = useState(true);
-
-  const demoUsers = useMemo(() => {
-    const seen = new Set<string>();
-    const result: User[] = [];
-    for (const u of users) {
-      const k = u.username.toLowerCase();
-      if (seen.has(k)) continue;
-      seen.add(k);
-      result.push(u);
-    }
-    return result;
-  }, [users]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (login(username, password)) {
       setRoute('app');
     } else {
-      setError('معلومات الدخول غير صحيحة. يرجى استخدام بيانات الدخول التجريبية أسفل النموذج.');
+      setError('معلومات الدخول غير صحيحة.');
     }
-  };
-
-  const fill = (u: User) => {
-    setUsername(u.username);
-    setPassword(u.password);
-    setError('');
   };
 
   const inputCls =
@@ -53,7 +32,7 @@ const LoginPage: React.FC = () => {
         <div className="absolute bottom-[-15%] right-[-15%] w-[50%] h-[50%] bg-[#1A3A5F] blur-[150px] rounded-full"></div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-8 items-start relative z-10 w-full max-w-5xl">
+      <div className="flex flex-col md:flex-row gap-8 items-start relative z-10 w-full max-w-lg">
         <div className="w-full max-w-lg bg-white border border-[#D4AF37]/20 p-10 rounded-[40px] shadow-2xl border-t-8 border-t-[#D4AF37] animate-fade-up">
           <div className="flex justify-center mb-6">
             <img
@@ -142,49 +121,6 @@ const LoginPage: React.FC = () => {
             </button>
             <span className="text-gray-200">|</span>
             <span className="hover:text-[#D4AF37] transition-colors">سياسة الخصوصية</span>
-          </div>
-        </div>
-
-        <div
-          className={`flex-1 bg-white/80 backdrop-blur-md border border-[#D4AF37]/30 p-8 rounded-[40px] shadow-xl h-fit transition-all duration-500 ${
-            showDemo ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10 pointer-events-none'
-          }`}
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-[#1A3A5F] rounded-xl text-[#D4AF37]">
-              <Info size={24} />
-            </div>
-            <h2 className="text-xl font-black text-[#1A3A5F]">بيانات الدخول (للتجربة)</h2>
-          </div>
-
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-              يمكنك الدخول بأي من الحسابات التالية لاستكشاف الصلاحيات والواجهات المخصصة لكل رتبة — إضغط على حساب لملء النموذج تلقائياً:
-            </p>
-            <div className="grid grid-cols-1 gap-3">
-              {demoUsers.map((u) => (
-                <button
-                  key={u.id}
-                  onClick={() => fill(u)}
-                  className="flex items-center justify-between p-4 bg-gray-50 hover:bg-[#D4AF37]/10 rounded-2xl border border-gray-100 hover:border-[#D4AF37]/50 transition-all text-right group active:scale-[0.98]"
-                >
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-[#D4AF37]">{ROLES_LABEL[u.role]}</span>
-                    <span className="text-sm font-black text-[#1A3A5F]" dir="ltr">{u.username}</span>
-                  </div>
-                  <div className="text-left">
-                    <span className="text-[10px] text-gray-400 block font-bold uppercase">كلمة المرور</span>
-                    <span className="text-sm font-mono font-bold text-[#1A3A5F]">{u.password}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-6 p-4 bg-[#1A3A5F]/5 rounded-2xl border border-[#1A3A5F]/10">
-              <p className="text-[11px] text-[#1A3A5F]/70 font-medium leading-relaxed">
-                * هذه البيانات مخصصة للعرض التجريبي فقط. في النظام الحقيقي يتم تشفير كافة البيانات وربطها بـ NIN وفق القانون 18-07.
-              </p>
-            </div>
           </div>
         </div>
       </div>
