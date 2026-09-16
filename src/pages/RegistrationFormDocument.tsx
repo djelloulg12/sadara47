@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, FileDown, Loader2, Printer, ShieldCheck } from 'lucide-react';
 import { useAppContext } from '@/context';
 import { getPrintData } from '@/data';
-import { downloadFormImage, downloadFormPdf, renderBackCanvas, renderFormCanvas } from '@/services/formService';
+import { downloadFormImage, downloadFormPdf, renderBackCanvas, renderFormCanvas, renderReceiptCanvas } from '@/services/formService';
 import logo from '@/assets/logo.png';
 
 const RegistrationFormDocument: React.FC = () => {
@@ -10,9 +10,11 @@ const RegistrationFormDocument: React.FC = () => {
   const data = getPrintData();
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [backUrl, setBackUrl] = useState<string | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const backCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const receiptCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -24,11 +26,14 @@ const RegistrationFormDocument: React.FC = () => {
       try {
         const front = await renderFormCanvas(data, { photoUrl: data.photoUrl });
         const back = await renderBackCanvas(data);
+        const receipt = await renderReceiptCanvas(data);
         if (!alive) return;
         canvasRef.current = front;
         backCanvasRef.current = back;
+        receiptCanvasRef.current = receipt;
         setDataUrl(front.toDataURL('image/jpeg', 0.92));
         setBackUrl(back ? back.toDataURL('image/jpeg', 0.92) : null);
+        setReceiptUrl(receipt ? receipt.toDataURL('image/jpeg', 0.92) : null);
       } catch {
         if (alive) setDataUrl(null);
       } finally {
@@ -40,7 +45,8 @@ const RegistrationFormDocument: React.FC = () => {
     };
   }, [data]);
 
-  const faces = () => [canvasRef.current, backCanvasRef.current].filter(Boolean) as HTMLCanvasElement[];
+  const faces = () =>
+    [canvasRef.current, backCanvasRef.current, receiptCanvasRef.current].filter(Boolean) as HTMLCanvasElement[];
 
   if (!data) {
     return (
@@ -108,6 +114,11 @@ const RegistrationFormDocument: React.FC = () => {
               {backUrl ? (
                 <div className="print-page-break">
                   <img src={backUrl} alt="الوجه الثاني - معلومات الحساب" className="w-full h-auto" />
+                </div>
+              ) : null}
+              {receiptUrl ? (
+                <div className="print-page-break">
+                  <img src={receiptUrl} alt="وصل حقوق الاشتراك والتأمين" className="w-full h-auto" />
                 </div>
               ) : null}
             </>

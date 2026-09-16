@@ -7,7 +7,7 @@ import EmptyState from '@/components/EmptyState';
 import { useAuth, useData } from '@/context';
 import { BadgeChip, CATEGORY_STYLE, LEVEL_STYLE, STATUS_STYLE } from '@/constants';
 import { Athlete, MembershipStatus, Sport, UserRole } from '@/types';
-import { maskNin } from '@/utils/helpers';
+import { maskNin, toStyles } from '@/utils/helpers';
 
 const AthletesPage: React.FC<{ onOpenProfile: (athleteId: string) => void }> = ({ onOpenProfile }) => {
   const { user } = useAuth();
@@ -173,7 +173,7 @@ const AthletesPage: React.FC<{ onOpenProfile: (athleteId: string) => void }> = (
                         <BadgeChip label={a.sport} className={a.sport === Sport.SWIMMING ? 'bg-cyan-100 text-cyan-800' : a.sport === Sport.CROSS_COUNTRY ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} />
                         <BadgeChip label={CATEGORY_STYLE[a.category].label} className={CATEGORY_STYLE[a.category].badge} />
                         <BadgeChip label={LEVEL_STYLE[a.level].label} className={LEVEL_STYLE[a.level].badge} />
-                        {a.swimStyle && <BadgeChip label={a.swimStyle} className="bg-indigo-50 text-indigo-600" />}
+                        {toStyles(a.swimStyle).map((s) => <BadgeChip key={s} label={s} className="bg-indigo-50 text-indigo-600" />)}
                       </div>
                     </td>
                     <td className="px-8 py-5 text-xs font-bold text-gray-500">

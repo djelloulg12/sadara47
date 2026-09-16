@@ -147,3 +147,18 @@ export const progressColor = (value: number): string => {
   if (value >= 50) return 'bg-blue-500';
   return 'bg-gray-400';
 };
+
+/* المسبح الأولمبي / النصف أولمبي / الملعب البلدي / غابة غرداية */
+const POOLS = ['المسبح الأولمبي', 'المسبح النصف أولمبي', 'الملعب البلدي', 'غابة غرداية'] as const;
+export type PoolKey = (typeof POOLS)[number];
+export const poolKeys = [...POOLS];
+
+/** مصفوفة حقوق الاشتراك السنوية (دج) حسب الفئة والمنشأة */
+export const BASE_FEES: Record<'أصاغر' | 'أكابر', Record<string, number>> = {
+  'أصاغر': { 'المسبح الأولمبي': 3000, 'المسبح النصف أولمبي': 2800, 'الملعب البلدي': 2600, 'غابة غرداية': 2400 },
+  'أكابر': { 'المسبح الأولمبي': 3500, 'المسبح النصف أولمبي': 3200, 'الملعب البلدي': 3000, 'غابة غرداية': 2800 },
+};
+
+export const INSURANCE_FEE = 600; // قسط التأمين السنوي الإجباري (دج)
+export const TRANSPORT_FEE = 900; // خدمة النقل السنوية عند التفعيل (دج)
+export const DEFAULT_DISCOUNT_PCT = 15; // خصم الاتفاقية الافتراضي (%)

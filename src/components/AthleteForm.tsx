@@ -10,6 +10,7 @@ import {
   UserRole,
 } from '@/types';
 import { useAuth } from '@/context';
+import { toStyles } from '@/utils/helpers';
 
 export interface AthleteFormValues {
   name: string;
@@ -18,7 +19,7 @@ export interface AthleteFormValues {
   dob: string;
   gender: Gender;
   sport: Sport;
-  swimStyle?: SwimStyle;
+  swimStyle?: SwimStyle[];
   level: SkillLevel;
   progress: number;
   assignedCoach: string;
@@ -41,7 +42,7 @@ const emptyForm = (): AthleteFormValues => ({
   dob: '',
   gender: Gender.MALE,
   sport: Sport.SWIMMING,
-  swimStyle: SwimStyle.FREE,
+  swimStyle: [SwimStyle.FREE],
   level: SkillLevel.BEGINNER,
   progress: 50,
   assignedCoach: '',
@@ -88,7 +89,7 @@ const AthleteForm: React.FC<{
           dob: initial.dob,
           gender: initial.gender,
           sport: initial.sport,
-          swimStyle: initial.swimStyle,
+          swimStyle: toStyles(initial.swimStyle) as SwimStyle[],
           level: initial.level,
           progress: initial.progress,
           assignedCoach: initial.assignedCoach,
@@ -108,6 +109,15 @@ const AthleteForm: React.FC<{
 
   const set = <K extends keyof AthleteFormValues>(key: K, value: AthleteFormValues[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
+
+  const toggle = (s: SwimStyle) =>
+    setForm((prev) => {
+      const cur = prev.swimStyle ?? [];
+      return {
+        ...prev,
+        swimStyle: cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s],
+      };
+    });
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,12 +173,24 @@ const AthleteForm: React.FC<{
             </select>
           </Field>
           {form.sport === Sport.SWIMMING && (
-            <Field label="الأسلوب المفضل">
-              <select value={form.swimStyle} onChange={(e) => set('swimStyle', e.target.value as SwimStyle)} className={inputCls}>
-                {Object.values(SwimStyle).map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+            <Field label="الأنماط (اختيار متعدد)" className="md:col-span-2">
+              <div className="flex flex-wrap gap-2">
+                {Object.values(SwimStyle).map((s) => {
+                  const active = (form.swimStyle ?? []).includes(s);
+                  return (
+                    <button
+                      type="button"
+                      key={s}
+                      onClick={() => toggle(s)}
+                      className={`px-3 py-2 rounded-xl text-[11px] font-black border-2 transition-all ${
+                        active ? 'border-[#007377] bg-[#007377]/10 text-[#007377]' : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
             </Field>
           )}
           <Field label="المستوى">

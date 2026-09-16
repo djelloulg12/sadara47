@@ -43,11 +43,12 @@ const RegistrationPage: React.FC = () => {
 
   const [f, setF] = useState({
     sport: Sport.SWIMMING,
-    swimStyle: SwimStyle.FREE,
+    swimStyle: [SwimStyle.FREE] as SwimStyle[],
     category: 'أصاغر' as ApplicantCategory,
     subscriptionType: 'اشتراك حر' as SubscriptionType,
     agreementName: '',
     pool: 'المسبح الأولمبي',
+    transport: false,
     nin: '',
     certNumber: '',
     birthPlace: '',
@@ -79,6 +80,14 @@ const RegistrationPage: React.FC = () => {
 
   const set = (key: string, value: string | boolean) => setF((prev) => ({ ...prev, [key]: value }));
 
+  const toggleStyle = (s: SwimStyle) =>
+    setF((prev) => ({
+      ...prev,
+      swimStyle: (prev.swimStyle as SwimStyle[]).includes(s)
+        ? (prev.swimStyle as SwimStyle[]).filter((x) => x !== s)
+        : [...(prev.swimStyle as SwimStyle[]), s],
+    }));
+
   const isMinor = f.category === 'أصاغر';
 
   const genderDigit = f.gender === Gender.MALE ? '1' : '0';
@@ -93,6 +102,8 @@ const RegistrationPage: React.FC = () => {
     () => buildUsername(f.firstNameLatin || f.name, f.lastNameLatin || f.lastName),
     [f.firstNameLatin, f.name, f.lastNameLatin, f.lastName],
   );
+
+  const agreement = agreements.find((a) => a.name === f.agreementName) || undefined;
 
   const printData = useMemo(
     () => ({
@@ -123,8 +134,11 @@ const RegistrationPage: React.FC = () => {
       idIssueAuthority: f.idIssueAuthority,
       username,
       password,
+      transport: f.transport,
+      discountPct: f.subscriptionType === 'ضمن اتفاقية معتمدة' ? agreement?.discountPct ?? undefined : undefined,
+      receiptNumber: `RC-${new Date().getFullYear()}-${(effNin || '').slice(-6) || '000000'}`,
     }),
-    [f, effNin, username, password],
+    [f, effNin, username, password, agreement],
   );
 
   const ninValid =
@@ -141,7 +155,7 @@ const RegistrationPage: React.FC = () => {
 
   const canNext =
     step === 0
-      ? true
+      ? f.sport !== Sport.SWIMMING || f.swimStyle.length > 0
       : step === 1
         ? ninValid && f.name && f.lastName && f.dob && f.phone && f.address && f.accountConfirmed
         : step === 2
@@ -222,6 +236,7 @@ const RegistrationPage: React.FC = () => {
       guardianBirthDate: isMinor ? f.guardianBirthDate : undefined,
       guardianBirthPlace: isMinor ? f.guardianBirthPlace : undefined,
       consent18_07: f.consent18_07,
+      transport: f.transport,
     });
     setPrintData(printData);
     setSuccess(true);
@@ -338,11 +353,24 @@ const RegistrationPage: React.FC = () => {
                       </p>
                       {f.sport === s && i === 0 && (
                         <div className="mt-4">
-                          <select value={f.swimStyle} onChange={(e) => set('swimStyle', e.target.value)} className="w-full bg-white border border-[#D4AF37]/30 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#D4AF37]">
-                            {Object.values(SwimStyle).map((st) => (
-                              <option key={st} value={st}>{st}</option>
-                            ))}
-                          </select>
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">الأنماط المتعددة (اختيار متعدد)</p>
+                          <div className="flex flex-wrap gap-2">
+                            {Object.values(SwimStyle).map((st) => {
+                              const active = f.swimStyle.includes(st);
+                              return (
+                                <button
+                                  type="button"
+                                  key={st}
+                                  onClick={() => toggleStyle(st)}
+                                  className={`px-3 py-2 rounded-xl text-[11px] font-black border-2 transition-all ${
+                                    active ? 'border-[#007377] bg-[#007377]/10 text-[#007377]' : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
+                                  }`}
+                                >
+                                  {st}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
                     </button>
@@ -400,6 +428,13 @@ const RegistrationPage: React.FC = () => {
                     <option key={p} value={p}>{p}</option>
                   ))}
                 </select>
+                <label className="flex items-center gap-3 mt-3 bg-gray-50 border border-gray-100 rounded-2xl p-4 cursor-pointer hover:border-[#007377]/40 transition-all">
+                  <input type="checkbox" checked={f.transport} onChange={(e) => set('transport', e.target.checked)} className="w-5 h-5 accent-[#007377]" />
+                  <span className="text-sm font-bold text-[#0B121E]">
+                    الاستفادة من خدمة النقل
+                    <span className="block text-[11px] text-gray-400 font-bold mt-0.5">تُحتسب رسوم النقل في وصل الاشتراك فقط إذا أجازتها الإدارة.</span>
+                  </span>
+                </label>
               </div>
             </div>
           )}

@@ -8,6 +8,7 @@ import {
   Droplets,
   FileText,
   MapPin,
+  PencilLine,
   Phone,
   Plus,
   Printer,
@@ -22,14 +23,16 @@ import Avatar from '@/components/Avatar';
 import Modal from '@/components/Modal';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
-import { useData } from '@/context';
+import { useAuth, useData } from '@/context';
 import { BadgeChip, CATEGORY_STYLE, LEVEL_STYLE, STATUS_STYLE } from '@/constants';
-import { Athlete, PersonalRecord } from '@/types';
-import { formatDate, formatDateShort, maskNin } from '@/utils/helpers';
+import { Athlete, PersonalRecord, SwimStyle, UserRole } from '@/types';
+import { formatDate, formatDateShort, maskNin, toStyles } from '@/utils/helpers';
 import { analyzePerformance, generateAthleteBio, generateDietPlan } from '@/services/gemini';
 
 const AthleteProfilePage: React.FC<{ athleteId: string | null; onBack: () => void }> = ({ athleteId, onBack }) => {
-  const { athletes, records, addRecord, updateRecord, deleteRecord, updateAthleteBio } = useData();
+  const { user } = useAuth();
+  const { athletes, records, addRecord, updateRecord, deleteRecord, updateAthleteBio, updateAthlete } = useData();
+  const isManagerLike = !!user && (user.role === UserRole.PRESIDENT || user.role === UserRole.MANAGER || user.role === UserRole.COACH);
 
   const athlete = athletes.find((a) => a.id === athleteId) || null;
 
@@ -40,6 +43,8 @@ const AthleteProfilePage: React.FC<{ athleteId: string | null; onBack: () => voi
   const [reportOpen, setReportOpen] = useState(false);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [stylesModal, setStylesModal] = useState(false);
+  const [draftStyles, setDraftStyles] = useState<SwimStyle[]>([]);
 
   const [recordModal, setRecordModal] = useState(false);
   const [editingRecord, setEditingRecord] = useState<PersonalRecord | null>(null);
@@ -53,6 +58,21 @@ const AthleteProfilePage: React.FC<{ athleteId: string | null; onBack: () => voi
         .sort((a, b) => a.date.localeCompare(b.date)),
     [records, athleteId],
   );
+
+  const styles = toStyles(athlete?.swimStyle);
+
+  const openStyles = () => {
+    setDraftStyles(styles as SwimStyle[]);
+    setStylesModal(true);
+  };
+
+  const toggleDraft = (s: SwimStyle) =>
+    setDraftStyles((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+
+  const saveStyles = () => {
+    if (athlete) updateAthlete(athlete.id, { swimStyle: draftStyles });
+    setStylesModal(false);
+  };
 
   if (!athlete) {
     return (
@@ -154,7 +174,7 @@ const AthleteProfilePage: React.FC<{ athleteId: string | null; onBack: () => voi
                 {athlete.name} {athlete.lastName}
               </h2>
               <p className="text-[#D4AF37] text-xs font-black uppercase tracking-[0.2em] mt-1">
-                {athlete.category} • {athlete.level} {athlete.swimStyle ? `• ${athlete.swimStyle}` : ''}
+                {athlete.category} • {athlete.level} {styles.length > 0 ? `• ${styles.join(' / ')}` : ''}
               </p>
             </div>
             <div className="flex gap-3 no-print">
@@ -170,6 +190,23 @@ const AthleteProfilePage: React.FC<{ athleteId: string | null; onBack: () => voi
             <InfoRow label="رقم التعريف الوطني NIN" value={<span className="font-mono">{maskNin(athlete.nin)}</span>} />
             <InfoRow label="تاريخ الميلاد / العمر" value={`${formatDate(athlete.dob)} (${athlete.age} سنة)`} icon={Calendar} />
             <InfoRow label="الجنس" value={athlete.gender} icon={User} />
+            <InfoRow
+              label="الأنماط السباحية"
+              value={
+                <span className="flex items-center gap-1.5 flex-wrap;">
+                  {styles.length > 0 ? (
+                    styles.map((s) => <BadgeChip key={s} label={s} className="bg-indigo-50 text-indigo-600" />)
+                  ) : (
+                    athlete.sport
+                  )}
+                  {isManagerLike && (
+                    <button onClick={openStyles} className="p-1.5 rounded-lg bg-[#0B121E]/5 text-[#0B121E] hover:bg-[#0B121E]/10 transition-all" title="تعديل الأنماط">
+                      <PencilLine size={13} />
+                    </button>
+                  )}
+                </span>
+              }
+            />
             <InfoRow label="المدرب المشرف" value={athlete.assignedCoach || '—'} />
             <InfoRow label="موقع التدريب" value={<span className="flex items-center gap-1">{athlete.location || '—'} {athlete.transport && <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md text-[9px] flex items-center gap-1"><Bus size={9} /> نقل</span>}</span>} icon={MapPin} />
             <InfoRow label="الهاتف" value={athlete.phone} icon={Phone} />
@@ -331,6 +368,35 @@ const AthleteProfilePage: React.FC<{ athleteId: string | null; onBack: () => voi
         }}
       />
 
+      {/* Swim styles editor (coach / admin) */}
+      <Modal open={stylesModal} onClose={() => setStylesModal(false)} title="تعديل الأنماط السباحية" subtitle={`${athlete.name} ${athlete.lastName} — تحديث مباشر مع الملف والتقرير`} accent="indigo" maxWidth="max-w-md">
+        <div className="space-y-5">
+          <p className="text-xs text-gray-400 font-bold leading-relaxed">
+            اختيار <b>متعدد</b> لأنماط السباحة (حرة، ظهر، صدر، فراشة، متناوبة). تُحدَّث فوراً في الملف والتقرير الفني وأرقام المسجلة.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {Object.values(SwimStyle).map((s) => {
+              const active = draftStyles.includes(s);
+              return (
+                <button
+                  type="button"
+                  key={s}
+                  onClick={() => toggleDraft(s)}
+                  className={`px-4 py-4 rounded-2xl font-black text-sm border-2 transition-all text-center ${
+                    active ? 'border-[#007377] bg-[#007377]/10 text-[#007377]' : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
+                  }`}
+                >
+                  {s}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={saveStyles} className="w-full py-4 luxury-gradient-gold text-[#0B121E] rounded-2xl font-black shadow-xl">
+            حفظ الأنماط
+          </button>
+        </div>
+      </Modal>
+
       {/* Technical report modal */}
       <Modal open={reportOpen} onClose={() => setReportOpen(false)} title={`التقرير الفني - ${athlete.name} ${athlete.lastName}`} subtitle="Technical Performance Report • Season 2026" accent="teal" maxWidth="max-w-5xl">
         <div className="flex flex-col sm:flex-row justify-center gap-4 mb-8 no-print">
@@ -373,7 +439,7 @@ const AthleteProfilePage: React.FC<{ athleteId: string | null; onBack: () => voi
               </div>
               <div className="flex justify-between text-xs font-bold border-b border-gray-100 pb-3">
                 <span className="text-gray-400">الاختصاص:</span>
-                <span className="text-[#007377] font-black">{athlete.swimStyle || athlete.sport}</span>
+                <span className="text-[#007377] font-black">{styles.length > 0 ? styles.join(' • ') : athlete.sport}</span>
               </div>
             </div>
             <div className="space-y-4">

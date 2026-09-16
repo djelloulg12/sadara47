@@ -12,27 +12,28 @@ const AgreementsPage: React.FC = () => {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Agreement | null>(null);
-  const [form, setForm] = useState({ name: '', institution: '', reference: '', status: 'نشطة' as Agreement['status'] });
+  const [form, setForm] = useState({ name: '', institution: '', reference: '', status: 'نشطة' as Agreement['status'], discountPct: '' });
   const [toDelete, setToDelete] = useState<Agreement | null>(null);
 
   const openAdd = () => {
     setEditing(null);
-    setForm({ name: '', institution: '', reference: '', status: 'نشطة' });
+    setForm({ name: '', institution: '', reference: '', status: 'نشطة', discountPct: '' });
     setModalOpen(true);
   };
 
   const openEdit = (a: Agreement) => {
     setEditing(a);
-    setForm({ name: a.name, institution: a.institution, reference: a.reference, status: a.status });
+    setForm({ name: a.name, institution: a.institution, reference: a.reference, status: a.status, discountPct: a.discountPct ? String(a.discountPct) : '' });
     setModalOpen(true);
   };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    const payload = { ...form, discountPct: form.discountPct ? Math.min(100, Math.max(0, Number(form.discountPct))) : undefined };
     if (editing) {
-      updateAgreement(editing.id, form);
+      updateAgreement(editing.id, payload);
     } else {
-      addAgreement(form);
+      addAgreement(payload);
     }
     setModalOpen(false);
   };
@@ -86,6 +87,7 @@ const AgreementsPage: React.FC = () => {
               <div>
                 <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">المرجع • أُضيفت</p>
                 <p className="text-xs font-black text-[#0B121E] mt-1" dir="ltr">{a.reference || '—'}</p>
+                <p className="text-lg font-black text-[#007377] mt-2">{a.discountPct ? `${a.discountPct}% خصم` : 'بدون خصم'}</p>
               </div>
               <p className="text-[11px] text-gray-400 font-bold">{formatDate(a.createdAt)}</p>
               <div className="flex gap-2">
@@ -127,6 +129,10 @@ const AgreementsPage: React.FC = () => {
                 <option value="نشطة">نشطة</option>
                 <option value="منتهية">منتهية</option>
               </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-gray-400 px-2 uppercase tracking-widest">نسبة الخصم %</label>
+              <input type="number" min={0} max={100} value={form.discountPct} onChange={(e) => setForm({ ...form, discountPct: e.target.value })} placeholder="مثال: 20" className={inputCls} />
             </div>
           </div>
           <button type="submit" className="w-full py-4 luxury-gradient-gold text-[#0B121E] rounded-2xl font-black shadow-xl">

@@ -67,7 +67,7 @@ export interface Athlete {
   category: AgeCategory;
   level: SkillLevel;
   sport: Sport;
-  swimStyle?: SwimStyle;
+  swimStyle?: SwimStyle[];
   progress: number;
   assignedCoach: string;
   membershipStatus: MembershipStatus;
@@ -105,7 +105,7 @@ export interface RegistrationApplication {
   gender: Gender;
   sport: Sport;
   level: SkillLevel;
-  swimStyle?: SwimStyle;
+  swimStyle?: SwimStyle[];
   phone: string;
   address: string;
   bloodType: string;
@@ -124,6 +124,7 @@ export interface RegistrationApplication {
   idIssueDate?: string;
   idIssueAuthority?: string;
   consent18_07: boolean;
+  transport?: boolean;
   submittedAt: string;
 }
 
@@ -177,6 +178,7 @@ export interface Agreement {
   institution: string;
   reference: string;
   status: 'نشطة' | 'منتهية';
+  discountPct?: number;
   createdAt: string;
 }
 

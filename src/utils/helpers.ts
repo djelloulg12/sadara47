@@ -67,3 +67,11 @@ export const downloadTextFile = (filename: string, content: string): void => {
   a.click();
   URL.revokeObjectURL(url);
 };
+
+export const fmtDA = (value: number): string => `${(value || 0).toLocaleString('fr-DZ')} دج`;
+
+/** يوحّد قيمة swimStyle المخزنة (قديمة: نص واحد / جديدة: مصفوفة) إلى مصفوفة */
+export const toStyles = (value: unknown): string[] => {
+  if (!value) return [];
+  return Array.isArray(value) ? (value.filter(Boolean) as string[]) : [value as string];
+};

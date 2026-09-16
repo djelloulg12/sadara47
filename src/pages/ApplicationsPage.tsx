@@ -13,7 +13,7 @@ import EmptyState from '@/components/EmptyState';
 import { BadgeChip, CATEGORY_STYLE, LEVEL_STYLE, SPORT_STYLE } from '@/constants';
 import { useAuth, useData } from '@/context';
 import { MembershipStatus, RegistrationApplication, RegistrationStatus, UserRole } from '@/types';
-import { formatDate, generateRegistrationNumber, getAgeCategory, calculateAge } from '@/utils/helpers';
+import { formatDate, generateRegistrationNumber, getAgeCategory, calculateAge, toStyles } from '@/utils/helpers';
 import { buildUsername, randomPassword } from '@/services/formService';
 
 const ApplicationsPage: React.FC = () => {
@@ -44,6 +44,7 @@ const ApplicationsPage: React.FC = () => {
         guardianName: app.guardianName,
         photoUrl: app.photoUrl,
         location: app.pool,
+        transport: app.transport,
         joinedAt: new Date().toISOString().slice(0, 10),
       });
       const username = app.username || buildUsername(app.firstNameLatin || app.name, app.lastNameLatin || app.lastName);
@@ -103,7 +104,8 @@ const ApplicationsPage: React.FC = () => {
                     <div className="flex flex-wrap gap-2 mt-2">
                       <BadgeChip label={CATEGORY_STYLE[getAgeCategory(age)].label} className={CATEGORY_STYLE[getAgeCategory(age)].badge} />
                       <BadgeChip label={app.level} className={LEVEL_STYLE[app.level].badge} />
-                      {app.swimStyle && <BadgeChip label={app.swimStyle} className="bg-indigo-50 text-indigo-600" />}
+                      {toStyles(app.swimStyle).map((s) => <BadgeChip key={s} label={s} className="bg-indigo-50 text-indigo-600" />)}
+                      {app.transport && <BadgeChip label="نقل" className="bg-blue-50 text-blue-700" />}
                       {app.subscriptionType === 'ضمن اتفاقية معتمدة' ? (
                         <BadgeChip label={`${app.subscriptionType}`} className="bg-blue-50 text-blue-700" />
                       ) : (

@@ -1,5 +1,8 @@
 import { jsPDF } from 'jspdf';
+import QRCode from 'qrcode';
 import templateSrc from '@/assets/form-template.jpg';
+import { BASE_FEES, DEFAULT_DISCOUNT_PCT, INSURANCE_FEE, TRANSPORT_FEE } from '@/constants';
+import { fmtDA } from '@/utils/helpers';
 import { PrintData } from '@/data';
 
 /**
@@ -370,4 +373,182 @@ export function downloadFormPdf(canvases: HTMLCanvasElement[], filename = 'stama
     pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, c.width, c.height);
   });
   pdf.save(filename);
+}
+
+export interface FeeBreakdown {
+  base: number;
+  insurance: number;
+  transport: number;
+  discountPct: number;
+  discount: number;
+  net: number;
+}
+
+/** احتساب تفصيل الحقوق: اشتراك أساسي + تأمين إجباري + نقل مشروط، ثم خصم الاتفاقية والمجموع الصافي */
+export function computeFees(d: PrintData): FeeBreakdown {
+  const base = (BASE_FEES[d.category as 'أصاغر' | 'أكابر']?.[d.pool ?? ''] as number | undefined) ?? 0;
+  const insurance = INSURANCE_FEE;
+  const transportFee = d.transport ? TRANSPORT_FEE : 0;
+  const discountPct = d.subscriptionType === 'ضمن اتفاقية معتمدة' ? (d.discountPct ?? DEFAULT_DISCOUNT_PCT) : 0;
+  const gross = base + insurance + transportFee;
+  const discount = Math.round(gross * discountPct * 0.01);
+  return { base, insurance, transport: transportFee, discountPct, discount, net: gross - discount };
+}
+
+/** تصيير قسيمة وصل حقوق الاشتراك والتأمين على ورقة A4 عمودية (مع رمز QR للمصادقة) */
+export async function renderReceiptCanvas(d: PrintData): Promise<HTMLCanvasElement> {
+  await document.fonts.ready;
+  const W = 794;
+  const H = 1123;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  const fees = computeFees(d);
+  const ink = '#0F2440';
+  const gold = '#D4AF37';
+  const muted = '#6B7280';
+  const pct = (v: number, base = W) => (v / 100) * base;
+
+  const font = (size: number, weight = 700, unit = 1.4) => `${weight} ${Math.round(size * unit)}px Tajawal, Arial, sans-serif`;
+  const right = (text: string, xp: number, yp: number, size: number, color = ink, weight = 700, unit = 1.4) => {
+    ctx.font = font(size, weight, unit);
+    ctx.fillStyle = color;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, pct(xp), pct(yp, H));
+  };
+  const left = (text: string, xp: number, yp: number, size: number, color = ink, weight = 700, unit = 1.4) => {
+    ctx.font = font(size, weight, unit);
+    ctx.fillStyle = color;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, pct(xp), pct(yp, H));
+  };
+  const center = (text: string, xp: number, yp: number, size: number, color = ink, weight = 700, unit = 1.4) => {
+    ctx.font = font(size, weight, unit);
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, pct(xp), pct(yp, H));
+  };
+  const line = (x1: number, y1: number, x2: number, y2: number, color = '#E5E7EB', width = 1.2) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(pct(x1), pct(y1, H));
+    ctx.lineTo(pct(x2), pct(y2, H));
+    ctx.stroke();
+  };
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  /* رأس القسيمة */
+  line(5, 14, 95, 14, gold, 4);
+  center('كشكول حقوق الاشتراك والتأمين السنوي', 50, 6.2, 23, ink, 800);
+  center('نادي الصدارة - Ghardaïa', 50, 9.2, 12, muted, 600);
+  center('رقم الوصل: ' + (d.receiptNumber || '—'), 50, 12.2, 11, ink, 700);
+  left('تاريخ الدفع: ' + new Date().toLocaleDateString('fr-DZ'), 6, 12.2, 10, muted, 600);
+  left('الساعة: ' + new Date().toLocaleTimeString('fr-DZ', { hour: '2-digit', minute: '2-digit' }), 30, 12.2, 10, muted, 600);
+
+  /* بيانات العضو */
+  const member: Array<[string, string]> = [
+    ['اسم المنخرط', `${d.name} ${d.lastName}`],
+    ['التخصص / الرياضة', `${d.sport}${(d.swimStyle ?? []).length ? ' • ' + (d.swimStyle ?? []).join(' / ') : ''}`],
+    ['الفئة', d.category || '—'],
+    ['نوع الاشتراك', d.subscriptionType || '—'],
+    ['بيان الاتفاقية', d.agreementName || '—'],
+    ['المنشأة (المسبح)', d.pool || '—'],
+    ['رقم الرياضي', d.nin || '—'],
+  ];
+  let my = 18.5;
+  member.forEach(([k, v]) => {
+    right(k + ':', 40, my, 11, muted, 600);
+    right(v, 94, my, 12, ink, 700);
+    my += 3.1;
+  });
+
+  /* جدول التفصيل */
+  const rows: Array<[string, number]> = [
+    ['حقوق الاشتراك الأساسية (' + (d.category || '—') + ')', fees.base],
+    ['قسط التأمين السنوي الإجباري', fees.insurance],
+    ['خدمة النقل', fees.transport],
+  ];
+  const tY = 42;
+  const top = (v: number) => pct(tY + v, H);
+
+  ctx.fillStyle = '#0B121E';
+  ctx.fillRect(0, top(0) - pct(0.8, H), W, pct(1.6, H) + pct(0.8, H));
+  center('التفصيل', 6, top(0), 12, '#ffffff', 800);
+
+  let ry = 2.3;
+  rows.forEach(([label, amount]) => {
+    right(label + ':', 40, top(ry), 11, muted, 600);
+    left(fmtDA(amount), 50, top(ry), 12, ink, 700);
+    line(6, top(ry + 1.2), 94, top(ry + 1.2));
+    ry += 2.3;
+  });
+
+  if (fees.discountPct > 0) {
+    right('خصم الاتفاقية (' + fees.discountPct + '%) :', 40, top(ry), 11, '#007377', 600);
+    left('- ' + fmtDA(fees.discount), 50, top(ry), 12, '#007377', 700);
+    line(6, top(ry + 1.2), 94, top(ry + 1.2));
+    ry += 2.3;
+  }
+
+  ctx.fillStyle = '#0F2440';
+  ctx.fillRect(0, top(ry) - pct(1.4, H), W, pct(2.9, H));
+  right('المجموع الصافي: ' + fmtDA(fees.net), 88, top(ry), 17, '#ffffff', 800);
+  line(4, top(ry + 2.0), 96, top(ry + 2.0), '#D4AF37', 3);
+
+  const payY = tY + ry + 7;
+  const payRows: Array<[string, string]> = [
+    ['طريقة الدفع', d.paymentMethod || '—'],
+    ['أمين المال / الإدارة', 'الاسم: ................................  التوقيع: ....................'],
+  ];
+  let py = 1.0;
+  payRows.forEach(([k, v]) => {
+    right(k + ':', 40, top(payY - tY + py), 11, muted, 600);
+    right(v, 94, top(payY - tY + py), 11, ink, 700);
+    py += 3.2;
+  });
+
+  /* توقيع وخاتم أمين المال */
+  const sigY = 63;
+  line(60, sigY + 12, 94, sigY + 12);
+  right('توقيع وخاتم أمين المال', 94, sigY + 14.5, 11, muted, 600);
+  line(4, sigY + 12, 40, sigY + 12);
+  right('توقيع المنخرط / الولي', 40, sigY + 14.5, 11, muted, 600);
+
+  /* رمز QR للمصادقة */
+  const qrText = [
+    'SADARA47:RECEIPT',
+    'N:' + (d.receiptNumber || ''),
+    'MEMBER:' + (d.nin || (d.name + ' ' + d.lastName)),
+    'NET:' + fees.net,
+    'DATE:' + new Date().toISOString().slice(0, 10),
+  ].join('|');
+  let qr: string | null = null;
+  try {
+    qr = await QRCode.toDataURL(qrText, { width: 128, margin: 1, errorCorrectionLevel: 'M' });
+  } catch {
+    qr = null;
+  }
+  if (qr) {
+    const img = new Image();
+    await new Promise<void>((res) => {
+      img.onload = () => res();
+      img.src = qr!;
+    });
+    const qs = pct(16, H);
+    ctx.drawImage(img, pct(72), pct(64, H), qs, qs);
+    center('رمز QR للمصادقة', 80, pct(83.5, H), 10, muted, 600);
+  }
+
+  line(5, 88, 95, 88, gold, 4);
+  center('قسيمة تُرفق ملف المنخرط وتُسلَّم مع الاستمارة', 50, 96.5, 11, muted, 600);
+  center('مكتب التحفيظ - نادي الصدارة 2026', 50, 98.5, 10, muted, 600);
+
+  return canvas;
 }

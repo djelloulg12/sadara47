@@ -65,7 +65,7 @@ const rawSeedAthletes: Array<Omit<Athlete, 'age' | 'category' | 'registrationNum
     gender: Gender.MALE,
     level: SkillLevel.ELITE,
     sport: Sport.SWIMMING,
-    swimStyle: SwimStyle.FREE,
+    swimStyle: [SwimStyle.FREE, SwimStyle.MEDLEY],
     progress: 88,
     assignedCoach: 'جلول قندوز',
     membershipStatus: MembershipStatus.ACTIVE,
@@ -127,7 +127,7 @@ const rawSeedAthletes: Array<Omit<Athlete, 'age' | 'category' | 'registrationNum
     gender: Gender.FEMALE,
     level: SkillLevel.INTERMEDIATE,
     sport: Sport.SWIMMING,
-    swimStyle: SwimStyle.BREAST,
+    swimStyle: [SwimStyle.BREAST, SwimStyle.BACK],
     progress: 64,
     assignedCoach: 'أحمد سباح',
     membershipStatus: MembershipStatus.ACTIVE,
@@ -222,7 +222,7 @@ const seedApplications = (): RegistrationApplication[] => [
     dob: '2010-02-11',
     gender: Gender.FEMALE,
     sport: Sport.SWIMMING,
-    swimStyle: SwimStyle.FREE,
+    swimStyle: [SwimStyle.FREE],
     level: SkillLevel.BEGINNER,
     phone: '0770001112',
     address: 'حي الوئام - غرداية',
@@ -349,6 +349,7 @@ const seedAgreements = (): Agreement[] => [
     institution: 'المدرسة الوطنية للرياضات الأولمبية - الجزائر',
     reference: 'AGR-2026-001',
     status: 'نشطة',
+    discountPct: 20,
     createdAt: '2026-01-10',
   },
   {
@@ -357,6 +358,7 @@ const seedAgreements = (): Agreement[] => [
     institution: 'مديرية الشباب والرياضة - غرداية',
     reference: 'AGR-2026-014',
     status: 'نشطة',
+    discountPct: 15,
     createdAt: '2026-02-01',
   },
 ];
@@ -462,7 +464,7 @@ export interface PrintData {
   guardianName?: string;
   nin: string;
   level: string;
-  swimStyle?: string;
+  swimStyle?: string[];
   category?: string;
   subscriptionType?: string;
   agreementName?: string;
@@ -475,6 +477,10 @@ export interface PrintData {
   idIssueAuthority?: string;
   username?: string;
   password?: string;
+  transport?: boolean;
+  discountPct?: number;
+  receiptNumber?: string;
+  paymentMethod?: string;
 }
 
 export const setPrintData = (data: PrintData): void => saveValue(KEYS.printData, data);
