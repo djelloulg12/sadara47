@@ -174,6 +174,16 @@ export async function renderFormCanvas(d: PrintData, opts?: { photoUrl?: string;
     }
   }
 
+  if (d.season) {
+    ctx.save();
+    ctx.fillStyle = '#0F2440';
+    ctx.font = `700 ${Math.round(W * 0.010)}px Tajawal, Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`الموسم: ${d.season}`, ((PHOTO_BOX.x1 + PHOTO_BOX.x2) / 200) * W, (PHOTO_BOX.y2 / 100) * H + Math.round(H * 0.014));
+    ctx.restore();
+  }
+
   return canvas;
 }
 
