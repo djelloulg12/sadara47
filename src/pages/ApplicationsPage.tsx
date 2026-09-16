@@ -11,18 +11,20 @@ import {
 import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import { BadgeChip, CATEGORY_STYLE, LEVEL_STYLE, SPORT_STYLE } from '@/constants';
-import { useData } from '@/context';
-import { MembershipStatus, RegistrationApplication, RegistrationStatus } from '@/types';
+import { useAuth, useData } from '@/context';
+import { MembershipStatus, RegistrationApplication, RegistrationStatus, UserRole } from '@/types';
 import { formatDate, generateRegistrationNumber, getAgeCategory, calculateAge } from '@/utils/helpers';
+import { buildUsername, randomPassword } from '@/services/formService';
 
 const ApplicationsPage: React.FC = () => {
   const { applications, setApplicationStatus, deleteApplication, addAthlete, athletes } = useData();
+  const { users, addUser } = useAuth();
   const [toDelete, setToDelete] = React.useState<RegistrationApplication | null>(null);
   const [audit, setAudit] = React.useState<RegistrationApplication | null>(null);
 
   const handleDecision = (app: RegistrationApplication, status: RegistrationStatus) => {
     if (status === 'approved') {
-      addAthlete({
+      const athlete = addAthlete({
         registrationNumber: generateRegistrationNumber(athletes.length),
         nin: app.nin,
         name: app.name,
@@ -44,6 +46,18 @@ const ApplicationsPage: React.FC = () => {
         location: app.pool,
         joinedAt: new Date().toISOString().slice(0, 10),
       });
+      const username = app.username || buildUsername(app.firstNameLatin || app.name, app.lastNameLatin || app.lastName);
+      const password = app.password || randomPassword(8);
+      const alreadyExists = users.some((u) => u.username.toLowerCase() === username.toLowerCase());
+      if (!alreadyExists) {
+        addUser({
+          name: `${app.firstNameLatin || app.name} ${app.lastNameLatin || app.lastName}`.trim(),
+          username,
+          password,
+          role: UserRole.ATHLETE,
+          athleteId: athlete.id,
+        });
+      }
     }
     setApplicationStatus(app.id, status);
   };
@@ -197,6 +211,18 @@ const ApplicationsPage: React.FC = () => {
               <div className="p-4 bg-gray-50 rounded-2xl"><p className="text-gray-400 text-[10px] mb-1">NIN</p><p className="text-[#0B121E] font-mono">{audit.nin.slice(0, 6)}••••••••{audit.nin.slice(-4)}</p></div>
               <div className="p-4 bg-gray-50 rounded-2xl"><p className="text-gray-400 text-[10px] mb-1">الملف</p><p className="text-[#0B121E]">{audit.photoUrl ? '✓ مرفق' : '—'} / {audit.scanUrl ? '✓ ممسوح' : '—'}</p></div>
               <div className="p-4 bg-gray-50 rounded-2xl"><p className="text-gray-400 text-[10px] mb-1">المنشأة</p><p className="text-[#0B121E]">{audit.pool || '—'}</p></div>
+            </div>
+            <div className="px-8 pb-8">
+              <div className="rounded-2xl border border-[#007377]/20 bg-[#007377]/5 p-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-bold">
+                <div>
+                  <p className="text-gray-400 text-[10px] mb-1 flex items-center gap-2"><UserCheck size={12} /> معلومات الحساب (الوجه الثاني من الاستمارة)</p>
+                  <p className="text-[#0B121E] font-mono" dir="ltr">user: {audit.username || buildUsername(audit.firstNameLatin || audit.name, audit.lastNameLatin || audit.lastName)}</p>
+                  <p className="text-[#0B121E] font-mono text-[11px] mt-1" dir="ltr">pass: {audit.password || '— (يُنشأ عند القبول)'}</p>
+                </div>
+                <p className="text-[11px] text-[#007377] leading-relaxed self-center">
+                  عند قبول الطلب يُنشأ حساب دخول للرياضي بهذا الإسم المستخدم وكلمة المرور تلقائياً.
+                </p>
+              </div>
             </div>
           </div>
         </div>

@@ -25,6 +25,7 @@ import {
   savePlans,
   saveRecords,
   saveSession,
+  saveValue,
   getSession,
   getRegistrationOpen,
   setRegistrationOpenValue,
@@ -77,6 +78,7 @@ interface AuthContextType {
   users: User[];
   login: (username: string, password: string) => boolean;
   logout: () => void;
+  addUser: (data: Omit<User, 'id'>) => User;
   isRole: (...roles: UserRole[]) => boolean;
   canManage: boolean;
 }
@@ -86,7 +88,7 @@ export const useAuth = (): AuthContextType => useContext(AuthContext)!;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => getSession());
-  const [users] = useState<User[]>(() => getInitialState().users);
+  const [users, setUsers] = useState<User[]>(() => getInitialState().users);
 
   const login = useCallback(
     (username: string, password: string): boolean => {
@@ -108,6 +110,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveSession(null);
   }, []);
 
+  const addUser = useCallback((data: Omit<User, 'id'>): User => {
+    const u: User = { ...data, id: data.username.replace(/[^a-z0-9]/gi, '').slice(0, 8) || `u${Date.now()}` };
+    setUsers((prev) => {
+      const exists = prev.find((x) => x.username.toLowerCase() === u.username.toLowerCase());
+      const next = exists ? prev.map((x) => (x === exists ? u : x)) : [u, ...prev];
+      saveValue('sadara47_users', next);
+      return next;
+    });
+    return u;
+  }, []);
+
   const isRole = useCallback(
     (...roles: UserRole[]) => !!user && roles.includes(user.role),
     [user],
@@ -118,7 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     (user.role === UserRole.PRESIDENT || user.role === UserRole.MANAGER || user.role === UserRole.COACH);
 
   return (
-    <AuthContext.Provider value={{ user, users, login, logout, isRole, canManage }}>
+    <AuthContext.Provider value={{ user, users, login, logout, addUser, isRole, canManage }}>
       {children}
     </AuthContext.Provider>
   );

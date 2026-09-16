@@ -201,6 +201,10 @@ input[type='date'] {
   .no-print {
     display: none !important;
   }
+  .print-page-break {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
   nav,
   .app-sidebar {
     display: none !important;

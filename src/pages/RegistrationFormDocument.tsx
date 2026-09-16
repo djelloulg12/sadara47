@@ -2,15 +2,17 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, FileDown, Loader2, Printer, ShieldCheck } from 'lucide-react';
 import { useAppContext } from '@/context';
 import { getPrintData } from '@/data';
-import { downloadFormImage, downloadFormPdf, renderFormCanvas } from '@/services/formService';
+import { downloadFormImage, downloadFormPdf, renderBackCanvas, renderFormCanvas } from '@/services/formService';
 import logo from '@/assets/logo.png';
 
 const RegistrationFormDocument: React.FC = () => {
   const { setRoute } = useAppContext();
   const data = getPrintData();
   const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [backUrl, setBackUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const backCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -18,22 +20,27 @@ const RegistrationFormDocument: React.FC = () => {
       setLoading(false);
       return;
     }
-    renderFormCanvas(data, { photoUrl: data.photoUrl })
-      .then((canvas) => {
+    (async () => {
+      try {
+        const front = await renderFormCanvas(data, { photoUrl: data.photoUrl });
+        const back = await renderBackCanvas(data);
         if (!alive) return;
-        canvasRef.current = canvas;
-        setDataUrl(canvas.toDataURL('image/jpeg', 0.92));
-      })
-      .catch(() => {
+        canvasRef.current = front;
+        backCanvasRef.current = back;
+        setDataUrl(front.toDataURL('image/jpeg', 0.92));
+        setBackUrl(back ? back.toDataURL('image/jpeg', 0.92) : null);
+      } catch {
         if (alive) setDataUrl(null);
-      })
-      .finally(() => {
+      } finally {
         if (alive) setLoading(false);
-      });
+      }
+    })();
     return () => {
       alive = false;
     };
   }, [data]);
+
+  const faces = () => [canvasRef.current, backCanvasRef.current].filter(Boolean) as HTMLCanvasElement[];
 
   if (!data) {
     return (
@@ -59,14 +66,14 @@ const RegistrationFormDocument: React.FC = () => {
           </div>
           <div className="flex gap-3">
             <button
-              onClick={() => canvasRef.current && downloadFormImage(canvasRef.current)}
+              onClick={() => downloadFormImage(faces())}
               disabled={loading}
               className="flex items-center gap-2 px-5 py-3 bg-[#0B121E] text-white rounded-2xl font-bold shadow-lg border-b-4 border-[#D4AF37]"
             >
               <FileDown size={18} className="text-[#D4AF37]" /> صورة
             </button>
             <button
-              onClick={() => canvasRef.current && downloadFormPdf(canvasRef.current)}
+              onClick={() => downloadFormPdf(faces())}
               disabled={loading}
               className="flex items-center gap-2 px-5 py-3 bg-[#007377] text-white rounded-2xl font-bold shadow-lg border-b-4 border-green-900"
             >
@@ -96,7 +103,14 @@ const RegistrationFormDocument: React.FC = () => {
               <p className="text-sm font-bold">جاري تجهيز الاستمارة الرسمية...</p>
             </div>
           ) : dataUrl ? (
-            <img src={dataUrl} alt="الاستمارة الرسمية" className="w-full h-auto" />
+            <>
+              <img src={dataUrl} alt="الاستمارة الرسمية - الوجه الأول" className="w-full h-auto" />
+              {backUrl ? (
+                <div className="print-page-break">
+                  <img src={backUrl} alt="الوجه الثاني - معلومات الحساب" className="w-full h-auto" />
+                </div>
+              ) : null}
+            </>
           ) : (
             <div className="p-10 text-center">
               <ShieldCheck className="text-gray-300 mx-auto mb-4" size={48} />

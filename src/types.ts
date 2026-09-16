@@ -96,6 +96,11 @@ export interface RegistrationApplication {
   nin: string;
   name: string;
   lastName: string;
+  firstNameLatin?: string;
+  lastNameLatin?: string;
+  whatsapp?: string;
+  username?: string;
+  password?: string;
   dob: string;
   gender: Gender;
   sport: Sport;

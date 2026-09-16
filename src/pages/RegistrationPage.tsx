@@ -23,7 +23,7 @@ import { setPrintData } from '@/data';
 import { Gender, SkillLevel, Sport, SwimStyle, ApplicantCategory, SubscriptionType } from '@/types';
 import { WILAYAS } from '@/constants';
 import logo from '@/assets/logo.png';
-import { cropResizePhoto, downloadFormImage, downloadFormPdf, renderFormCanvas } from '@/services/formService';
+import { cropResizePhoto, downloadFormImage, downloadFormPdf, renderBackCanvas, renderFormCanvas, buildUsername, randomPassword } from '@/services/formService';
 
 const STEPS = ['الاختيار الرياضي', 'البيانات الشخصية', 'الولي / التصريحات', 'الاستمارة والمصادقة'];
 
@@ -37,7 +37,9 @@ const RegistrationPage: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [filledFormUrl, setFilledFormUrl] = useState<string | null>(null);
   const formCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const backCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [scanUrl, setScanUrl] = useState<string | null>(null);
+  const [password] = useState(() => randomPassword(8));
 
   const [f, setF] = useState({
     sport: Sport.SWIMMING,
@@ -53,6 +55,9 @@ const RegistrationPage: React.FC = () => {
     wilaya: '',
     name: '',
     lastName: '',
+    firstNameLatin: '',
+    lastNameLatin: '',
+    whatsapp: '',
     dob: '',
     gender: Gender.MALE,
     bloodType: 'O+',
@@ -69,6 +74,7 @@ const RegistrationPage: React.FC = () => {
     medicalClearance: false,
     consent18_07: false,
     signatureConfirmed: false,
+    accountConfirmed: false,
   });
 
   const set = (key: string, value: string | boolean) => setF((prev) => ({ ...prev, [key]: value }));
@@ -83,11 +89,19 @@ const RegistrationPage: React.FC = () => {
       : '';
   const effNin = isMinor ? composedMinorNin : f.nin;
 
+  const username = useMemo(
+    () => buildUsername(f.firstNameLatin || f.name, f.lastNameLatin || f.lastName),
+    [f.firstNameLatin, f.name, f.lastNameLatin, f.lastName],
+  );
+
   const printData = useMemo(
     () => ({
       nin: effNin,
       name: f.name,
       lastName: f.lastName,
+      firstNameLatin: f.firstNameLatin,
+      lastNameLatin: f.lastNameLatin,
+      whatsapp: f.whatsapp,
       dob: f.dob,
       gender: f.gender,
       address: f.address,
@@ -107,8 +121,10 @@ const RegistrationPage: React.FC = () => {
       idCardNumber: f.idCardNumber,
       idIssueDate: f.idIssueDate,
       idIssueAuthority: f.idIssueAuthority,
+      username,
+      password,
     }),
-    [f, effNin],
+    [f, effNin, username, password],
   );
 
   const ninValid =
@@ -127,7 +143,7 @@ const RegistrationPage: React.FC = () => {
     step === 0
       ? true
       : step === 1
-        ? ninValid && f.name && f.lastName && f.dob && f.phone && f.address
+        ? ninValid && f.name && f.lastName && f.dob && f.phone && f.address && f.accountConfirmed
         : step === 2
           ? f.medicalClearance &&
             f.consent18_07 &&
@@ -154,6 +170,8 @@ const RegistrationPage: React.FC = () => {
     try {
       const canvas = await renderFormCanvas(printData, { photoUrl: f.photoUrl || undefined });
       formCanvasRef.current = canvas;
+      const back = await renderBackCanvas(printData);
+      backCanvasRef.current = back;
       setFilledFormUrl(canvas.toDataURL('image/jpeg', 0.92));
     } catch {
       setFilledFormUrl(null);
@@ -163,11 +181,13 @@ const RegistrationPage: React.FC = () => {
   };
 
   const handleDownloadImage = () => {
-    if (formCanvasRef.current) downloadFormImage(formCanvasRef.current);
+    const faces = [formCanvasRef.current, backCanvasRef.current].filter(Boolean) as HTMLCanvasElement[];
+    if (faces.length) downloadFormImage(faces);
   };
 
   const handleDownloadPdf = () => {
-    if (formCanvasRef.current) downloadFormPdf(formCanvasRef.current);
+    const faces = [formCanvasRef.current, backCanvasRef.current].filter(Boolean) as HTMLCanvasElement[];
+    if (faces.length) downloadFormPdf(faces);
   };
 
   const submit = () => {
@@ -176,6 +196,9 @@ const RegistrationPage: React.FC = () => {
       nin: effNin,
       name: f.name,
       lastName: f.lastName,
+      firstNameLatin: f.firstNameLatin,
+      lastNameLatin: f.lastNameLatin,
+      whatsapp: f.whatsapp,
       dob: f.dob,
       gender: f.gender,
       sport: f.sport,
@@ -389,8 +412,10 @@ const RegistrationPage: React.FC = () => {
                   <User className="text-[#007377]" size={22} /> المعلومات الشخصية
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="space-y-2"><label className={labelCls}>الاسم *</label><input required value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="الاسم" className={inputCls} /></div>
-                  <div className="space-y-2"><label className={labelCls}>اللقب *</label><input required value={f.lastName} onChange={(e) => set('lastName', e.target.value)} placeholder="اللقب" className={inputCls} /></div>
+                  <div className="space-y-2"><label className={labelCls}>الاسم (بالعربية) *</label><input required value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="الاسم" className={inputCls} /></div>
+                  <div className="space-y-2"><label className={labelCls}>اللقب (بالعربية) *</label><input required value={f.lastName} onChange={(e) => set('lastName', e.target.value)} placeholder="اللقب" className={inputCls} /></div>
+                  <div className="space-y-2"><label className={labelCls}>الإسم (بالفرنسية) *</label><input required value={f.firstNameLatin} onChange={(e) => set('firstNameLatin', e.target.value)} placeholder="Prénom" dir="ltr" className={`${inputCls} font-mono`} /></div>
+                  <div className="space-y-2"><label className={labelCls}>اللقب (بالفرنسية) *</label><input required value={f.lastNameLatin} onChange={(e) => set('lastNameLatin', e.target.value)} placeholder="Nom" dir="ltr" className={`${inputCls} font-mono`} /></div>
                   {isMinor ? (
                     <>
                       <div className="space-y-2"><label className={labelCls}>رقم شهادة الميلاد *</label><input required inputMode="numeric" value={f.certNumber} onChange={(e) => set('certNumber', e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="رقم الشهادة" className={`${inputCls} font-mono`} /></div>
@@ -425,6 +450,7 @@ const RegistrationPage: React.FC = () => {
                   <div className="space-y-2"><label className={labelCls}>فصيلة الدم</label><select value={f.bloodType} onChange={(e) => set('bloodType', e.target.value)} className={inputCls}>{['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'].map((b) => <option key={b} value={b}>{b}</option>)}</select></div>
                   <div className="space-y-2"><label className={labelCls}>المستوى الرياضي</label><select value={f.level} onChange={(e) => set('level', e.target.value)} className={inputCls}>{Object.values(SkillLevel).map((l) => <option key={l} value={l}>{l}</option>)}</select></div>
                   <div className="space-y-2"><label className={labelCls}>الهاتف *</label><input required value={f.phone} onChange={(e) => set('phone', e.target.value)} placeholder="05/06..." className={inputCls} /></div>
+                  <div className="space-y-2"><label className={labelCls}>رقم الوتساب</label><input value={f.whatsapp} onChange={(e) => set('whatsapp', e.target.value)} placeholder="رقم واتساب للتواصل (اختياري)" className={inputCls} /></div>
                   <div className="space-y-2 col-span-full"><label className={labelCls}>العنوان *</label><input required value={f.address} onChange={(e) => set('address', e.target.value)} placeholder="الحي - البلدية" className={inputCls} /></div>
                 </div>
               </div>
@@ -453,6 +479,31 @@ const RegistrationPage: React.FC = () => {
                     </p>
                   </div>
                 </div>
+              </div>
+
+              <div className="pt-6 border-t border-gray-100 space-y-4">
+                <h3 className="text-lg font-black text-[#0B121E] flex items-center gap-3 mb-1">
+                  <User className="text-[#007377]" size={20} /> حساب الدخول الرسمي
+                </h3>
+                <p className="text-xs text-gray-400 font-bold leading-relaxed">
+                  يُنشأ حسابك آلياً ويُطبع في منتصف <b>الوجه الثاني</b> من الاستمارة (معلومات موثّقة بتوقيعك عند الاستلام).
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#F4F7FA] border border-gray-200 rounded-3xl p-5">
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">إسم المستخدم / Username</p>
+                    <p dir="ltr" className="font-mono text-sm font-black text-[#007377] tracking-wider break-all">{username}</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">كلمة المرور / Password</p>
+                    <p dir="ltr" className="font-mono text-sm font-black text-[#007377] tracking-wider break-all">{password}</p>
+                  </div>
+                </div>
+                <label className="flex items-center gap-4 p-5 bg-gray-50 rounded-2xl border border-gray-100 cursor-pointer hover:border-[#007377]/40 transition-all">
+                  <input type="checkbox" required checked={f.accountConfirmed} onChange={(e) => set('accountConfirmed', e.target.checked)} className="w-5 h-5 accent-[#007377]" />
+                  <span className="text-sm font-bold text-[#0B121E]">
+                    أقرّ وبتوقيعي بأني تسلّمت <b>معلومات حسابي الرسمية</b> (إسم المستخدم وكلمة المرور) وأوافق على توثيقها في الوجه الثاني من الاستمارة
+                  </span>
+                </label>
               </div>
             </div>
           )}
@@ -549,7 +600,7 @@ const RegistrationPage: React.FC = () => {
                       <button type="button" onClick={handleDownloadPdf} className="flex items-center gap-2 px-5 py-3 bg-[#007377] text-white rounded-2xl font-black text-xs border-b-4 border-green-900 hover:-translate-y-0.5 transition-all">
                         <FileDown size={16} /> تنزيل PDF
                       </button>
-                      <button type="button" onClick={() => setRoute('print-form')} className="flex items-center gap-2 px-5 py-3 bg-white text-gray-500 rounded-2xl font-black text-xs border border-gray-200 hover:-translate-y-0.5 transition-all no-print">
+                      <button type="button" onClick={() => { setPrintData(printData); setRoute('print-form'); }} className="flex items-center gap-2 px-5 py-3 bg-white text-gray-500 rounded-2xl font-black text-xs border border-gray-200 hover:-translate-y-0.5 transition-all no-print">
                         <Printer size={16} /> طباعة
                       </button>
                     </div>

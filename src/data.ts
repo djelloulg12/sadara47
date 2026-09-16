@@ -450,6 +450,9 @@ export const saveNotifications = (v: AppNotification[]) => saveValue(KEYS.notifi
 export interface PrintData {
   name: string;
   lastName: string;
+  firstNameLatin?: string;
+  lastNameLatin?: string;
+  whatsapp?: string;
   dob: string;
   gender: string;
   address: string;
@@ -470,6 +473,8 @@ export interface PrintData {
   idCardNumber?: string;
   idIssueDate?: string;
   idIssueAuthority?: string;
+  username?: string;
+  password?: string;
 }
 
 export const setPrintData = (data: PrintData): void => saveValue(KEYS.printData, data);
