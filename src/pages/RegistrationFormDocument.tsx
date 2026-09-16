@@ -2,17 +2,19 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, FileDown, Loader2, Printer, ShieldCheck } from 'lucide-react';
 import { useAppContext } from '@/context';
 import { getPrintData } from '@/data';
-import { downloadFormImage, downloadFormPdf, renderBackCanvas, renderFormCanvas, renderReceiptCanvas } from '@/services/formService';
+import { downloadFormImage, downloadFormPdf, renderBackCanvas, renderFormCanvas, renderLawCanvas, renderReceiptCanvas } from '@/services/formService';
 import logo from '@/assets/logo.png';
 
 const RegistrationFormDocument: React.FC = () => {
   const { setRoute } = useAppContext();
   const data = getPrintData();
   const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [lawUrl, setLawUrl] = useState<string | null>(null);
   const [backUrl, setBackUrl] = useState<string | null>(null);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const lawCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const backCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const receiptCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -25,13 +27,16 @@ const RegistrationFormDocument: React.FC = () => {
     (async () => {
       try {
         const front = await renderFormCanvas(data, { photoUrl: data.photoUrl });
+        const law = await renderLawCanvas();
         const back = await renderBackCanvas(data);
         const receipt = await renderReceiptCanvas(data);
         if (!alive) return;
         canvasRef.current = front;
+        lawCanvasRef.current = law;
         backCanvasRef.current = back;
         receiptCanvasRef.current = receipt;
         setDataUrl(front.toDataURL('image/jpeg', 0.92));
+        setLawUrl(law.toDataURL('image/jpeg', 0.92));
         setBackUrl(back ? back.toDataURL('image/jpeg', 0.92) : null);
         setReceiptUrl(receipt ? receipt.toDataURL('image/jpeg', 0.92) : null);
       } catch {
@@ -46,7 +51,7 @@ const RegistrationFormDocument: React.FC = () => {
   }, [data]);
 
   const faces = () =>
-    [canvasRef.current, backCanvasRef.current, receiptCanvasRef.current].filter(Boolean) as HTMLCanvasElement[];
+    [canvasRef.current, lawCanvasRef.current, backCanvasRef.current, receiptCanvasRef.current].filter(Boolean) as HTMLCanvasElement[];
 
   if (!data) {
     return (
@@ -111,9 +116,14 @@ const RegistrationFormDocument: React.FC = () => {
           ) : dataUrl ? (
             <>
               <img src={dataUrl} alt="الاستمارة الرسمية - الوجه الأول" className="w-full h-auto" />
+              {lawUrl ? (
+                <div className="print-page-break">
+                  <img src={lawUrl} alt="الوجه الثاني - قانون النادي" className="w-full h-auto" />
+                </div>
+              ) : null}
               {backUrl ? (
                 <div className="print-page-break">
-                  <img src={backUrl} alt="الوجه الثاني - معلومات الحساب" className="w-full h-auto" />
+                  <img src={backUrl} alt="الوجه الثالث - معلومات الحساب" className="w-full h-auto" />
                 </div>
               ) : null}
               {receiptUrl ? (

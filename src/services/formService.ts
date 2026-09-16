@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 import templateSrc from '@/assets/form-template.jpg';
+import clubLawSrc from '@/assets/club-law.jpg';
 import { BASE_FEES, DEFAULT_DISCOUNT_PCT, INSURANCE_FEE, TRANSPORT_FEE } from '@/constants';
 import { fmtDA } from '@/utils/helpers';
 import { PrintData } from '@/data';
@@ -44,29 +45,29 @@ export interface FormTextFields {
    تثبيت النصوص فوق الخطوط المنقطة — النقطة (0,0) = أعلى اليسار،
    الارتكاز يمثّل نهاية النص جهة اليمين (بعد النقطتين «:»)، وحجم الخط 14-18pt عريض. */
 const TOP_FIELDS: FieldBox[] = [
-  { key: 'pool', x1: 88, x2: 88, y: 18.5, fontSize: 18, align: 'right', weight: 700 },
-  { key: 'regNumber', x1: 6, x2: 6, y: 21.5, fontSize: 18, align: 'left', weight: 700 },
-  { key: 'firstName', x1: 82, x2: 82, y: 25.2, fontSize: 18, align: 'right', weight: 700 },
-  { key: 'lastName', x1: 82, x2: 82, y: 28.7, fontSize: 18, align: 'right', weight: 700 },
-  { key: 'birthDate', x1: 75, x2: 75, y: 32.2, fontSize: 18, align: 'right', weight: 700 },
-  { key: 'address', x1: 80, x2: 80, y: 35.7, fontSize: 18, align: 'right', weight: 700 },
-  { key: 'bloodType', x1: 78, x2: 78, y: 39.2, fontSize: 18, align: 'right', weight: 700 },
-  { key: 'phoneNumber', x1: 78, x2: 78, y: 42.7, fontSize: 18, align: 'right', weight: 700 },
-  { key: 'whatsapp', x1: 78, x2: 78, y: 46.2, fontSize: 16, align: 'right', weight: 700 },
+  { key: 'pool', x1: 88, x2: 88, y: 18.5, fontSize: 36, align: 'right', weight: 700 },
+  { key: 'regNumber', x1: 6, x2: 6, y: 21.5, fontSize: 36, align: 'left', weight: 700 },
+  { key: 'firstName', x1: 82, x2: 82, y: 25.2, fontSize: 36, align: 'right', weight: 700 },
+  { key: 'lastName', x1: 82, x2: 82, y: 28.7, fontSize: 36, align: 'right', weight: 700 },
+  { key: 'birthDate', x1: 75, x2: 75, y: 32.2, fontSize: 36, align: 'right', weight: 700 },
+  { key: 'address', x1: 80, x2: 80, y: 35.7, fontSize: 36, align: 'right', weight: 700 },
+  { key: 'bloodType', x1: 78, x2: 78, y: 39.2, fontSize: 36, align: 'right', weight: 700 },
+  { key: 'phoneNumber', x1: 78, x2: 78, y: 42.7, fontSize: 36, align: 'right', weight: 700 },
+  { key: 'whatsapp', x1: 78, x2: 78, y: 46.2, fontSize: 32, align: 'right', weight: 700 },
 ];
 
-/* ب. الشهادة الطبية (الجزء الأوسط) — خط 16pt */
-const MEDICAL_FIELDS: FieldBox[] = [{ key: 'doctorName', x1: 70, x2: 70, y: 49.6, fontSize: 16, align: 'right', weight: 600 }];
+/* ب. الشهادة الطبية (الجزء الأوسط) — خط 32pt */
+const MEDICAL_FIELDS: FieldBox[] = [{ key: 'doctorName', x1: 70, x2: 70, y: 49.6, fontSize: 32, align: 'right', weight: 600 }];
 
-/* ج. التصريح الأبوي والمصادقة (الجزء السفلي) — خط 12-16pt وفق الجدول */
+/* ج. التصريح الأبوي والمصادقة (الجزء السفلي) — خط 26-36pt وفق الجدول */
 const GUARDIAN_FIELDS: FieldBox[] = [
-  { key: 'guardianName', x1: 72, x2: 72, y: 70.0, fontSize: 16, align: 'right', weight: 700 },
-  { key: 'guardianBirthDate', x1: 35, x2: 35, y: 70.0, fontSize: 16, align: 'right', weight: 400 },
-  { key: 'guardianBirthPlace', x1: 14, x2: 14, y: 70.0, fontSize: 16, align: 'right', weight: 400 },
-  { key: 'idCardNumber', x1: 70, x2: 70, y: 73.5, fontSize: 16, align: 'right', weight: 700 },
-  { key: 'idIssueDate', x1: 36, x2: 36, y: 73.5, fontSize: 13, align: 'right', weight: 400 },
-  { key: 'idIssueAuthority', x1: 15, x2: 15, y: 73.5, fontSize: 16, align: 'right', weight: 400 },
-  { key: 'childName', x1: 87, x2: 87, y: 76.6, fontSize: 18, align: 'right', weight: 700 },
+  { key: 'guardianName', x1: 72, x2: 72, y: 70.0, fontSize: 32, align: 'right', weight: 700 },
+  { key: 'guardianBirthDate', x1: 35, x2: 35, y: 70.0, fontSize: 32, align: 'right', weight: 400 },
+  { key: 'guardianBirthPlace', x1: 14, x2: 14, y: 70.0, fontSize: 32, align: 'right', weight: 400 },
+  { key: 'idCardNumber', x1: 70, x2: 70, y: 73.5, fontSize: 32, align: 'right', weight: 700 },
+  { key: 'idIssueDate', x1: 36, x2: 36, y: 73.5, fontSize: 26, align: 'right', weight: 400 },
+  { key: 'idIssueAuthority', x1: 15, x2: 15, y: 73.5, fontSize: 32, align: 'right', weight: 400 },
+  { key: 'childName', x1: 87, x2: 87, y: 76.6, fontSize: 36, align: 'right', weight: 700 },
 ];
 
 const PHOTO_BOX = { x1: 10.5, x2: 28.0, y1: 22.2, y2: 38.0 };
@@ -112,7 +113,7 @@ export function buildFormFields(d: PrintData): FormTextFields {
 
 function drawField(ctx: CanvasRenderingContext2D, text: string, f: FieldBox, W: number, H: number) {
   if (!text) return;
-  const fs = f.fontSize ?? Math.round(W * 0.012);
+  const fs = f.fontSize ?? Math.round(W * 0.024);
   ctx.save();
   ctx.fillStyle = '#0F2440';
   ctx.font = `${f.weight ?? 700} ${fs}px Tajawal, Arial, sans-serif`;
@@ -177,7 +178,7 @@ export async function renderFormCanvas(d: PrintData, opts?: { photoUrl?: string;
   if (d.season) {
     ctx.save();
     ctx.fillStyle = '#0F2440';
-    ctx.font = `700 ${Math.round(W * 0.010)}px Tajawal, Arial, sans-serif`;
+    ctx.font = `700 ${Math.round(W * 0.020)}px Tajawal, Arial, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`الموسم: ${d.season}`, ((PHOTO_BOX.x1 + PHOTO_BOX.x2) / 200) * W, (PHOTO_BOX.y2 / 100) * H + Math.round(H * 0.014));
@@ -233,6 +234,20 @@ export function buildUsername(first: string, last: string): string {
   const l = norm(last || '');
   const base = l ? `${f}.${l}` : f;
   return base.slice(0, 24) || 'athlete';
+}
+
+/** توليد Canvas للوجه الثاني للإستمارة: قانون النادي الداخلي (صورة «الإستمارة-02») */
+export async function renderLawCanvas(): Promise<HTMLCanvasElement> {
+  await document.fonts.ready;
+  const img = await loadImage(clubLawSrc);
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
 }
 
 /** يولّد Canvas للوجه الثاني للإستمارة: معلومات الحساب (إسم المستخدم، كلمة المرور) الموثّقة */
