@@ -46,6 +46,9 @@ const RegistrationPage: React.FC = () => {
     agreementName: '',
     pool: 'المسبح الأولمبي',
     nin: '',
+    certNumber: '',
+    birthYear: '',
+    wilaya: '',
     name: '',
     lastName: '',
     dob: '',
@@ -68,9 +71,18 @@ const RegistrationPage: React.FC = () => {
 
   const set = (key: string, value: string | boolean) => setF((prev) => ({ ...prev, [key]: value }));
 
+  const isMinor = f.category === 'أصاغر';
+
+  const genderDigit = f.gender === Gender.MALE ? '1' : '0';
+  const composedMinorNin =
+    isMinor && f.certNumber.trim() && f.birthYear.trim() && f.wilaya.trim()
+      ? `${f.certNumber.trim()}${f.birthYear.trim()}${f.wilaya.trim()}${genderDigit}`
+      : '';
+  const effNin = isMinor ? composedMinorNin : f.nin;
+
   const printData = useMemo(
     () => ({
-      nin: f.nin,
+      nin: effNin,
       name: f.name,
       lastName: f.lastName,
       dob: f.dob,
@@ -93,20 +105,25 @@ const RegistrationPage: React.FC = () => {
       idIssueDate: f.idIssueDate,
       idIssueAuthority: f.idIssueAuthority,
     }),
-    [f],
+    [f, effNin],
   );
 
-  const isMinor = f.category === 'أصاغر';
+  const ninValid =
+    isMinor
+      ? /^\d{2,8}$/.test(f.certNumber.trim()) && /^\d{2}$/.test(f.birthYear.trim()) && /^\d{1,2}$/.test(f.wilaya.trim())
+      : f.nin.length >= 12;
+
+  const guardianNinValid = f.idCardNumber.trim().length >= 10;
 
   const canNext =
     step === 0
       ? true
       : step === 1
-        ? f.nin.length >= 12 && f.name && f.lastName && f.dob && f.phone && f.address
+        ? ninValid && f.name && f.lastName && f.dob && f.phone && f.address
         : step === 2
           ? f.medicalClearance &&
             f.consent18_07 &&
-            (!isMinor || (f.guardianName && f.idCardNumber && f.idIssueDate))
+            (!isMinor || (f.guardianName && guardianNinValid && f.idIssueDate))
           : !!filledFormUrl && !!scanUrl && f.signatureConfirmed;
 
   const handlePhoto = async (file: File | undefined) => {
@@ -146,7 +163,7 @@ const RegistrationPage: React.FC = () => {
   const submit = () => {
     setSubmitting(true);
     addApplication({
-      nin: f.nin,
+      nin: effNin,
       name: f.name,
       lastName: f.lastName,
       dob: f.dob,
@@ -364,7 +381,30 @@ const RegistrationPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-2"><label className={labelCls}>الاسم *</label><input required value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="الاسم" className={inputCls} /></div>
                   <div className="space-y-2"><label className={labelCls}>اللقب *</label><input required value={f.lastName} onChange={(e) => set('lastName', e.target.value)} placeholder="اللقب" className={inputCls} /></div>
-                  <div className="space-y-2"><label className={labelCls}>رقم التعريف الوطني NIN *</label><input required minLength={12} value={f.nin} onChange={(e) => set('nin', e.target.value)} placeholder="18 رقم" className={`${inputCls} font-mono`} /></div>
+                  {isMinor ? (
+                    <>
+                      <div className="space-y-2"><label className={labelCls}>رقم شهادة الميلاد *</label><input required inputMode="numeric" value={f.certNumber} onChange={(e) => set('certNumber', e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="رقم الشهادة" className={`${inputCls} font-mono`} /></div>
+                      <div className="space-y-2"><label className={labelCls}>سنة الميلاد (آخر رقمين) *</label><input required inputMode="numeric" value={f.birthYear} onChange={(e) => set('birthYear', e.target.value.replace(/\D/g, '').slice(0, 2))} placeholder="مثال: 15" className={`${inputCls} font-mono`} /></div>
+                      <div className="space-y-2"><label className={labelCls}>رقم الولاية (58) *</label><input required inputMode="numeric" value={f.wilaya} onChange={(e) => set('wilaya', e.target.value.replace(/\D/g, '').slice(0, 2))} placeholder="47 / 58" className={`${inputCls} font-mono`} /></div>
+                      <div className="space-y-2">
+                        <label className={labelCls}>رمز الجنس (تلقائي)</label>
+                        <div className="px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl font-black text-sm text-center text-[#007377]">
+                          {genderDigit} — {f.gender === Gender.MALE ? 'ذكر' : 'أنثى'}
+                        </div>
+                      </div>
+                      <div className="space-y-2 col-span-full">
+                        <label className={labelCls}>رقم التعريف الوطني الناتج</label>
+                        <div className={`${inputCls} bg-[#007377]/5 border-[#007377]/30 text-center tracking-widest ${composedMinorNin ? 'text-[#007377]' : 'text-gray-300'}`} dir="ltr">
+                          {composedMinorNin || 'ش.م + سنة + ولاية + 1/0'}
+                        </div>
+                        <p className="text-[11px] text-gray-400 px-2 leading-relaxed">
+                          يُركّب آلياً بصيغة: <b className="text-[#007377]">رقم شهادة الميلاد + سنة الميلاد(2) + رقم الولاية(2) + 1 ذكر / 0 أنثى</b>
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-2"><label className={labelCls}>رقم التعريف الوطني NIN *</label><input required minLength={12} value={f.nin} onChange={(e) => set('nin', e.target.value)} placeholder="18 رقم" className={`${inputCls} font-mono`} /></div>
+                  )}
                   <div className="space-y-2"><label className={labelCls}>تاريخ الميلاد *</label><input required type="date" value={f.dob} onChange={(e) => set('dob', e.target.value)} className={inputCls} /></div>
                   <div className="space-y-2"><label className={labelCls}>الجنس</label><select value={f.gender} onChange={(e) => set('gender', e.target.value)} className={inputCls}>{Object.values(Gender).map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
                   <div className="space-y-2"><label className={labelCls}>فصيلة الدم</label><select value={f.bloodType} onChange={(e) => set('bloodType', e.target.value)} className={inputCls}>{['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'].map((b) => <option key={b} value={b}>{b}</option>)}</select></div>
@@ -415,7 +455,7 @@ const RegistrationPage: React.FC = () => {
                       <div className="space-y-2"><label className={labelCls}>اسم الولي *</label><input required value={f.guardianName} onChange={(e) => set('guardianName', e.target.value)} placeholder="الاسم الكامل" className={inputCls} /></div>
                       <div className="space-y-2"><label className={labelCls}>تاريخ ميلاد الولي</label><input type="date" value={f.guardianBirthDate} onChange={(e) => set('guardianBirthDate', e.target.value)} className={inputCls} /></div>
                       <div className="space-y-2"><label className={labelCls}>مكان الميلاد</label><input value={f.guardianBirthPlace} onChange={(e) => set('guardianBirthPlace', e.target.value)} placeholder="البلدية / الولاية" className={inputCls} /></div>
-                      <div className="space-y-2"><label className={labelCls}>رقم بطاقة التعريف / رخصة السياقة *</label><input required value={f.idCardNumber} onChange={(e) => set('idCardNumber', e.target.value)} placeholder="ب.ت / ر.س رقم" className={inputCls} /></div>
+                      <div className="space-y-2"><label className={labelCls}>رقم التعريف الوطني للولي (NIN) *</label><input required minLength={10} inputMode="numeric" value={f.idCardNumber} onChange={(e) => set('idCardNumber', e.target.value)} placeholder="18 رقم - إجباري" className={`${inputCls} font-mono`} /></div>
                       <div className="space-y-2"><label className={labelCls}>تاريخ الإصدار *</label><input required type="date" value={f.idIssueDate} onChange={(e) => set('idIssueDate', e.target.value)} className={inputCls} /></div>
                       <div className="space-y-2"><label className={labelCls}>جهة الإصدار</label><input value={f.idIssueAuthority} onChange={(e) => set('idIssueAuthority', e.target.value)} placeholder="البلدية المصدرة" className={inputCls} /></div>
                     </div>

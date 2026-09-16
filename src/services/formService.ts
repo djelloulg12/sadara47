@@ -12,7 +12,7 @@ interface FieldBox {
   x1: number;
   x2: number;
   y: number;
-  size?: number; // حجم الخط النسبي (نسبة من العرض)
+  fontSize?: number; // حجم الخط المطلق بالبكسل
   align?: CanvasTextAlign;
   weight?: number;
 }
@@ -36,30 +36,30 @@ export interface FormTextFields {
   childName: string;
 }
 
-/* أ. بيانات المنخرط الأساسية (الجزء العلوي) */
+/* أ. بيانات المنخرط الأساسية (الجزء العلوي) — خط 20px */
 const TOP_FIELDS: FieldBox[] = [
-  { key: 'regNumber', x1: 12, x2: 24, y: 21.5, align: 'center' },
-  { key: 'pool', x1: 43, x2: 90, y: 21.5 },
-  { key: 'firstName', x1: 30, x2: 82, y: 25.5 },
-  { key: 'lastName', x1: 30, x2: 82, y: 29.0 },
-  { key: 'birthDate', x1: 30, x2: 82, y: 32.5 },
-  { key: 'address', x1: 30, x2: 82, y: 36.0 },
-  { key: 'bloodType', x1: 30, x2: 82, y: 39.5 },
-  { key: 'phoneNumber', x1: 30, x2: 82, y: 43.0 },
+  { key: 'regNumber', x1: 12, x2: 24, y: 21.5, fontSize: 20, align: 'center', weight: 800 },
+  { key: 'pool', x1: 43, x2: 90, y: 21.5, fontSize: 20, weight: 700 },
+  { key: 'firstName', x1: 30, x2: 82, y: 25.5, fontSize: 20, weight: 700 },
+  { key: 'lastName', x1: 30, x2: 82, y: 29.0, fontSize: 20, weight: 700 },
+  { key: 'birthDate', x1: 30, x2: 82, y: 32.5, fontSize: 20, weight: 700 },
+  { key: 'address', x1: 30, x2: 82, y: 36.0, fontSize: 20, weight: 700 },
+  { key: 'bloodType', x1: 30, x2: 82, y: 39.5, fontSize: 20, weight: 700 },
+  { key: 'phoneNumber', x1: 30, x2: 82, y: 43.0, fontSize: 20, weight: 700 },
 ];
 
-/* ب. الشهادة الطبية (الجزء الأوسط) */
-const MEDICAL_FIELDS: FieldBox[] = [{ key: 'doctorName', x1: 30, x2: 71, y: 49.5 }];
+/* ب. الشهادة الطبية (الجزء الأوسط) — خط 20px */
+const MEDICAL_FIELDS: FieldBox[] = [{ key: 'doctorName', x1: 30, x2: 71, y: 49.5, fontSize: 20, weight: 700 }];
 
-/* ج. التصريح الأبوي والمصادقة (الجزء السفلي) */
+/* ج. التصريح الأبوي والمصادقة (الجزء السفلي) — خط 16px */
 const GUARDIAN_FIELDS: FieldBox[] = [
-  { key: 'guardianName', x1: 52, x2: 74, y: 70.0 },
-  { key: 'guardianBirthDate', x1: 18, x2: 33, y: 70.0 },
-  { key: 'guardianBirthPlace', x1: 2, x2: 14, y: 70.0 },
-  { key: 'idCardNumber', x1: 51, x2: 70, y: 73.5 },
-  { key: 'idIssueDate', x1: 20, x2: 36, y: 73.5 },
-  { key: 'idIssueAuthority', x1: 2, x2: 15, y: 73.5 },
-  { key: 'childName', x1: 51, x2: 87, y: 76.5 },
+  { key: 'guardianName', x1: 52, x2: 74, y: 70.0, fontSize: 16, weight: 600 },
+  { key: 'guardianBirthDate', x1: 18, x2: 33, y: 70.0, fontSize: 16, weight: 600 },
+  { key: 'guardianBirthPlace', x1: 2, x2: 14, y: 70.0, fontSize: 16, weight: 600 },
+  { key: 'idCardNumber', x1: 51, x2: 70, y: 73.5, fontSize: 16, weight: 600 },
+  { key: 'idIssueDate', x1: 20, x2: 36, y: 73.5, fontSize: 16, weight: 600 },
+  { key: 'idIssueAuthority', x1: 2, x2: 15, y: 73.5, fontSize: 16, weight: 600 },
+  { key: 'childName', x1: 51, x2: 87, y: 76.5, fontSize: 16, weight: 600 },
 ];
 
 const PHOTO_BOX = { x1: 10, x2: 28, y1: 22, y2: 38 };
@@ -102,16 +102,16 @@ export function buildFormFields(d: PrintData): FormTextFields {
   };
 }
 
-function drawField(ctx: CanvasRenderingContext2D, text: string, f: FieldBox, W: number) {
+function drawField(ctx: CanvasRenderingContext2D, text: string, f: FieldBox, W: number, H: number) {
   if (!text) return;
-  const fs = Math.round(W * (f.size ?? 0.0105) * 100) / 100;
+  const fs = f.fontSize ?? Math.round(W * 0.0105);
   ctx.save();
   ctx.fillStyle = '#111827';
   ctx.font = `${f.weight ?? 700} ${fs}px Tajawal, Arial, sans-serif`;
   ctx.textAlign = f.align ?? 'center';
   ctx.textBaseline = 'middle';
-  const x = f.align === 'left' ? (f.x1 / 100) * W : f.align === 'right' ? (f.x2 / 100) * W : (f.x1 / 100 + f.x2 / 100) * 0.5 * W;
-  ctx.fillText(text, x, (f.y / 100) * W * (ctx.canvas.height / W));
+  const x = f.align === 'left' ? (f.x1 / 100) * W : f.align === 'right' ? (f.x2 / 100) * W : ((f.x1 + f.x2) / 200) * W;
+  ctx.fillText(text, x, (f.y / 100) * H);
   ctx.restore();
 }
 
@@ -153,9 +153,9 @@ export async function renderFormCanvas(d: PrintData, opts?: { photoUrl?: string;
   const fields = buildFormFields(d);
   const fieldMap: Record<FieldKey, string> = fields;
 
-  TOP_FIELDS.forEach((f) => drawField(ctx, fieldMap[f.key as FieldKey], f as FieldBox, W));
-  MEDICAL_FIELDS.forEach((f) => drawField(ctx, fieldMap[f.key as FieldKey], f as FieldBox, W));
-  GUARDIAN_FIELDS.forEach((f) => drawField(ctx, fieldMap[f.key as FieldKey], f as FieldBox, W));
+  TOP_FIELDS.forEach((f) => drawField(ctx, fieldMap[f.key as FieldKey], f as FieldBox, W, H));
+  MEDICAL_FIELDS.forEach((f) => drawField(ctx, fieldMap[f.key as FieldKey], f as FieldBox, W, H));
+  GUARDIAN_FIELDS.forEach((f) => drawField(ctx, fieldMap[f.key as FieldKey], f as FieldBox, W, H));
 
   if (opts?.photoUrl) {
     try {

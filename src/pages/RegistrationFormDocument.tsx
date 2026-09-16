@@ -18,7 +18,7 @@ const RegistrationFormDocument: React.FC = () => {
       setLoading(false);
       return;
     }
-    renderFormCanvas(data)
+    renderFormCanvas(data, { photoUrl: data.photoUrl })
       .then((canvas) => {
         if (!alive) return;
         canvasRef.current = canvas;
