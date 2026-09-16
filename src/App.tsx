@@ -4,6 +4,9 @@ import Layout, { PageId } from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import RegistrationPage from './pages/RegistrationPage';
 import RegistrationFormDocument from './pages/RegistrationFormDocument';
+import HomePage from './pages/HomePage';
+import ProgramsPage from './pages/ProgramsPage';
+import HallOfFamePage from './pages/HallOfFamePage';
 import DashboardPage from './pages/DashboardPage';
 import AthletesPage from './pages/AthletesPage';
 import AthleteProfilePage from './pages/AthleteProfilePage';
@@ -51,6 +54,12 @@ const MainApp: React.FC = () => {
 
   const renderPage = () => {
     switch (page) {
+      case 'home':
+        return <HomePage onNavigate={handleNavigate} />;
+      case 'programs':
+        return <ProgramsPage />;
+      case 'hall':
+        return <HallOfFamePage />;
       case 'athletes':
         return (
           <AthletesPage

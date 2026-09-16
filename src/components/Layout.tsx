@@ -3,11 +3,15 @@ import {
   Activity,
   Building2,
   Calendar,
+  Dumbbell,
   Gavel,
+  Home,
   LayoutDashboard,
   LogOut,
+  Map,
   ShieldCheck,
   Settings,
+  Trophy,
   UserCheck,
   Users,
 } from 'lucide-react';
@@ -17,6 +21,7 @@ import { useAuth } from '@/context';
 import logo from '@/assets/logo.png';
 
 export type PageId =
+  | 'home'
   | 'dashboard'
   | 'athletes'
   | 'applications'
@@ -26,7 +31,9 @@ export type PageId =
   | 'agreements'
   | 'legal'
   | 'settings'
-  | 'profile';
+  | 'profile'
+  | 'programs'
+  | 'hall';
 
 interface NavItem {
   id: PageId;
@@ -36,6 +43,14 @@ interface NavItem {
 }
 
 const MENU_GROUPS: { title: string; items: NavItem[] }[] = [
+  {
+    title: 'النادي',
+    items: [
+      { id: 'home', label: 'الواجهة العامة', icon: Home, roles: Object.values(UserRole) },
+      { id: 'programs', label: 'البرامج والمسارات', icon: Map, roles: Object.values(UserRole) },
+      { id: 'hall', label: 'لوحة الشرف', icon: Trophy, roles: Object.values(UserRole) },
+    ],
+  },
   {
     title: 'الرئيسية',
     items: [
@@ -112,6 +127,15 @@ const Layout: React.FC<{
     }
   };
 
+  const bottomItems: { id: PageId; label: string; icon: React.ComponentType<{ size?: number | string; className?: string }> }[] = [
+    { id: 'dashboard', label: 'الرئيسية', icon: LayoutDashboard },
+    { id: 'programs', label: 'البرامج', icon: Map },
+    { id: 'hall', label: 'الشرف', icon: Trophy },
+    canOpenProfile
+      ? { id: 'profile' as PageId, label: 'مساري', icon: UserCheck }
+      : { id: 'training' as PageId, label: 'التمارين', icon: Dumbbell },
+  ];
+
   return (
     <div className="min-h-screen bg-[#FDFBFA] text-[#1F2937] rtl relative">
       <nav className="app-sidebar no-print w-full md:w-80 bg-[#0B121E] flex flex-col p-8 shadow-2xl z-50 border-l border-white/5 md:h-screen md:fixed md:top-0 md:right-0">
@@ -187,9 +211,24 @@ const Layout: React.FC<{
         </div>
       </nav>
 
-      <main className="app-main md:mr-80 p-6 md:p-12 relative bg-[#FDFBFA] scroll-smooth min-h-screen">
+      <main className="app-main md:mr-80 p-6 pb-24 md:p-12 relative bg-[#FDFBFA] scroll-smooth min-h-screen">
         <div className="max-w-7xl mx-auto">{children}</div>
       </main>
+
+      <nav className="app-mobile-nav no-print md:hidden fixed bottom-0 inset-x-0 z-50 bg-[#071318]/95 backdrop-blur-md border-t border-[#1B3E48] grid grid-cols-4 items-center px-2 pb-[env(safe-area-inset-bottom)]">
+        {bottomItems.map((b) => (
+          <button
+            key={b.id}
+            onClick={() => onNavigate(b.id)}
+            className={`flex flex-col items-center gap-1 py-2.5 rounded-xl transition-all ${
+              page === b.id ? 'text-[#0A8696]' : 'text-white/50 hover:text-white/90'
+            }`}
+          >
+            <b.icon size={19} className={page === b.id ? 'drop-shadow-[0_0_6px_rgba(10,134,150,0.9)]' : ''} />
+            <span className="text-[9px] font-black">{b.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 };

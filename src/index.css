@@ -66,6 +66,22 @@ input[type='date'] {
 .gold-glow {
   box-shadow: 0 10px 30px -5px rgba(212, 175, 55, 0.4);
 }
+
+/* Live pulse indicator */
+.pulse-red {
+  animation: pulseRed 1.6s ease-in-out infinite;
+}
+@keyframes pulseRed {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.4);
+  }
+}
 .luxury-shadow {
   box-shadow: 0 20px 50px -20px rgba(11, 18, 30, 0.25);
 }
