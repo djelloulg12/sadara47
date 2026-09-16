@@ -21,6 +21,7 @@ import {
 import { useAppContext, useData } from '@/context';
 import { setPrintData } from '@/data';
 import { Gender, SkillLevel, Sport, SwimStyle, ApplicantCategory, SubscriptionType } from '@/types';
+import { WILAYAS } from '@/constants';
 import logo from '@/assets/logo.png';
 import { cropResizePhoto, downloadFormImage, downloadFormPdf, renderFormCanvas } from '@/services/formService';
 
@@ -47,7 +48,8 @@ const RegistrationPage: React.FC = () => {
     pool: 'المسبح الأولمبي',
     nin: '',
     certNumber: '',
-    birthYear: '',
+    birthPlace: '',
+    birthWilayaName: '',
     wilaya: '',
     name: '',
     lastName: '',
@@ -74,9 +76,10 @@ const RegistrationPage: React.FC = () => {
   const isMinor = f.category === 'أصاغر';
 
   const genderDigit = f.gender === Gender.MALE ? '1' : '0';
+  const birthYearDigits = isMinor && f.dob ? f.dob.slice(0, 4).slice(-2) : '';
   const composedMinorNin =
-    isMinor && f.certNumber.trim() && f.birthYear.trim() && f.wilaya.trim()
-      ? `${f.certNumber.trim()}${f.birthYear.trim()}${f.wilaya.trim()}${genderDigit}`
+    isMinor && f.certNumber.trim() && birthYearDigits && f.wilaya.trim()
+      ? `${f.certNumber.trim()}${birthYearDigits}${f.wilaya.trim()}${genderDigit}`
       : '';
   const effNin = isMinor ? composedMinorNin : f.nin;
 
@@ -110,7 +113,12 @@ const RegistrationPage: React.FC = () => {
 
   const ninValid =
     isMinor
-      ? /^\d{2,8}$/.test(f.certNumber.trim()) && /^\d{2}$/.test(f.birthYear.trim()) && /^\d{1,2}$/.test(f.wilaya.trim())
+      ? /^\d{2,8}$/.test(f.certNumber.trim()) &&
+        /^\d{2}$/.test(birthYearDigits) &&
+        /^(0[1-9]|[1-4][0-9]|5[0-8])$/.test(f.wilaya.trim()) &&
+        !!f.dob &&
+        !!f.birthPlace.trim() &&
+        !!f.birthWilayaName.trim()
       : f.nin.length >= 12;
 
   const guardianNinValid = f.idCardNumber.trim().length >= 10;
@@ -386,18 +394,21 @@ const RegistrationPage: React.FC = () => {
                   {isMinor ? (
                     <>
                       <div className="space-y-2"><label className={labelCls}>رقم شهادة الميلاد *</label><input required inputMode="numeric" value={f.certNumber} onChange={(e) => set('certNumber', e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="رقم الشهادة" className={`${inputCls} font-mono`} /></div>
-                      <div className="space-y-2"><label className={labelCls}>سنة الميلاد (آخر رقمين) *</label><input required inputMode="numeric" value={f.birthYear} onChange={(e) => set('birthYear', e.target.value.replace(/\D/g, '').slice(0, 2))} placeholder="مثال: 15" className={`${inputCls} font-mono`} /></div>
-                      <div className="space-y-2"><label className={labelCls}>رقم الولاية (58) *</label><input required inputMode="numeric" value={f.wilaya} onChange={(e) => set('wilaya', e.target.value.replace(/\D/g, '').slice(0, 2))} placeholder="47 / 58" className={`${inputCls} font-mono`} /></div>
+                      <div className="space-y-2"><label className={labelCls}>بلدية الميلاد *</label><input required value={f.birthPlace} onChange={(e) => set('birthPlace', e.target.value)} placeholder="بلدية الولادة" className={inputCls} /></div>
                       <div className="space-y-2">
-                        <label className={labelCls}>رمز الجنس (تلقائي)</label>
-                        <div className="px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl font-black text-sm text-center text-[#007377]">
-                          {genderDigit} — {f.gender === Gender.MALE ? 'ذكر' : 'أنثى'}
-                        </div>
+                        <label className={labelCls}>ولاية الميلاد *</label>
+                        <select required value={f.birthWilayaName || f.wilaya} onChange={(e) => setF((p) => ({ ...p, birthWilayaName: e.target.value, wilaya: WILAYAS.find((w) => w.name === e.target.value)?.num || '' }))} className={inputCls}>
+                          <option value="">— اختر الولاية —</option>
+                          {WILAYAS.map((w) => (
+                            <option key={w.num} value={w.name}>{w.num} — {w.name}</option>
+                          ))}
+                        </select>
+                        {f.wilaya && <p className="text-[11px] text-[#007377] font-bold px-2">رقم الولاية المستخرج آلياً: {f.wilaya}</p>}
                       </div>
                       <div className="space-y-2 col-span-full">
                         <label className={labelCls}>رمز الرياضي</label>
                         <div className={`${inputCls} bg-[#007377]/5 border-[#007377]/30 text-center tracking-widest ${composedMinorNin ? 'text-[#007377]' : 'text-gray-300'}`} dir="ltr">
-                          {composedMinorNin || 'ش.م + سنة + ولاية + 1/0'}
+                          {composedMinorNin || 'ش.م + سنة(من تاريخ الميلاد) + ولاية + 1/0'}
                         </div>
                         <p className="text-[11px] text-gray-400 px-2 leading-relaxed">
                           يُركّب آلياً بصيغة: <b className="text-[#007377]">رقم شهادة الميلاد + سنة الميلاد(2) + رقم الولاية(2) + 1 ذكر / 0 أنثى</b>
