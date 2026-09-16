@@ -6,14 +6,17 @@ import {
   AttendanceRecord,
   ClubActivity,
   ClubSettings,
+  CoachApplication,
   DisciplinaryCase,
   Gender,
+  GroupSession,
   MembershipStatus,
   PersonalRecord,
   RegistrationApplication,
   SkillLevel,
   Sport,
   SwimStyle,
+  TrainingGroup,
   TrainingPlan,
   User,
   UserRole,
@@ -33,11 +36,15 @@ const KEYS = {
   agreements: 'sadara47_agreements',
   attendance: 'sadara47_attendance',
   notifications: 'sadara47_notifications',
+  coachApplications: 'sadara47_coach_applications',
+  groups: 'sadara47_groups',
+  sessions: 'sadara47_sessions',
   session: 'sadara47_session',
   printData: 'sadara47_print_data',
   regOpen: 'sadara47_registration_open',
-  seeded: 'sadara47_seeded_v2',
+  seeded: 'sadara47_seeded_v3',
   settings: 'sadara47_club_settings',
+  schedulePrint: 'sadara47_schedule_print',
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -62,17 +69,29 @@ export function saveValue(key: string, value: unknown): void {
 const seedAthletes = (): Athlete[] =>
   SWIMMER_SEED.map((a, index) => {
     const age = calculateAge(a.dob);
+    const category = getAgeCategory(age);
+    const young = category === AgeCategory.MINIMES;
+    // ربط أبناء تجريبيين بحسابات الأولياء لتفعيل لوحة الولي متعددة المكفولين
+    const guardianUserId =
+      index < SWIMMER_SEED.length && index >= 0 && young
+        ? index % 2 === 0
+          ? 'ug_kandouz'
+          : 'ug_belhaj'
+        : undefined;
     return {
       ...a,
       age,
-      category: getAgeCategory(age),
+      category,
       registrationNumber: `SD-${new Date().getFullYear()}-${String(index + 1).padStart(4, '0')}`,
       joinedAt: new Date().toISOString().slice(0, 10),
+      guardianUserId,
     };
   });
 
 const seedUsers = (): User[] => [
   { id: 'u_admin', name: 'محمد حناي', username: 'admin', password: 'admin', role: UserRole.PRESIDENT },
+  { id: 'ug_kandouz', name: 'محمد قندوز', username: 'guardian1', password: '123', role: UserRole.GUARDIAN, active: true, phone: '0660000001' },
+  { id: 'ug_belhaj', name: 'سعاد بلحاج', username: 'guardian2', password: '123', role: UserRole.GUARDIAN, active: true, phone: '0660000002' },
   ...SWIMMER_SEED.map((a, i) => ({
     id: `usw${i + 1}`,
     name: `${a.name} ${a.lastName}`.trim(),
@@ -99,6 +118,12 @@ const seedAttendance = (): AttendanceRecord[] => [];
 
 const seedNotifications = (): AppNotification[] => [];
 
+const seedCoachApplications = (): CoachApplication[] => [];
+
+const seedGroups = (): TrainingGroup[] => [];
+
+const seedSessions = (): GroupSession[] => [];
+
 export interface AppState {
   athletes: Athlete[];
   users: User[];
@@ -110,6 +135,9 @@ export interface AppState {
   agreements: Agreement[];
   attendance: AttendanceRecord[];
   notifications: AppNotification[];
+  coachApplications: CoachApplication[];
+  groups: TrainingGroup[];
+  sessions: GroupSession[];
 }
 
 export function getInitialState(): AppState {
@@ -125,6 +153,9 @@ export function getInitialState(): AppState {
       agreements: seedAgreements(),
       attendance: seedAttendance(),
       notifications: seedNotifications(),
+      coachApplications: seedCoachApplications(),
+      groups: seedGroups(),
+      sessions: seedSessions(),
     };
     Object.entries(state).forEach(([key, value]) => saveValue(`sadara47_${key}`, value));
     localStorage.setItem(KEYS.seeded, '1');
@@ -141,6 +172,9 @@ export function getInitialState(): AppState {
     agreements: load<Agreement[]>(KEYS.agreements, []),
     attendance: load<AttendanceRecord[]>(KEYS.attendance, []),
     notifications: load<AppNotification[]>(KEYS.notifications, []),
+    coachApplications: load<CoachApplication[]>(KEYS.coachApplications, []),
+    groups: load<TrainingGroup[]>(KEYS.groups, []),
+    sessions: load<GroupSession[]>(KEYS.sessions, []),
   };
 }
 
@@ -153,6 +187,9 @@ export const saveDisciplinary = (v: DisciplinaryCase[]) => saveValue(KEYS.discip
 export const saveAgreements = (v: Agreement[]) => saveValue(KEYS.agreements, v);
 export const saveAttendance = (v: AttendanceRecord[]) => saveValue(KEYS.attendance, v);
 export const saveNotifications = (v: AppNotification[]) => saveValue(KEYS.notifications, v);
+export const saveCoachApplications = (v: CoachApplication[]) => saveValue(KEYS.coachApplications, v);
+export const saveGroups = (v: TrainingGroup[]) => saveValue(KEYS.groups, v);
+export const saveSessions = (v: GroupSession[]) => saveValue(KEYS.sessions, v);
 
 export const getClubSettings = (): ClubSettings => {
   const saved = load<Partial<ClubSettings>>(KEYS.settings, {});
@@ -220,6 +257,20 @@ export const clearPrintData = (): void => localStorage.removeItem(KEYS.printData
 
 export const saveSession = (user: User | null): void => saveValue(KEYS.session, user);
 export const getSession = (): User | null => load<User | null>(KEYS.session, null);
+
+/* ------------------- بيانات وثيقة البرنامج الأسبوعي القابلة للطباعة ------------------- */
+export interface SchedulePrintData {
+  groups: TrainingGroup[];
+  sessions: GroupSession[];
+  title: string;
+  season: string;
+  issuedAt: string;
+  /** خرائط أسماء المستخدمين (المدربون) لعرضها في المستند */
+  coachNames?: Record<string, string>;
+}
+
+export const setSchedulePrintData = (data: SchedulePrintData): void => saveValue(KEYS.schedulePrint, data);
+export const getSchedulePrintData = (): SchedulePrintData | null => load<SchedulePrintData | null>(KEYS.schedulePrint, null);
 
 export const getRegistrationOpen = (): boolean => load<boolean>(KEYS.regOpen, true);
 export const setRegistrationOpenValue = (open: boolean): void => saveValue(KEYS.regOpen, open);

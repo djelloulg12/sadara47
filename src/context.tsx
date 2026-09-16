@@ -6,10 +6,13 @@ import {
   AttendanceRecord,
   ClubActivity,
   ClubSettings,
+  CoachApplication,
   DisciplinaryCase,
+  GroupSession,
   PersonalRecord,
   RegistrationApplication,
   RegistrationStatus,
+  TrainingGroup,
   TrainingPlan,
   User,
   UserRole,
@@ -22,10 +25,13 @@ import {
   saveAthletes,
   saveAttendance,
   saveClubSettings,
+  saveCoachApplications,
   saveDisciplinary,
+  saveGroups,
   saveNotifications,
   savePlans,
   saveRecords,
+  saveSessions,
   saveSession,
   saveValue,
   getSession,
@@ -36,7 +42,7 @@ import {
 import { calculateAge, getAgeCategory, uid } from './utils/helpers';
 
 /* ------------------------------ Routing ------------------------------ */
-type Route = 'login' | 'register' | 'print-form' | 'app';
+type Route = 'login' | 'register' | 'print-form' | 'apply-coach' | 'print-schedule' | 'app';
 
 interface AppContextType {
   route: Route;
@@ -48,7 +54,7 @@ export const useAppContext = (): AppContextType => useContext(AppContext)!;
 
 const readRoute = (): Route => {
   const hash = window.location.hash.replace(/^#/, '');
-  if (['login', 'register', 'print-form', 'app'].includes(hash)) return hash as Route;
+  if (['login', 'register', 'print-form', 'apply-coach', 'print-schedule', 'app'].includes(hash)) return hash as Route;
   return 'login';
 };
 
@@ -82,6 +88,8 @@ interface AuthContextType {
   login: (username: string, password: string) => boolean;
   logout: () => void;
   addUser: (data: Omit<User, 'id'>) => User;
+  updateUser: (id: string, data: Partial<User>) => void;
+  deleteUser: (id: string) => void;
   isRole: (...roles: UserRole[]) => boolean;
   canManage: boolean;
 }
@@ -98,7 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const found = users.find(
         (u) => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password,
       );
-      if (found) {
+      if (found && found.active !== false) {
         setUser(found);
         saveSession(found);
         return true;
@@ -114,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const addUser = useCallback((data: Omit<User, 'id'>): User => {
-    const u: User = { ...data, id: data.username.replace(/[^a-z0-9]/gi, '').slice(0, 8) || `u${Date.now()}` };
+    const u: User = { ...data, active: data.active ?? true, id: data.username.replace(/[^a-z0-9]/gi, '').slice(0, 8) || `u${Date.now()}` };
     setUsers((prev) => {
       const exists = prev.find((x) => x.username.toLowerCase() === u.username.toLowerCase());
       const next = exists ? prev.map((x) => (x === exists ? u : x)) : [u, ...prev];
@@ -122,6 +130,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return next;
     });
     return u;
+  }, []);
+
+  const updateUser = useCallback((id: string, data: Partial<User>) => {
+    setUsers((prev) => {
+      const next = prev.map((x) => (x.id === id ? { ...x, ...data } : x));
+      saveValue('sadara47_users', next);
+      return next;
+    });
+    setUser((current) => (current && current.id === id ? { ...current, ...data } : current));
+  }, []);
+
+  const deleteUser = useCallback((id: string) => {
+    setUsers((prev) => {
+      const next = prev.filter((x) => x.id !== id);
+      saveValue('sadara47_users', next);
+      return next;
+    });
+    setUser((current) => (current && current.id === id ? null : current));
   }, []);
 
   const isRole = useCallback(
@@ -134,7 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     (user.role === UserRole.PRESIDENT || user.role === UserRole.MANAGER || user.role === UserRole.COACH);
 
   return (
-    <AuthContext.Provider value={{ user, users, login, logout, addUser, isRole, canManage }}>
+    <AuthContext.Provider value={{ user, users, login, logout, addUser, updateUser, deleteUser, isRole, canManage }}>
       {children}
     </AuthContext.Provider>
   );
@@ -151,10 +177,23 @@ interface DataContextType {
   agreements: Agreement[];
   attendance: AttendanceRecord[];
   notifications: AppNotification[];
+  coachApplications: CoachApplication[];
+  groups: TrainingGroup[];
+  sessions: GroupSession[];
   registrationOpen: boolean;
   clubSettings: ClubSettings;
   updateClubSettings: (settings: ClubSettings) => void;
   setRegistrationOpen: (open: boolean) => void;
+  addCoachApplication: (data: Omit<CoachApplication, 'id' | 'status' | 'submittedAt'>) => void;
+  setCoachApplicationStatus: (id: string, status: CoachApplication['status'], credentials?: { username: string; password: string }) => void;
+  deleteCoachApplication: (id: string) => void;
+  addGroup: (data: Omit<TrainingGroup, 'id'>) => TrainingGroup;
+  updateGroup: (id: string, data: Partial<TrainingGroup>) => void;
+  deleteGroup: (id: string) => void;
+  addSession: (data: Omit<GroupSession, 'id' | 'status' | 'managerApproved'>) => GroupSession;
+  updateSession: (id: string, data: Partial<GroupSession>) => void;
+  approveSession: (id: string) => void;
+  deleteSession: (id: string) => void;
   addAthlete: (data: Omit<Athlete, 'id' | 'age' | 'category'>) => Athlete;
   updateAthlete: (id: string, data: Partial<Athlete>) => void;
   deleteAthlete: (id: string) => void;
@@ -198,6 +237,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [agreements, setAgreements] = useState<Agreement[]>(initialState.agreements);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(initialState.attendance);
   const [notifications, setNotifications] = useState<AppNotification[]>(initialState.notifications);
+  const [coachApplications, setCoachApplications] = useState<CoachApplication[]>(initialState.coachApplications);
+  const [groups, setGroups] = useState<TrainingGroup[]>(initialState.groups);
+  const [sessions, setSessions] = useState<GroupSession[]>(initialState.sessions);
   const [registrationOpen, setRegistrationOpenState] = useState<boolean>(() => getRegistrationOpen());
   const [clubSettings, setClubSettings] = useState<ClubSettings>(() => getClubSettings());
 
@@ -210,6 +252,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => saveAgreements(agreements), [agreements]);
   useEffect(() => saveAttendance(attendance), [attendance]);
   useEffect(() => saveNotifications(notifications), [notifications]);
+  useEffect(() => saveCoachApplications(coachApplications), [coachApplications]);
+  useEffect(() => saveGroups(groups), [groups]);
+  useEffect(() => saveSessions(sessions), [sessions]);
 
   const setRegistrationOpen = useCallback((open: boolean) => {
     setRegistrationOpenState(open);
@@ -353,6 +398,74 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   }, []);
 
+  const addCoachApplication = useCallback((data: Omit<CoachApplication, 'id' | 'status' | 'submittedAt'>) => {
+    setCoachApplications((prev) => [
+      { ...data, id: uid('coach'), status: 'pending', submittedAt: new Date().toISOString().slice(0, 10) },
+      ...prev,
+    ]);
+  }, []);
+
+  const setCoachApplicationStatus = useCallback(
+    (id: string, status: CoachApplication['status'], credentials?: { username: string; password: string }) => {
+      setCoachApplications((prev) =>
+        prev.map((c) =>
+          c.id === id
+            ? { ...c, status, username: status === 'approved' ? credentials?.username ?? c.username : c.username, password: status === 'approved' ? credentials?.password ?? c.password : c.password }
+            : c,
+        ),
+      );
+    },
+    [],
+  );
+
+  const deleteCoachApplication = useCallback((id: string) => {
+    setCoachApplications((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
+  const addGroup = useCallback((data: Omit<TrainingGroup, 'id'>): TrainingGroup => {
+    const group: TrainingGroup = { ...data, id: uid('grp') };
+    setGroups((prev) => [group, ...prev]);
+    return group;
+  }, []);
+
+  const updateGroup = useCallback((id: string, data: Partial<TrainingGroup>) => {
+    setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, ...data } : g)));
+  }, []);
+
+  const deleteGroup = useCallback((id: string) => {
+    setGroups((prev) => prev.filter((g) => g.id !== id));
+    setSessions((prev) => prev.map((s) => ({ ...s, groupIds: s.groupIds.filter((g) => g !== id) })).filter((s) => s.groupIds.length > 0));
+  }, []);
+
+  const addSession = useCallback(
+    (data: Omit<GroupSession, 'id' | 'status' | 'managerApproved'>): GroupSession => {
+      const shared = data.groupIds.length > 1;
+      const session: GroupSession = {
+        ...data,
+        id: uid('ses'),
+        status: shared ? 'pending' : 'approved',
+        managerApproved: !shared,
+      };
+      setSessions((prev) => [session, ...prev]);
+      return session;
+    },
+    [],
+  );
+
+  const updateSession = useCallback((id: string, data: Partial<GroupSession>) => {
+    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, ...data } : s)));
+  }, []);
+
+  const approveSession = useCallback((id: string) => {
+    setSessions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, status: 'approved', managerApproved: true } : s)),
+    );
+  }, []);
+
+  const deleteSession = useCallback((id: string) => {
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+  }, []);
+
   return (
     <DataContext.Provider
       value={{
@@ -365,10 +478,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         agreements,
         attendance,
         notifications,
+        coachApplications,
+        groups,
+        sessions,
         registrationOpen,
         clubSettings,
         updateClubSettings,
         setRegistrationOpen,
+        addCoachApplication,
+        setCoachApplicationStatus,
+        deleteCoachApplication,
+        addGroup,
+        updateGroup,
+        deleteGroup,
+        addSession,
+        updateSession,
+        approveSession,
+        deleteSession,
         addAthlete,
         updateAthlete,
         deleteAthlete,

@@ -3,6 +3,7 @@ import {
   Activity,
   Building2,
   Calendar,
+  CalendarDays,
   Dumbbell,
   Gavel,
   Home,
@@ -13,6 +14,7 @@ import {
   Settings,
   Trophy,
   UserCheck,
+  UserCog,
   Users,
 } from 'lucide-react';
 import { UserRole } from '@/types';
@@ -33,7 +35,31 @@ export type PageId =
   | 'settings'
   | 'profile'
   | 'programs'
-  | 'hall';
+  | 'hall'
+  | 'accounts'
+  | 'schedule';
+
+/** مصفوفة الصلاحيات (RBAC) لفتح الصفحات — مصدر الحقيقة للقائمة الجانبية وحراسة المسارات */
+export const PAGE_ACCESS: Record<PageId, UserRole[]> = {
+  home: Object.values(UserRole),
+  dashboard: Object.values(UserRole),
+  programs: Object.values(UserRole),
+  hall: Object.values(UserRole),
+  activities: Object.values(UserRole),
+  legal: Object.values(UserRole),
+  schedule: Object.values(UserRole),
+  training: [UserRole.PRESIDENT, UserRole.MANAGER, UserRole.COACH, UserRole.ATHLETE, UserRole.GUARDIAN],
+  profile: [UserRole.PRESIDENT, UserRole.MANAGER, UserRole.COACH, UserRole.ATHLETE, UserRole.GUARDIAN],
+  athletes: [UserRole.PRESIDENT, UserRole.MANAGER, UserRole.COACH],
+  applications: [UserRole.PRESIDENT, UserRole.MANAGER],
+  agreements: [UserRole.PRESIDENT, UserRole.MANAGER],
+  disciplinary: [UserRole.PRESIDENT, UserRole.MANAGER],
+  settings: [UserRole.PRESIDENT, UserRole.MANAGER],
+  accounts: [UserRole.PRESIDENT, UserRole.MANAGER],
+};
+
+export const isPageAllowed = (page: PageId, role?: UserRole): boolean =>
+  !!role && (PAGE_ACCESS[page] ?? []).includes(role);
 
 interface NavItem {
   id: PageId;
@@ -90,6 +116,12 @@ const MENU_GROUPS: { title: string; items: NavItem[] }[] = [
         icon: Activity,
         roles: [UserRole.PRESIDENT, UserRole.MANAGER, UserRole.COACH, UserRole.ATHLETE, UserRole.GUARDIAN],
       },
+      {
+        id: 'schedule',
+        label: 'البرنامج الأسبوعي',
+        icon: CalendarDays,
+        roles: [UserRole.PRESIDENT, UserRole.MANAGER, UserRole.COACH, UserRole.ATHLETE, UserRole.GUARDIAN],
+      },
     ],
   },
   {
@@ -106,6 +138,12 @@ const MENU_GROUPS: { title: string; items: NavItem[] }[] = [
         id: 'settings',
         label: 'الإعدادات',
         icon: Settings,
+        roles: [UserRole.PRESIDENT, UserRole.MANAGER],
+      },
+      {
+        id: 'accounts',
+        label: 'تسيير الحسابات',
+        icon: UserCog,
         roles: [UserRole.PRESIDENT, UserRole.MANAGER],
       },
     ],

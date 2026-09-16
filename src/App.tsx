@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
 import { AppProvider, AuthProvider, DataProvider, useAuth, useAppContext } from './context';
-import Layout, { PageId } from './components/Layout';
+import Layout, { PageId, isPageAllowed } from './components/Layout';
+import AccessDenied from './components/AccessDenied';
 import LoginPage from './pages/LoginPage';
 import RegistrationPage from './pages/RegistrationPage';
+import CoachApplyPage from './pages/CoachApplyPage';
 import RegistrationFormDocument from './pages/RegistrationFormDocument';
 import HomePage from './pages/HomePage';
 import ProgramsPage from './pages/ProgramsPage';
 import HallOfFamePage from './pages/HallOfFamePage';
 import DashboardPage from './pages/DashboardPage';
+import AccountsManagementPage from './pages/AccountsManagementPage';
+import SchedulePage from './pages/SchedulePage';
+import SchedulePrintDocument from './pages/SchedulePrintDocument';
 import AthletesPage from './pages/AthletesPage';
 import AthleteProfilePage from './pages/AthleteProfilePage';
 import TrainingPage from './pages/TrainingPage';
@@ -29,6 +34,12 @@ const App: React.FC = () => {
   if (route === 'register') {
     return <RegistrationPage />;
   }
+  if (route === 'apply-coach') {
+    return <CoachApplyPage />;
+  }
+  if (route === 'print-schedule') {
+    return <SchedulePrintDocument />;
+  }
   if (!user) {
     return <LoginPage />;
   }
@@ -44,7 +55,8 @@ const MainApp: React.FC = () => {
     !!user && (user.role === UserRole.ATHLETE || user.role === UserRole.GUARDIAN);
 
   const handleNavigate = (next: PageId, athleteId?: string) => {
-    if (isOwnProfile && (next === 'athletes' || next === 'applications' || next === 'disciplinary' || next === 'settings')) {
+    if (!isPageAllowed(next, user?.role)) {
+      setPage('dashboard');
       return;
     }
     setPage(next);
@@ -53,6 +65,9 @@ const MainApp: React.FC = () => {
   };
 
   const renderPage = () => {
+    if (!isPageAllowed(page, user?.role)) {
+      return <AccessDenied onHome={() => handleNavigate('dashboard')} />;
+    }
     switch (page) {
       case 'home':
         return <HomePage onNavigate={handleNavigate} />;
@@ -79,6 +94,8 @@ const MainApp: React.FC = () => {
         );
       case 'training':
         return <TrainingPage />;
+      case 'schedule':
+        return <SchedulePage />;
       case 'applications':
         return <ApplicationsPage />;
       case 'activities':
@@ -91,6 +108,8 @@ const MainApp: React.FC = () => {
         return <LegalPage />;
       case 'settings':
         return <SettingsPage />;
+      case 'accounts':
+        return <AccountsManagementPage />;
       case 'dashboard':
       default:
         return <DashboardPage onNavigate={handleNavigate} />;

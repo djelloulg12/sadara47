@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Lock, UserCircle2, Eye, EyeOff, Info, LogIn, ClipboardList } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Lock, UserCircle2, Eye, EyeOff, Info, LogIn, ClipboardList, UserPlus } from 'lucide-react';
 import { useAuth, useAppContext, useData } from '@/context';
 import { ROLES_LABEL } from '@/constants';
 import { User } from '@/types';
@@ -15,6 +15,18 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [showDemo, setShowDemo] = useState(true);
+
+  const demoUsers = useMemo(() => {
+    const seen = new Set<string>();
+    const result: User[] = [];
+    for (const u of users) {
+      const k = u.username.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      result.push(u);
+    }
+    return result;
+  }, [users]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,6 +133,14 @@ const LoginPage: React.FC = () => {
               </button>
             )}
             <span className="text-gray-200">|</span>
+            <button
+              onClick={() => setRoute('apply-coach')}
+              className="hover:text-[#0B121E] transition-colors flex items-center gap-1.5 font-bold"
+            >
+              <UserPlus size={14} />
+              طلب الانضمام كمدرب
+            </button>
+            <span className="text-gray-200">|</span>
             <span className="hover:text-[#D4AF37] transition-colors">سياسة الخصوصية</span>
           </div>
         </div>
@@ -142,7 +162,7 @@ const LoginPage: React.FC = () => {
               يمكنك الدخول بأي من الحسابات التالية لاستكشاف الصلاحيات والواجهات المخصصة لكل رتبة — إضغط على حساب لملء النموذج تلقائياً:
             </p>
             <div className="grid grid-cols-1 gap-3">
-              {users.map((u) => (
+              {demoUsers.map((u) => (
                 <button
                   key={u.id}
                   onClick={() => fill(u)}

@@ -53,6 +53,9 @@ export interface User {
   password: string;
   role: UserRole;
   athleteId?: string;
+  /** تفعيل/تجميد الحساب — المجمّد لا يمكنه الدخول */
+  active?: boolean;
+  phone?: string;
 }
 
 export interface Athlete {
@@ -172,6 +175,29 @@ export interface ClubActivity {
   participants?: string[];
 }
 
+/** طلب انضمام مدرب إلى النادي (تعبئة كاملة + شهادات معتمدة) */
+export interface CoachApplication {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  name: string;
+  lastName: string;
+  dob?: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  specialty: string;
+  experienceYears?: number;
+  diploma: string;
+  diplomaYear?: string;
+  certifications?: string;
+  certificateFiles?: string[];
+  references?: string;
+  bio?: string;
+  username?: string;
+  password?: string;
+  submittedAt: string;
+}
+
 export interface Agreement {
   id: string;
   name: string;
@@ -207,6 +233,45 @@ export interface AttendanceRecord {
   date: string;
   present: boolean;
   note?: string;
+}
+
+/* ----------------------------- البرنامج الأسبوعي ----------------------------- */
+/** أيام الأسبوع التدريبي */
+export type WeekDay = 'السبت' | 'الأحد' | 'الاثنين' | 'الثلاثاء' | 'الأربعاء' | 'الخميس';
+
+/** فئات الأفواج (أصاغر / أكابر) */
+export type GroupCategory = 'أصاغر' | 'أكابر';
+
+export type SessionStatus = 'pending' | 'approved';
+
+/** فوج تدريبي: قائمة رياضيين + مدربان إجباريان (رئيسي + مساعد) */
+export interface TrainingGroup {
+  id: string;
+  name: string;
+  category: GroupCategory;
+  sport: Sport;
+  memberIds: string[];
+  headCoachId: string;
+  assistantCoachId: string;
+}
+
+/**
+ * حصة تدريبية (خانة زمنية في مسبح واحد).
+ * الاشتراك: حصة مشتركة بين 2 إلى 4 أفواج في نفس المسبح والتوقيت.
+ * الحصص المشتركة يتطلب تفعيل `managerApproved` قبل اعتمادها.
+ */
+export interface GroupSession {
+  id: string;
+  groupIds: string[];
+  day: WeekDay;
+  start: string;
+  end: string;
+  pool: string;
+  basin?: string;
+  focus: string;
+  status: SessionStatus;
+  managerApproved: boolean;
+  createdBy: string;
 }
 
 export type NotificationType =
