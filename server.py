@@ -136,5 +136,8 @@ class App(SimpleHTTPRequestHandler):
         fields.append("updated_at=datetime('now')"); values.append(app_id); c.execute('UPDATE applications SET '+','.join(fields)+' WHERE id=?',values); c.execute('INSERT INTO audit_logs(user_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?)',(user['id'],'تعديل طلب','application',app_id,json.dumps(data,ensure_ascii=False))); c.commit(); c.close(); self.send_json({'ok':True})
 
 if __name__ == '__main__':
-    init_db(); print('Sadara platform: http://127.0.0.1:4173'); ThreadingHTTPServer(('127.0.0.1',4173), App).serve_forever()
+    init_db()
+    port = int(os.environ.get('PORT', '4173'))
+    print(f'Sadara platform listening on port {port}')
+    ThreadingHTTPServer(('0.0.0.0', port), App).serve_forever()
 
