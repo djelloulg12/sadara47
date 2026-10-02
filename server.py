@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from datetime import date
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-DB = os.path.join(ROOT, 'sadara.db')
+DB = os.environ.get('SADARA_DB_PATH', os.path.join(ROOT, 'sadara.db'))
 SESSIONS = {}
 
 def connect():

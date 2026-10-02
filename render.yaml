@@ -1,7 +1,21 @@
 services:
   - type: web
     name: sadara-swimming-platform
-    env: docker
+    runtime: docker
     plan: free
     healthCheckPath: /
+    autoDeployTrigger: commit
+    envVars:
+      - key: SADARA_ADMIN_EMAIL
+        sync: false
+      - key: SADARA_ADMIN_PASSWORD
+        sync: false
+      - key: SADARA_PRESIDENT_EMAIL
+        sync: false
+      - key: SADARA_PRESIDENT_PASSWORD
+        sync: false
+      - key: SADARA_COACH_EMAIL
+        sync: false
+      - key: SADARA_COACH_PASSWORD
+        sync: false
 
