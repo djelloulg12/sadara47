@@ -12,6 +12,7 @@ const seed = {
   dark: false
 };
 let state = JSON.parse(localStorage.getItem('sadara-state') || 'null') || seed;
+state.groups ||= [{id:'g1',name:'المبتدئون',coach:'المدرب سليم',schedule:'السبت والثلاثاء · 16:00'},{id:'g2',name:'المتوسطون',coach:'المدرب سليم',schedule:'الأحد · 17:00'},{id:'g3',name:'المتقدمون',coach:'المدربة نادية',schedule:'الإثنين والخميس · 16:00'}];
 const save = () => localStorage.setItem('sadara-state', JSON.stringify(state));
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v).replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
@@ -21,7 +22,12 @@ function render() {
   document.body.classList.toggle('dark', state.dark);
   $('#app').innerHTML = state.user ? dashboard() : home();
   if (!state.user) injectFacebookSection();
+  if (state.user) injectGroupsNav();
   bind();
+}
+function injectGroupsNav() {
+  const nav=document.querySelector('.side-nav'); if(!nav||nav.querySelector('[data-page="groups"]')) return;
+  nav.insertAdjacentHTML('beforeend','<a data-page="groups"><i>♟</i>الأفواج والمدربون</a>');
 }
 function injectFacebookSection() {
   const landing = document.querySelector('.landing');
@@ -98,6 +104,10 @@ function phoneRecoveryModal() {
   document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop"><div class="modal auth-modal"><button class="close" data-action="close">×</button><div class="modal-heading"><span class="logo auth-logo">🏊</span><h2>الدخول عبر الهاتف</h2><p>تحقق من رقمك برسالة SMS للوصول الآمن.</p></div><div class="form-message" id="phone-message" role="status"></div><label>رقم الهاتف<input id="phone-number" type="tel" autocomplete="tel" placeholder="+213 5xx xx xx xx"></label><div id="recaptcha-container"></div><button class="btn btn-primary full" data-action="send-phone-code">إرسال رمز التحقق</button><label id="phone-code-wrap" hidden>رمز التحقق<input id="phone-code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></label><button class="btn btn-sms full" data-action="verify-phone-code" hidden>تأكيد الرمز والدخول</button><p class="hint">هذه الطريقة تتحقق من الهاتف وتتيح الدخول للحساب المرتبط به. إعادة تعيين كلمة مرور البريد تتم عبر رابط البريد الإلكتروني.</p></div></div>`); bind();
 }
 action=async function(a,el){
+  if(a==='add-group'){const name=prompt('اسم الفوج');if(!name)return;const coach=prompt('اسم المدرب المشرف','المدرب سليم')||'غير محدد';const schedule=prompt('البرنامج الأسبوعي','السبت · 16:00')||'يحدد لاحقًا';state.groups.push({id:'g'+Date.now(),name,coach,schedule});save();render();showToast('تمت إضافة الفوج والمدرب.');return}
+  if(a==='edit-group'){const g=state.groups.find(x=>x.id===el.dataset.group);if(!g)return;g.coach=prompt('المدرب المشرف',g.coach)||g.coach;g.schedule=prompt('البرنامج الأسبوعي',g.schedule)||g.schedule;save();render();return}
+  if(a==='print-a4'||a==='print-group'){window.print();return}
+  if(a==='print-cards'){window.print();return}
   if(a==='do-login'){
     const email=$('#email')?.value.trim(), password=$('#password')?.value;
     if(!email||!password){authMessage('أدخل البريد الإلكتروني وكلمة المرور.','error');return}
@@ -147,4 +157,12 @@ action=async function(a,el){
 };
 document.addEventListener('click',e=>{if(e.target.closest('.notification'))action('notification')});
 document.addEventListener('click',e=>{const link=e.target.closest('.official-docs a');if(!link)return;e.preventDefault();const file=link.getAttribute('href').split('/').pop();window.open('https://raw.githubusercontent.com/djelloulg12/sadara47/main/assets/'+file,'_blank','noopener');});
+
+function groupsPage(){return `<div class="toolbar"><span class="page-description">وزّع السباحين على الأفواج وحدد المدرب والمواعيد المشرفة على كل فوج.</span><button class="btn btn-primary" data-action="add-group">+ إضافة فوج</button></div><section class="group-grid">${state.groups.map(g=>`<article class="group-card"><div class="group-card-head"><span class="stat-icon blue">♟</span><span class="status success">نشط</span></div><h3>${esc(g.name)}</h3><p><b>المدرب المشرف:</b> ${esc(g.coach)}</p><p><b>البرنامج:</b> ${esc(g.schedule)}</p><div class="group-card-actions"><button class="check-btn" data-action="print-group" data-group="${g.id}">طباعة قائمة الفوج</button><button class="check-btn" data-action="edit-group" data-group="${g.id}">تعديل</button></div></article>`).join('')}</section><section class="panel print-a4"><div class="panel-head"><div><h3>قائمة الأفواج والمدربين</h3><p>نسخة منظمة للطباعة على ورق A4</p></div><button class="btn btn-outline" data-action="print-a4">طباعة القائمة A4</button></div><div class="table-scroll"><table><thead><tr><th>الفوج</th><th>المدرب المشرف</th><th>البرنامج</th><th>عدد السباحين</th></tr></thead><tbody>${state.groups.map(g=>`<tr><td><b>${esc(g.name)}</b></td><td>${esc(g.coach)}</td><td>${esc(g.schedule)}</td><td>${state.swimmers.filter(s=>s.group===g.name).length}</td></tr>`).join('')}</tbody></table></div></section>`;}
+function enhancedCardPage(){return `<section class="card-intro"><div><span class="eyebrow">بطاقات 8.5 × 5.5 سم</span><h2>بطاقات انخراط<br>بـ QR للحضور.</h2><p>يمسح المشرف أو المدرب الرمز لتسجيل حضور السباح مباشرة.</p><button class="btn btn-primary" data-action="print-cards">طباعة البطاقات</button></div><div class="membership-card"><span>النادي الرياضي الصدارة</span><b>🏊</b><strong>بطاقة العضو</strong><small>مقاس 8.5 × 5.5 سم</small></div></section><section class="card-print-grid">${state.swimmers.length?state.swimmers.map(s=>`<article class="print-card" data-member="${esc(s.id)}"><div class="print-card-brand"><span class="logo"></span><b>الصدارة</b></div><div class="print-card-body"><div><strong>${esc(s.name)}</strong><small>${esc(s.group||'فوج السباحة')}</small><small>رقم العضوية: ${esc(s.id)}</small></div><div class="qr-code" data-qr="${esc(s.id)}"></div></div><footer><span>2026 / 2027</span><span>امسح لتسجيل الحضور</span></footer></article>`).join(''):'<div class="panel empty-cell">لا توجد بطاقات بعد اعتماد السباحين.</div>'}</section>`;}
+const oldPageView=pageView;
+pageView=function(p){if(p==='groups')return groupsPage();if(p==='card')return enhancedCardPage();return oldPageView(p);};
+function buildQRCodes(){document.querySelectorAll('.qr-code').forEach(el=>{if(!window.QRCode||el.childElementCount)return;new QRCode(el,{text:location.origin+'/#attendance?member='+encodeURIComponent(el.dataset.qr),width:64,height:64,colorDark:'#071a35',colorLight:'#ffffff'});});}
+const oldRender=render;
+render=function(){oldRender();buildQRCodes();};
 
