@@ -20,7 +20,13 @@ const icons = { home:'⌂', users:'♙', schedule:'▦', attendance:'✓', notic
 function render() {
   document.body.classList.toggle('dark', state.dark);
   $('#app').innerHTML = state.user ? dashboard() : home();
+  if (!state.user) injectFacebookSection();
   bind();
+}
+function injectFacebookSection() {
+  const landing = document.querySelector('.landing');
+  if (!landing || landing.querySelector('.facebook-section')) return;
+  landing.insertAdjacentHTML('beforeend', `<section class="facebook-section" id="facebook"><div class="social-heading"><div><span class="eyebrow">من الصفحة الرسمية</span><h2>صور وتظاهرات النادي</h2><p>تابع آخر التدريبات، المشاركات والإنجازات المنشورة من نادي الصدارة.</p></div><a class="btn btn-primary" href="https://www.facebook.com/nadiSadara47/?locale=ar_AR" target="_blank" rel="noopener noreferrer">زيارة صفحة Facebook</a></div><div class="facebook-content"><div class="facebook-copy"><div class="facebook-badge">f</div><h3>النادي الرياضي الصدارة</h3><p>المصدر الرسمي للأخبار والصور والتغطيات الخاصة بالنادي.</p><a href="https://www.facebook.com/nadiSadara47/?locale=ar_AR" target="_blank" rel="noopener noreferrer" class="facebook-link">عرض جميع المنشورات والتظاهرات ←</a></div><div class="facebook-feed"><iframe title="منشورات صفحة النادي الرسمية على Facebook" src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2FnadiSadara47%2F&tabs=timeline&width=560&height=420&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=true" width="560" height="420" style="border:none;overflow:hidden" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe></div></div></section>`);
 }
 function home() {
   return `<header class="topbar public-nav"><a class="brand" href="#"><span class="logo brand-logo">🏊</span><span><b>الصدارة</b><small>فوج السباحة</small></span></a><nav><a href="#activities">نشاطاتنا</a><a href="#about">عن النادي</a><a href="#contact">تواصل معنا</a></nav><button class="btn btn-outline" data-action="login">تسجيل الدخول</button></header>
