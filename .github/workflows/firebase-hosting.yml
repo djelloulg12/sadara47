@@ -17,4 +17,10 @@ jobs:
           projectId: sadara-platform
           channelId: live
           entryPoint: .
+      - name: Deploy Firestore and Storage rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
+        run: |
+          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$GOOGLE_APPLICATION_CREDENTIALS"
+          npx --yes firebase-tools deploy --only firestore:rules,storage --project sadara-platform
 
