@@ -40,19 +40,16 @@ function injectCoachEntry() {
 function injectContactInfo() {
   const landing = document.querySelector('.landing');
   if (!landing || landing.querySelector('.club-contact-section')) return;
-  landing.insertAdjacentHTML('beforeend', `<section class="club-contact-section" id="club-contact"><div><span class="eyebrow">مقر النادي وطرق التواصل</span><h2>نادي الصدارة الرياضي<br>في حي الثنية — غرداية</h2><p>نستقبلكم في مقر النادي، ونسعد بالتواصل معكم حول التسجيل والتدريب والأنشطة.</p></div><div class="contact-cards"><a class="contact-card" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('حي الثنية - غرداية')}" target="_blank" rel="noopener"><b>⌖</b><span>العنوان</span><strong>حي الثنية - غرداية</strong><small>فتح الموقع على الخريطة</small></a><a class="contact-card" href="tel:+213660606467"><b>☎</b><span>الهاتف</span><strong dir="ltr">0660 60 64 67</strong><small>اتصال مباشر بالنادي</small></a><a class="contact-card" href="mailto:nadisadara@gmail.com"><b>✉</b><span>البريد الإلكتروني</span><strong>nadisadara@gmail.com</strong><small>إرسال رسالة</small></a><a class="contact-card" href="http://nadaisadara47.com/" target="_blank" rel="noopener"><b>↗</b><span>الموقع الرسمي</span><strong>nadaisadara47.com</strong><small>زيارة موقع النادي</small></a></div></section>`);
+  landing.insertAdjacentHTML('beforeend', `<section class="club-contact-section" id="club-contact"><div><span class="eyebrow">مقر النادي وطرق التواصل</span><h2>نادي الصدارة الرياضي<br>في حي الثنية — غرداية</h2><p>نستقبلكم في مقر النادي، ونسعد بالتواصل معكم حول التسجيل والتدريب والأنشطة.</p></div><div class="contact-cards"><a class="contact-card" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('حي الثنية - غرداية')}" target="_blank" rel="noopener"><b>⌖</b><span>العنوان</span><strong>حي الثنية - غرداية</strong><small>فتح الموقع على الخريطة</small></a><a class="contact-card" href="tel:+213660606467"><b>☎</b><span>الهاتف</span><strong dir="ltr">0660 60 64 67</strong><small>اتصال مباشر بالنادي</small></a><a class="contact-card" href="mailto:nadisadara@gmail.com"><b>✉</b><span>البريد الإلكتروني</span><strong>nadisadara@gmail.com</strong><small>إرسال رسالة</small></a><a class="contact-card" href="https://www.facebook.com/nadiSadara47/?locale=ar_AR" target="_blank" rel="noopener"><b>f</b><span>الصفحة الرسمية</span><strong dir="ltr">facebook.com/nadiSadara47</strong><small>أخبار النادي وصوره على Facebook</small></a></div></section>`);
 }
-function injectGroupsNav() {
-  const nav=document.querySelector('.side-nav'); if(!nav||nav.querySelector('[data-page="groups"]')) return;
-  nav.insertAdjacentHTML('beforeend','<a data-page="groups"><i>♟</i>الأفواج والمدربون</a>');
-}
+function injectGroupsNav(){const nav=document.querySelector('.side-nav');if(!nav||nav.querySelector('[data-page="groups"]'))return;nav.insertAdjacentHTML('beforeend','<a class="'+(state.page==='groups'?'active':'')+'" data-page="groups"><i>♟</i>الأفواج والمدربون</a>')}
 function injectFacebookSection() {
   const landing = document.querySelector('.landing');
   if (!landing || landing.querySelector('.facebook-section')) return;
   landing.insertAdjacentHTML('beforeend', `<section class="facebook-section" id="facebook"><div class="social-heading"><div><span class="eyebrow">من الصفحة الرسمية</span><h2>صور وتظاهرات النادي</h2><p>تابع آخر التدريبات، المشاركات والإنجازات المنشورة من نادي الصدارة.</p></div><a class="btn btn-primary" href="https://www.facebook.com/nadiSadara47/?locale=ar_AR" target="_blank" rel="noopener noreferrer">زيارة صفحة Facebook</a></div><div class="facebook-content"><div class="facebook-copy"><div class="facebook-badge">f</div><h3>النادي الرياضي الصدارة</h3><p>المصدر الرسمي للأخبار والصور والتغطيات الخاصة بالنادي.</p><a href="https://www.facebook.com/nadiSadara47/?locale=ar_AR" target="_blank" rel="noopener noreferrer" class="facebook-link">عرض جميع المنشورات والتظاهرات ←</a></div><div class="facebook-feed"><iframe title="منشورات صفحة النادي الرسمية على Facebook" src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2FnadiSadara47%2F&tabs=timeline&width=560&height=420&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=true" width="560" height="420" style="border:none;overflow:hidden" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe></div></div></section>`);
 }
 function home() {
-  return `<header class="topbar public-nav"><a class="brand" href="#"><span class="logo brand-logo">🏊</span><span><b>الصدارة</b><small>فوج السباحة</small></span></a><nav><a href="#activities">نشاطاتنا</a><a href="#about">عن النادي</a><a href="#contact">تواصل معنا</a></nav><button class="btn btn-outline" data-action="login">تسجيل الدخول</button></header>
+  return `<header class="topbar public-nav" id="top"><a class="brand" href="#top"><span class="logo brand-logo">🏊</span><span><b>الصدارة</b><small>فوج السباحة</small></span></a><nav><a href="#activities">نشاطاتنا</a><a href="#about">عن النادي</a><a href="#contact">تواصل معنا</a></nav><button class="btn btn-outline" data-action="login">تسجيل الدخول</button></header>
   <main class="landing"><section class="hero"><div class="hero-copy"><span class="eyebrow">النادي الرياضي الصدارة</span><h1>نصنع أبطالًا<br><em>بشغف وانضباط.</em></h1><p>منصة رقمية متكاملة لإدارة فوج السباحة، متابعة التقدم، وتنظيم كل ما يخص أبطالنا.</p><div class="hero-actions"><button class="btn btn-primary" data-action="login">الدخول إلى المنصة <span>←</span></button><button class="btn btn-ghost" data-action="register">طلب التسجيل</button></div><div class="mini-stats"><span><b>+120</b><small>سباحًا</small></span><span><b>08</b><small>مدربين</small></span><span><b>12</b><small>حصة أسبوعية</small></span></div></div><div class="hero-art"><div class="ring ring-one"></div><div class="ring ring-two"></div><div class="water-card"><span>الموسم الرياضي</span><strong>2026 — 2027</strong><div class="wave">〰〰〰</div><small>اسبح أبعد من حدودك</small></div><div class="bubble b1">✦</div><div class="bubble b2">✧</div></div></section>
   <section class="feature-grid" id="activities"><article><span class="feature-icon blue">◷</span><h3>برنامج واضح</h3><p>اطّلع على حصصك ومواعيد التدريب في أي وقت.</p></article><article><span class="feature-icon gold">✓</span><h3>متابعة مستمرة</h3><p>سجّل الحضور وتابع تطور السباحين بدقة.</p></article><article><span class="feature-icon mint">♧</span><h3>مجتمع واحد</h3><p>تواصل سهل بين الإدارة والمدربين والأولياء.</p></article></section>
   <section class="public-section" id="about"><div><span class="eyebrow">لماذا الصدارة؟</span><h2>كل ما يحتاجه النادي<br>في مكان واحد.</h2></div><p>نمنح الطاقم الإداري والمدربين والأولياء تجربة بسيطة وآمنة تساعدهم على التركيز في الأهم: بناء جيل رياضي متميز.</p></section>
@@ -65,8 +62,6 @@ function dashboard() {
 }
 function pageTitle(p){return ({home:'نظرة عامة',applications:'طلبات التسجيل',subscriptions:'إدارة الاشتراكات',users:'إدارة السباحين',schedule:'البرنامج الأسبوعي',attendance:'سجل الحضور',notices:'الإعلانات والتنبيهات',card:'بطاقات الانخراط',settings:'الإعدادات'}[p]||'نظرة عامة');}
 function pageView(p){ if(p==='applications')return applicationsPage(); if(p==='subscriptions')return subscriptionsPage(); if(p==='users')return usersPage(); if(p==='schedule')return schedulePage(); if(p==='attendance')return attendancePage(); if(p==='notices')return noticesPage(); if(p==='card')return cardPage(); if(p==='settings')return settingsPage(); return overview(); }
-function applicationsPage(){return `<div class="toolbar"><span class="page-description">يراجع رئيس الجمعية الطلبات ويغير الاشتراك والخدمات قبل الاعتماد.</span><button class="btn btn-primary" data-action="refresh-data">↻ تحديث</button></div><section class="panel table-panel"><div class="panel-head"><div><h3>طلبات التسجيل</h3><p>${state.applications.length} طلبات محفوظة في قاعدة البيانات</p></div></div><div class="table-scroll"><table><thead><tr><th>الطلب</th><th>الرياضي</th><th>الفئة</th><th>الاشتراك</th><th>المبلغ</th><th>الحالة</th><th>قرار</th></tr></thead><tbody>${state.applications.length?state.applications.map(a=>`<tr><td>${a.application_no}</td><td><b>${esc(a.first_name_ar||'')} ${esc(a.last_name_ar||'')}</b></td><td>${a.category==='minor'?'أصاغر':'أكابر'}</td><td>${a.subscription_name||a.subscription_code}</td><td>${a.expected_amount} دج</td><td><span class="status ${a.status==='approved'?'success':a.status==='rejected'?'pending':'pending'}">${a.status==='approved'?'مقبول':a.status==='rejected'?'مرفوض':'قيد المراجعة'}</span></td><td><button class="check-btn" data-action="approve-app" data-id="${a.id}">اعتماد</button> <button class="check-btn" data-action="edit-app" data-id="${a.id}">تعديل</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty-cell">لا توجد طلبات بعد. ستظهر هنا طلبات التسجيل القادمة.</td></tr>'}</tbody></table></div></section>`;}
-function applicationsPage(){return `<div class="toolbar"><span class="page-description">يراجع رئيس النادي طلبات السباحين والمدربين ويصدر قرار الموافقة أو الرفض.</span><button class="btn btn-primary" data-action="refresh-data">↻ تحديث</button></div><section class="panel table-panel"><div class="panel-head"><div><h3>طلبات التسجيل والمَدربين</h3><p>${state.applications.length} طلبات محفوظة في قاعدة البيانات</p></div></div><div class="table-scroll"><table><thead><tr><th>الطلب</th><th>المتقدم</th><th>النوع</th><th>الوثائق</th><th>الحالة</th><th>قرار رئيس النادي</th></tr></thead><tbody>${state.applications.length?state.applications.map(a=>{const coach=a.application_type==='coach';const label=coach?(a.coach_name||'مدرب'):(`${a.first_name_ar||''} ${a.last_name_ar||''}`);return `<tr><td>${esc(a.application_no||a.id)}</td><td><b>${esc(label)}</b><br><small>${esc(coach?(a.coach_phone||a.coach_email||''):(a.phone||''))}</small></td><td>${coach?'مدرب':'سباح'}</td><td>${coach&&a.documents?.url?`<a class="link" href="${esc(a.documents.url)}" target="_blank" rel="noopener">عرض PDF</a>`:'—'}</td><td><span class="status ${a.status==='approved'?'success':a.status==='rejected'?'pending':'pending'}">${a.status==='approved'?'مقبول':a.status==='rejected'?'مرفوض':'قيد المراجعة'}</span>${a.decision_reason?`<br><small>${esc(a.decision_reason)}</small>`:''}</td><td>${a.status==='pending'?`<button class="check-btn" data-action="approve-app" data-id="${esc(a.id)}">موافقة</button> <button class="check-btn" data-action="reject-app" data-id="${esc(a.id)}">رفض</button>`:'تم اتخاذ القرار'}</td></tr>`}).join(''):'<tr><td colspan="6" class="empty-cell">لا توجد طلبات بعد.</td></tr>'}</tbody></table></div></section>`;}
 function subscriptionsPage(){return `<div class="toolbar"><span class="page-description">الأسعار والخدمات التي يمكن لرئيس الجمعية تعديلها.</span><button class="btn btn-primary" data-action="refresh-data">↻ تحديث</button></div><div class="stats-grid subscription-grid">${state.subscriptions.map(s=>`<div class="stat-card"><span class="stat-icon blue">▣</span><small>${s.duration}</small><strong>${s.amount} دج</strong><b>${s.name}</b></div>`).join('')}</div><section class="panel"><div class="panel-head"><div><h3>الخدمات الإضافية المحسوبة آليًا</h3><p>النقل 900 دج · البدلة الرياضية 2500 دج</p></div></div><p class="page-description">يمكن تعديل الاشتراك والخدمات داخل كل طلب، ويعاد احتساب المبلغ وتسجيل القرار في سجل المراجعة.</p></section>`;}
 function overview(){ return `<section class="welcome"><div><span>الخميس، 02 أكتوبر 2026</span><h2>صباح الخير، محمد 👋</h2><p>إليك ملخص أداء النادي لهذا اليوم.</p></div><button class="btn btn-primary" data-page="users">+ إضافة سباح</button></section><div class="stats-grid"><div class="stat-card"><span class="stat-icon blue">♙</span><small>إجمالي السباحين</small><strong>${state.swimmers.length+117}</strong><em class="up">↑ 12% <i>من الشهر الماضي</i></em></div><div class="stat-card"><span class="stat-icon mint">✓</span><small>حضور اليوم</small><strong>92%</strong><em class="up">↑ 4.5% <i>من الأسبوع الماضي</i></em></div><div class="stat-card"><span class="stat-icon gold">▣</span><small>بطاقات نشطة</small><strong>108</strong><em class="neutral">مستقر <i>هذا الشهر</i></em></div><div class="stat-card"><span class="stat-icon red">!</span><small>طلبات معلقة</small><strong>06</strong><em class="down">↓ 2 <i>من الأسبوع الماضي</i></em></div></div><div class="content-grid"><section class="panel chart-panel"><div class="panel-head"><div><h3>نسبة الحضور</h3><p>آخر 7 أيام</p></div><select><option>هذا الأسبوع</option><option>هذا الشهر</option></select></div><div class="chart"><div class="chart-labels"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div><div class="bars">${[72,88,67,93,81,96,92].map((n,i)=>`<div class="bar-wrap"><div class="bar" style="height:${n}%"><b>${n}%</b></div><small>${['السبت','الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','اليوم'][i]}</small></div>`).join('')}</div></div></section><section class="panel"><div class="panel-head"><div><h3>آخر الإعلانات</h3><p>تحديثات النادي الأخيرة</p></div><a class="link" data-page="notices">عرض الكل</a></div>${state.notices.map(n=>`<div class="notice-row"><span class="notice-dot"></span><div><b>${esc(n.title)}</b><p>${esc(n.text)}</p><small>${n.date}</small></div></div>`).join('')}</section></div><section class="panel quick-panel"><div class="panel-head"><div><h3>الوصول السريع</h3><p>أكثر العمليات استخدامًا</p></div></div><div class="quick-actions"><button data-page="attendance">✓ <span>تسجيل الحضور</span></button><button data-page="users">♙ <span>إدارة السباحين</span></button><button data-page="schedule">▦ <span>عرض البرنامج</span></button><button data-page="card">▣ <span>طباعة بطاقة</span></button></div></section>`; }
 function usersPage(){return `<div class="toolbar"><div class="search">⌕<input placeholder="ابحث عن سباح..." id="search"></div><button class="btn btn-primary" data-action="add-swimmer">+ إضافة سباح</button></div><section class="panel table-panel"><div class="panel-head"><div><h3>قائمة السباحين</h3><p>${state.swimmers.length} سجلات تجريبية — الموسم 2026/2027</p></div><button class="filter">تصفية ▾</button></div><div class="table-scroll"><table><thead><tr><th>السباح</th><th>رقم الانخراط</th><th>المجموعة</th><th>الهاتف</th><th>الحالة</th><th></th></tr></thead><tbody>${state.swimmers.map(s=>`<tr><td><span class="table-avatar">${s.name[0]}</span><b>${esc(s.name)}</b></td><td>${s.id}</td><td>${s.group}</td><td dir="ltr">${s.phone}</td><td><span class="status ${s.status==='نشط'?'success':'pending'}">${s.status}</span></td><td><button class="row-more">•••</button></td></tr>`).join('')}</tbody></table></div></section>`;}
@@ -111,7 +106,7 @@ function setupRegistrationMode() {
   const toggle = () => { const visible = category.value === 'minor'; guardianNodes.forEach(x => { x.hidden = !visible; }); if (!visible) guardianNodes.forEach(x => x.querySelectorAll?.('input').forEach(i => { if (i.type !== 'checkbox') i.value = ''; i.checked = false; })); };
   category.addEventListener('change', toggle); toggle();
   const submit = document.querySelector('[data-action="send-full-request"]');
-  if (submit && !document.querySelector('.attached-registration-forms')) submit.insertAdjacentHTML('beforebegin','<div class="official-docs attached-registration-forms"><a href="form-registration-01.jpg" target="_blank" rel="noopener">معاينة استمارة النادي</a><a href="form-registration-02.jpg" target="_blank" rel="noopener">معاينة النظام الداخلي المرفق</a></div>');
+  if (submit && !document.querySelector('.attached-registration-forms')) submit.insertAdjacentHTML('beforebegin','<div class="official-docs attached-registration-forms"><a href="form-registration-01.jpg" target="_blank" rel="noopener">استمارة النادي</a><a href="internal-regulations.jpg" target="_blank" rel="noopener">النظام الداخلي</a><a href="form-registration-02.jpg" target="_blank" rel="noopener">استمارة النظام</a><a href="registration-card.jpg" target="_blank" rel="noopener">نموذج بطاقة الانخراط</a></div>');
   if (submit && !document.querySelector('[data-action="print-registration-form"]')) submit.insertAdjacentHTML('beforebegin','<button class="btn btn-outline full" data-action="print-registration-form">طباعة نموذج التسجيل A4</button>');
   bind();
 }
@@ -231,16 +226,954 @@ state.user=data.user;state.page='home';save();document.querySelector('.modal-bac
   return currentAction(a,el);
 };
 document.addEventListener('click',e=>{if(e.target.closest('.notification'))action('notification')});
-document.addEventListener('click',e=>{const link=e.target.closest('.official-docs a');if(!link)return;e.preventDefault();const file=link.getAttribute('href').split('/').pop();window.open('https://raw.githubusercontent.com/djelloulg12/sadara47/main/assets/'+file,'_blank','noopener');});
+document.addEventListener('click',e=>{const link=e.target.closest('.official-docs a');if(!link)return;const file=link.getAttribute('href').split('/').pop();const files={'form-registration-01.jpg':'assets/form-registration-01.jpg','form-registration-02.jpg':'assets/form-registration-02.jpg','registration-card.jpg':'assets/registration-card.jpg','internal-regulations.jpg':'assets/internal-regulations.jpg'};const target=files[file];if(!target){e.preventDefault();return}const url=new URL(target,document.baseURI).href;if(new URL(url,location.href).origin===location.origin){e.preventDefault();window.open(url,'_blank','noopener')}});
 
-function groupsPage(){return `<div class="toolbar"><span class="page-description">وزّع السباحين على الأفواج وحدد المدرب والمواعيد المشرفة على كل فوج.</span><button class="btn btn-primary" data-action="add-group">+ إضافة فوج</button></div><section class="group-grid">${state.groups.map(g=>`<article class="group-card"><div class="group-card-head"><span class="stat-icon blue">♟</span><span class="status success">نشط</span></div><h3>${esc(g.name)}</h3><p><b>المدرب المشرف:</b> ${esc(g.coach)}</p><p><b>البرنامج:</b> ${esc(g.schedule)}</p><div class="group-card-actions"><button class="check-btn" data-action="print-group" data-group="${g.id}">طباعة قائمة الفوج</button><button class="check-btn" data-action="edit-group" data-group="${g.id}">تعديل</button></div></article>`).join('')}</section><section class="panel print-a4"><div class="panel-head"><div><h3>قائمة الأفواج والمدربين</h3><p>نسخة منظمة للطباعة على ورق A4</p></div><button class="btn btn-outline" data-action="print-a4">طباعة القائمة A4</button></div><div class="table-scroll"><table><thead><tr><th>الفوج</th><th>المدرب المشرف</th><th>البرنامج</th><th>عدد السباحين</th></tr></thead><tbody>${state.groups.map(g=>`<tr><td><b>${esc(g.name)}</b></td><td>${esc(g.coach)}</td><td>${esc(g.schedule)}</td><td>${state.swimmers.filter(s=>s.group===g.name).length}</td></tr>`).join('')}</tbody></table></div></section>`;}
-function applicationsPage(){return `<div class="toolbar"><span class="page-description">طلبات السباحين والمدربين — ملفات المدربين لا يفتحها إلا رئيس النادي.</span><button class="btn btn-primary" data-action="refresh-data">↻ تحديث</button></div><section class="panel table-panel"><div class="panel-head"><div><h3>طلبات التسجيل</h3><p>${state.applications.length} طلبات محفوظة</p></div></div><div class="table-scroll"><table><thead><tr><th>الطلب</th><th>المتقدم</th><th>النوع</th><th>الوثائق</th><th>الحالة</th><th>القرار</th></tr></thead><tbody>${state.applications.length?state.applications.map(a=>{const coach=a.application_type==='coach';const label=coach?(a.coach_name||'مدرب'):`${a.first_name_ar||''} ${a.last_name_ar||''}`;return `<tr><td>${esc(a.application_no||a.id)}</td><td><b>${esc(label)}</b></td><td>${coach?'مدرب':'سباح'}</td><td>${coach&&a.documents?.path?`<button class="check-btn" data-action="open-coach-doc" data-path="${esc(a.documents.path)}">فتح PDF</button>`:'—'}</td><td><span class="status ${a.status==='approved'?'success':'pending'}">${a.status==='approved'?'مقبول':a.status==='rejected'?'مرفوض':'قيد المراجعة'}</span></td><td>${a.status==='pending'?`<button class="check-btn" data-action="approve-app" data-id="${esc(a.id)}">موافقة</button> <button class="check-btn" data-action="reject-app" data-id="${esc(a.id)}">رفض</button>`:'تم اتخاذ القرار'}</td></tr>`}).join(''):'<tr><td colspan="6" class="empty-cell">لا توجد طلبات بعد.</td></tr>'}</tbody></table></div></section>`;}
-function enhancedCardPage(){return `<section class="card-intro"><div><span class="eyebrow">بطاقات 8.5 × 5.5 سم</span><h2>بطاقات انخراط<br>بـ QR للحضور.</h2><p>يمسح المشرف أو المدرب الرمز لتسجيل حضور السباح مباشرة.</p><button class="btn btn-primary" data-action="print-cards">طباعة البطاقات</button></div><div class="membership-card"><span>النادي الرياضي الصدارة</span><b>🏊</b><strong>بطاقة العضو</strong><small>مقاس 8.5 × 5.5 سم</small></div></section><section class="card-print-grid">${state.swimmers.length?state.swimmers.map(s=>`<article class="print-card" data-member="${esc(s.id)}"><div class="print-card-brand"><span class="logo"></span><b>الصدارة</b></div><div class="print-card-body"><div><strong>${esc(s.name)}</strong><small>${esc(s.group||'فوج السباحة')}</small><small>رقم العضوية: ${esc(s.id)}</small></div><div class="qr-code" data-qr="${esc(s.id)}"></div></div><footer><span>2026 / 2027</span><span>امسح لتسجيل الحضور</span></footer></article>`).join(''):'<div class="panel empty-cell">لا توجد بطاقات بعد اعتماد السباحين.</div>'}</section>`;}
 const oldPageView=pageView;
 pageView=function(p){if(p==='groups')return groupsPage();if(p==='card')return enhancedCardPage();return oldPageView(p);};
-function buildQRCodes(){document.querySelectorAll('.qr-code').forEach(el=>{if(!window.QRCode||el.childElementCount)return;new QRCode(el,{text:location.origin+'/#attendance?member='+encodeURIComponent(el.dataset.qr),width:64,height:64,colorDark:'#071a35',colorLight:'#ffffff'});});}
 const oldRender=render;
 render=function(){oldRender();buildQRCodes();};
 buildQRCodes=function(){document.querySelectorAll('.qr-code').forEach(el=>{if(!window.QRCode||el.childElementCount)return;new QRCode(el,{text:location.origin+'/?attendance='+encodeURIComponent(el.dataset.qr),width:64,height:64,colorDark:'#071a35',colorLight:'#ffffff'});});};
 setTimeout(()=>{if(state.user)recordPendingAttendance();},0);
 
+/* ==========================================================
+   Sadara Core — طباعة، بيانات حقيقية، وواجهة المدربين والرياضيين
+   ========================================================== */
+const CLUB={name:'النادي الرياضي الصدارة',unit:'فوج السباحة',address:'حي الثنية — غرداية',city:'غرداية',phone:'0660 60 64 67',email:'nadisadara@gmail.com',facebook:'https://www.facebook.com/nadiSadara47/',season:'2026 / 2027'};
+const AR_MONTHS=['جانفي','فيفري','مارس','أفريل','ماي','جوان','جويلية','أوت','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+const AR_DAYS=['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const WEEK_DAYS=['السبت','الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة'];
+const ATTENDANCE_LABELS={present:'حاضر',absent:'غائب',late:'متأخر',excused:'بعذر'};
+const pad2=n=>String(n).padStart(2,'0');
+const isoDay=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+const todayISO=()=>isoDay(new Date());
+const longDate=(d=new Date())=>`${AR_DAYS[d.getDay()]}، ${pad2(d.getDate())} ${AR_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+const money=v=>`${Number(v||0).toLocaleString('en-US')} دج`;
+const sum=(list,f)=>list.reduce((t,x)=>t+(Number(typeof f==='function'?f(x):x[f])||0),0);
+const stateLabel=s=>s==='approved'?'مقبول':s==='rejected'?'مرفوض':s==='paid'?'مدفوع':s==='cancelled'?'ملغى':'قيد المراجعة';
+const planName=code=>(state.subscriptions||[]).find(p=>p.code===code)?.name||code||'—';
+const catLabel=c=>c==='minor'?'أصاغر':c==='adult'?'أكابر':c==='coach'?'مدرب':c||'—';
+const appName=a=>a.application_type==='coach'?(a.coach_name||'مدرب'):`${a.first_name_ar||''} ${a.last_name_ar||''}`.trim()||a.application_no||'—';
+const appContact=a=>a.application_type==='coach'?(a.coach_phone||a.coach_email||''):(a.phone||'');
+const emptyRow=(cols,text)=>`<tr><td colspan="${cols}" class="empty-cell">${esc(text)}</td></tr>`;
+function firstName(){const n=(state.user?.name||'').trim();return n?n.split(/\s+/)[0]:'عضو النادي';}
+function groups(){return state.groups||[];}
+function swimmersOf(name){return (state.swimmers||[]).filter(s=>String(s.group||'').trim()===String(name||'').trim());}
+
+/* ---------------------- محرك الطباعة ---------------------- */
+let printReset=null;
+function stopPrint(){if(typeof printReset==='function'){const f=printReset;printReset=null;f();}}
+function printArea(source,options={}){
+  const node=typeof source==='string'?document.querySelector(source):source;
+  if(!node||!node.children.length){showToast('لا توجد بيانات متاحة للطباعة.','error');return null}
+  const host=document.createElement('div');
+  host.className='print-host';
+  const head=document.createElement('header');
+  head.className='print-head';
+  head.innerHTML='<div class="print-head-main"><b>'+esc(CLUB.name)+' — '+esc(CLUB.unit)+'</b><span class="print-head-title">'+esc(options.title||'تقرير')+'</span>'+(options.sub?'<span class="print-head-sub">'+esc(options.sub)+'</span>':'')+'</div>'
+    +'<div class="print-head-side"><span>الموسم '+esc(CLUB.season)+'</span><span>'+esc(options.date||longDate())+'</span></div>';
+  const body=document.createElement('div');
+  body.className='print-body'+(options.variant?' print-'+options.variant:'');
+  while(node.firstChild) body.appendChild(node.firstChild);
+  host.appendChild(head);
+  host.appendChild(body);
+  if(options.notes) host.insertAdjacentHTML('beforeend','<div class="print-notes">'+options.notes+'</div>');
+  host.insertAdjacentHTML('beforeend','<footer class="print-foot"><span>'+esc(CLUB.address)+' — هاتف: <span dir="ltr">'+esc(CLUB.phone)+'</span></span><span>'+esc(CLUB.email)+'</span></footer>');
+  $('#app').appendChild(host);
+  document.body.classList.add('printing');
+  let done=false;
+  const finish=()=>{
+    if(done)return;
+    done=true;
+    printReset=null;
+    document.body.classList.remove('printing');
+    host.remove();
+    window.removeEventListener('afterprint',finish);
+    render();
+  };
+  printReset=finish;
+  window.addEventListener('afterprint',finish);
+  setTimeout(()=>{window.print();setTimeout(finish,1200);},80);
+  return host;
+}
+function printPage(title,sub,notes){return printArea('#page-root',{title,sub,notes});}
+function printBtn(action,label){return '<button class="btn btn-outline" data-action="'+action+'">🖨 '+esc(label||'طباعة')+'</button>';}
+function buildMembersTable(list,extraHead,extraCell){
+  if(!list.length) return '<p class="empty-cell">لا يوجد سباحون مسجلون في هذه القائمة.</p>';
+  return '<table class="print-table"><thead><tr><th>#</th><th>الاسم واللقب</th><th>رقم الانخراط</th><th>الفوج</th><th>الهاتف</th><th>الحالة</th>'+(extraHead||'')+'<th>التوقيع</th></tr></thead><tbody>'
+    +list.map((s,i)=>'<tr><td>'+(i+1)+'</td><td><b>'+esc(s.name||'')+'</b></td><td dir="ltr">'+esc(s.id||'')+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(s.phone||'—')+'</td><td><span class="status '+(s.status==='نشط'?'success':'pending')+'">'+esc(s.status||'—')+'</span></td>'+(extraCell?'<td>'+extraCell(s)+'</td>':'')+'<td class="sign-cell"></td></tr>').join('')
+    +'</tbody></table>';
+}
+function printGroupRoster(groupId){
+  const g=groups().find(x=>x.id===groupId);
+  if(!g){showToast('تعذر العثور على بيانات الفوج.','error');return}
+  const list=swimmersOf(g.name);
+  const box=document.createElement('section');
+  box.className='roster';
+  box.innerHTML='<div class="roster-head"><div><h3>قائمة فوج '+esc(g.name)+'</h3><p>المدرب المشرف: '+esc(g.coach||'—')+' · البرنامج: '+esc(g.schedule||'—')+'</p></div><div class="roster-count"><b>'+list.length+'</b><small>سباح</small></div></div>'
+    +buildMembersTable(list,'<th>الحالة اليوم</th>',s=>{const a=attendanceOf(s.id);return '<span class="status '+(a?(a.status==='present'?'success':'pending'):'pending')+'">'+(a?ATTENDANCE_LABELS[a.status]||a.status:'لم يُسجّل')+'</span>';});
+  printArea(box,{title:'قائمة الفوج',sub:g.name,variant:'roster'});
+}
+function printGroupsSheet(){
+  const box=document.createElement('section');
+  box.className='roster';
+  box.innerHTML='<table class="print-table"><thead><tr><th>الفوج</th><th>المدرب المشرف</th><th>البرنامج الأسبوعي</th><th>عدد السباحين</th></tr></thead><tbody>'
+    +(groups().length?groups().map(g=>'<tr><td><b>'+esc(g.name)+'</b></td><td>'+esc(g.coach||'—')+'</td><td>'+esc(g.schedule||'—')+'</td><td>'+swimmersOf(g.name).length+'</td></tr>').join(''):emptyRow(4,'لا توجد أفواج مسجلة.'))
+    +'</tbody></table>'
+    +'<div class="roster-head" style="margin-top:10mm"><div><h3>تفصيل الأفواج</h3></div></div>'
+    +(groups().length?groups().map(g=>'<h4 class="roster-group">'+esc(g.name)+' — '+swimmersOf(g.name).length+' سباح</h4>'+buildMembersTable(swimmersOf(g.name))).join(''):'');
+  printArea(box,{title:'قائمة الأفواج والمدربين',variant:'roster'});
+}
+function printAttendanceSheet(){
+  const list=state.swimmers||[];
+  const box=document.createElement('section');
+  box.className='roster';
+  box.innerHTML='<div class="roster-head"><div><h3>كشف حضور حصة '+esc(todayISO())+'</h3><p>مسبح الصدارة · '+esc(todayISO())+'</p></div><div class="roster-count"><b>'+list.length+'</b><small>سباح</small></div></div>'
+    +(list.length?buildMembersTable(list,'<th>الحالة</th><th>وقت الدخول</th>',s=>{const a=attendanceOf(s.id);return '<span class="status '+(a?(a.status==='present'?'success':'pending'):'pending')+'">'+(a?ATTENDANCE_LABELS[a.status]||a.status:'لم يُسجّل')+'</span><br><small>'+esc(a&&a.at?String(a.at).slice(11,16):'—')+'</small>';}):'<p class="empty-cell">لا يوجد سباحة مسجلون.</p>');
+  printArea(box,{title:'كشف الحضور',sub:longDate(),variant:'roster'});
+}
+function printCardsSheet(){
+  const list=state.swimmers||[];
+  if(!list.length){showToast('لا توجد بطاقات لطباعتها.','error');return}
+  const box=document.createElement('div');
+  box.className='card-print-grid';
+  box.id='card-print-grid';
+  document.querySelectorAll('.print-card').forEach(c=>box.appendChild(c.cloneNode(true)));
+  printArea(box,{title:'بطاقات الانخراط',sub:'مقاس 8.5 × 5.5 سم — الموسم '+CLUB.season,variant:'cards'});
+}
+function printSingleCard(memberId){
+  const card=document.querySelector('.print-card[data-member="'+CSS.escape(String(memberId))+'"]');
+  if(!card){showToast('تعذر العثور على بطاقة هذا السباح.','error');return}
+  const box=document.createElement('div');
+  box.className='card-print-grid print-cards-single';
+  box.appendChild(card.cloneNode(true));
+  printArea(box,{title:'بطاقة انخراط',sub:card.dataset.member||'',variant:'cards'});
+}
+function printRegistrationFormA4(){
+  const list=(state.swimmers||[]).filter(s=>s.status==='نشط');
+  const box=document.createElement('section');
+  box.className='roster';
+  box.innerHTML='<table class="print-table"><thead><tr><th>#</th><th>الاسم واللقب</th><th>رقم الانخراط</th><th>الفوج</th><th>الهاتف</th><th>الحالة</th></tr></thead><tbody>'
+    +(list.length?list.map((s,i)=>'<tr><td>'+(i+1)+'</td><td><b>'+esc(s.name||'')+'</b></td><td dir="ltr">'+esc(s.id||'')+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(s.phone||'—')+'</td><td><span class="status success">سارية</span></td></tr>').join(''):emptyRow(6,'لا توجد بطاقات سارية.'))
+    +'</tbody></table>';
+  printArea(box,{title:'استمارة انخراط — قائمة السباحين السارية',variant:'roster'});
+}
+/* ---------------------- الوصول للبيانات ---------------------- */
+state.swimmers=state.swimmers||[];
+state.applications=state.applications||[];
+state.subscriptions=state.subscriptions||[];
+state.notices=state.notices||[];
+state.schedules=state.schedules||[];
+state.cards=state.cards||[];
+state.attendance=state.attendance||{};
+state.attendanceByDay=state.attendanceByDay||{};
+state.extras=state.extras||{transport:900,uniform:2500};
+state.groups=state.groups||[];
+
+function attendanceOf(id){
+  const rec=(state.attendance||{})[String(id)];
+  if(!rec)return null;
+  const last=Array.isArray(rec)?rec[rec.length-1]:rec;
+  if(!last)return null;
+  return {status:last.status||'present',at:last.check_in||last.marked_at||last.time||'',date:last.session_date||last.date||''};
+}
+function attendanceRate(list){
+  const src=list||state.swimmers||[];
+  if(!src.length)return null;
+  const present=src.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='present';}).length;
+  return Math.round(present/src.length*100);
+}
+function weeklyAttendance(){
+  const out=[];
+  for(let i=6;i>=0;i--){
+    const d=new Date();
+    d.setDate(d.getDate()-i);
+    const key=isoDay(d);
+    const day=(state.attendanceByDay||{})[key]||{};
+    const ids=Object.keys(day);
+    out.push({key,label:AR_DAYS[d.getDay()],value:ids.length?Math.round(ids.filter(k=>day[k]==='present').length/ids.length*100):null,isToday:i===0});
+  }
+  return out;
+}
+function pendingApplications(){return (state.applications||[]).filter(a=>!a.status||a.status==='pending');}
+function activeCards(){const list=(state.cards||[]).filter(c=>c.status!=='expired'&&c.status!=='cancelled');return list.length?list:(state.swimmers||[]).filter(s=>s.status==='نشط');}
+function collectedAmount(){return sum((state.applications||[]).filter(a=>a.status==='approved'),'expected_amount');}
+function recalcAmount(app){
+  const plan=(state.subscriptions||[]).find(p=>p.code===(app.subscription_code||'quarter'));
+  return (Number(plan?.amount)||0)+(app.transport?Number(state.extras.transport)||0:0)+(app.uniform?Number(state.extras.uniform)||0:0);
+}
+
+/* ---------------------- الصفحات ---------------------- */
+function pageOverview(){
+  const sw=state.swimmers||[];
+  const pending=pendingApplications().length;
+  const rate=attendanceRate();
+  const cards=activeCards().length;
+  const week=weeklyAttendance();
+  const maxRate=week.reduce((m,d)=>Math.max(m,d.value||0),100);
+  return '<section class="welcome"><div><span>'+esc(longDate())+'</span><h2>مرحبًا، '+esc(firstName())+' 👋</h2><p>إليك ملخص أداء النادي لهذا اليوم.</p></div>'
+    +'<button class="btn btn-primary" data-action="add-swimmer">+ إضافة سباح</button></section>'
+    +'<div class="stats-grid">'
+    +'<div class="stat-card"><span class="stat-icon blue">♙</span><small>إجمالي السباحين</small><strong>'+sw.length+'</strong><em class="neutral">'+(sw.filter(s=>s.status==='نشط').length)+' <i>نشط</i></em></div>'
+    +'<div class="stat-card"><span class="stat-icon mint">✓</span><small>حضور اليوم</small><strong>'+(rate===null?'—':rate+'%')+'</strong><em class="neutral">'+Object.keys(state.attendance).length+' <i>تسجيل اليوم</i></em></div>'
+    +'<div class="stat-card"><span class="stat-icon gold">▣</span><small>بطاقات نشطة</small><strong>'+cards+'</strong><em class="neutral">'+esc(CLUB.season)+' <i>الموسم</i></em></div>'
+    +'<div class="stat-card"><span class="stat-icon red">!</span><small>طلبات معلقة</small><strong>'+pad2(pending)+'</strong><em class="neutral">'+money(collectedAmount())+' <i>محصّل</i></em></div>'
+    +'</div>'
+    +'<div class="content-grid">'
+    +'<section class="panel chart-panel"><div class="panel-head"><div><h3>نسبة الحضور</h3><p>آخر 7 أيام — من سجل الحضور</p></div><a class="link" data-page="attendance">إدارة السجل ←</a></div>'
+    +'<div class="chart"><div class="chart-labels"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div><div class="bars">'
+    +week.map(d=>'<div class="bar-wrap'+(d.isToday?' is-today':'')+'"><div class="bar'+(d.value===null?' empty':'')+'" style="height:'+Math.max(d.value||0,2)+'%"><b>'+(d.value===null?'—':d.value+'%')+'</b></div><small>'+esc(d.label)+'</small></div>').join('')
+    +'</div></div></section>'
+    +'<section class="panel"><div class="panel-head"><div><h3>آخر الإعلانات</h3><p>تحديثات النادي الأخيرة</p></div><a class="link" data-page="notices">عرض الكل</a></div>'
+    +((state.notices||[]).length?state.notices.slice(0,4).map(n=>'<div class="notice-row"><span class="notice-dot"></span><div><b>'+esc(n.title)+'</b><p>'+esc(n.text)+'</p><small>'+esc(n.date||'')+'</small></div></div>').join(''):'<p class="empty-cell">لا توجد إعلانات.</p>')
+    +'</section></div>'
+    +'<section class="panel quick-panel"><div class="panel-head"><div><h3>الوصول السريع</h3><p>أكثر العمليات استخدامًا</p></div></div><div class="quick-actions">'
+    +'<button data-page="attendance">✓ <span>تسجيل الحضور</span></button>'
+    +'<button data-page="users">♙ <span>إدارة السباحين</span></button>'
+    +'<button data-page="applications">▤ <span>طلبات التسجيل</span></button>'
+    +'<button data-action="print-cards-quick">▣ <span>طباعة البطاقات</span></button>'
+    +'</div></section>';
+}
+
+function applicationFormBody(a,plans,extras){
+  const options=plans.map(p=>'<option value="'+esc(p.code)+'"'+(p.code===a.subscription_code?' selected':'')+'>'+esc(p.name)+' — '+money(p.amount)+'</option>').join('');
+  return '<div class="form-two">'
+    +'<label>نوع الاشتراك<select id="edit-plan">'+options+'</select></label>'
+    +'<label>طريقة الدفع<select id="edit-payment">'+['cash','postal_check','postal_transfer'].map(v=>'<option value="'+v+'"'+(v===(a.payment_method||'cash')?' selected':'')+'>'+({cash:'نقدًا',postal_check:'صك بريدي',postal_transfer:'حوالة بريدية'}[v]||v)+'</option>').join('')+'</select></label>'
+    +'<label>المنشأة<select id="edit-facility">'+['المسبح الأولمبي','المسبح النصف أولمبي','الملعب البلدي','غابة غرداية'].map(v=>'<option'+(v===a.facility?' selected':'')+'>'+esc(v)+'</option>').join('')+'</select></label>'
+    +'<label>قراررئيس النادي<select id="edit-status">'+[['pending','قيد المراجعة'],['approved','مقبول'],['rejected','مرفوض']].map(([v,l])=>'<option value="'+v+'"'+(v===(a.status||'pending')?' selected':'')+'>'+l+'</option>').join('')+'</select></label>'
+    +'</div>'
+    +'<div class="check-grid">'
+    +'<label class="check-line"><input id="edit-transport" type="checkbox"'+(a.transport?' checked':'')+'> النقل — '+money(extras.transport)+'</label>'
+    +'<label class="check-line"><input id="edit-uniform" type="checkbox"'+(a.uniform?' checked':'')+'> البدلة الرياضية — '+money(extras.uniform)+'</label>'
+    +'</div>'
+    +'<label>ملاحظة القرار<textarea id="edit-note" rows="2">'+esc(a.decision_reason||a.decision_note||'')+'</textarea></label>';
+}
+
+function pageApplications(){
+  const list=state.applications||[];
+  const q=(state.appQuery||'').trim();
+  const f=state.appFilter||'all';
+  const rows=list.filter(a=>{
+    if(f!=='all'&&(a.status||'pending')!==f)return false;
+    if(!q)return true;
+    return (appName(a)+' '+(a.application_no||'')+' '+(appContact(a)||'')).includes(q);
+  });
+  const head='<div class="toolbar"><div class="search">⌕<input placeholder="ابحث بالاسم أو رقم الطلب..." id="app-search" value="'+esc(q)+'"></div>'
+    +'<div class="toolbar-group">'
+    +'<select class="filter" id="app-filter">'+[['all','كل الحالات'],['pending','قيد المراجعة'],['approved','مقبول'],['rejected','مرفوض']].map(([v,l])=>'<option value="'+v+'"'+(v===f?' selected':'')+'>'+l+'</option>').join('')+'</select>'
+    +printBtn('print-applications','طباعة القائمة')
+    +'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button>'
+    +'</div></div>';
+  const body='<section class="panel table-panel"><div class="panel-head"><div><h3>طلبات التسجيل والمدربين</h3><p>'+rows.length+' من '+list.length+' طلب — ملف المدربين لا يفتحه إلا رئيس النادي</p></div></div>'
+    +'<div class="table-scroll"><table><thead><tr><th>رقم الطلب</th><th>المتقدم</th><th>النوع</th><th>الاشتراك</th><th>المبلغ</th><th>الوثائق</th><th>الحالة</th><th>القرار</th><th></th></tr></thead><tbody>'
+    +(rows.length?rows.map(a=>'<tr><td dir="ltr">'+esc(a.application_no||a.id)+'</td>'
+      +'<td><b>'+esc(appName(a))+'</b><br><small dir="ltr">'+esc(appContact(a)||'—')+'</small></td>'
+      +'<td>'+esc(catLabel(a.application_type==='coach'?'coach':a.category))+'</td>'
+      +'<td>'+esc(a.application_type==='coach'?'—':planName(a.subscription_code))+'<br><small>'+(a.transport?'النقل ':'')+(a.uniform?'البدلة':'')+'</small></td>'
+      +'<td>'+esc(a.application_type==='coach'?'—':money(a.expected_amount))+'</td>'
+      +'<td>'+(a.documents&&a.documents.path?'<button class="check-btn" data-action="open-coach-doc" data-path="'+esc(a.documents.path)+'">فتح PDF</button>':(a.documents&&a.documents.url?'<a class="link" href="'+esc(a.documents.url)+'" target="_blank" rel="noopener">PDF</a>':'—'))+'</td>'
+      +'<td><span class="status '+((a.status||'pending')==='approved'?'success':(a.status||'pending')==='rejected'?'rejected':'pending')+'">'+esc(stateLabel(a.status))+'</span>'+(a.decision_reason?'<br><small>'+esc(a.decision_reason)+'</small>':'')+'</td>'
+      +'<td>'+((a.status||'pending')==='pending'?'<button class="check-btn ok" data-action="approve-app" data-id="'+esc(a.id)+'">موافقة</button> <button class="check-btn no" data-action="reject-app" data-id="'+esc(a.id)+'">رفض</button>':'<small>تم القرار</small>')+'</td>'
+      +'<td><button class="row-more" data-action="edit-app" data-id="'+esc(a.id)+'">•••</button></td>'
+      +'</tr>').join(''):emptyRow(9,'لا توجد طلبات مطابقة. ستظهر هنا طلبات التسجيل القادمة.'))
+    +'</tbody></table></div></section>';
+  return head+body;
+}
+
+function pageSubscriptions(){
+  const plans=state.subscriptions||[];
+  const extras=state.extras||{};
+  const rows='<section class="panel"><div class="panel-head"><div><h3>تعديل الأسعار والخدمات</h3><p>المبالغ بالدينار الجزائري — تُحفظ في قاعدة البيانات</p></div>'
+    +'<div class="toolbar-group">'+printBtn('print-subscriptions','طباعة')+'<button class="btn btn-primary" data-action="save-plans">حفظ التغييرات</button></div></div>'
+    +'<div class="plans-editor">'
+    +(plans.length?plans.map(p=>'<div class="plan-row"><label class="check-line"><input type="checkbox" data-plan-active="'+esc(p.code)+'"'+(p.active===false?'':' checked')+'> نشط</label>'
+      +'<input class="plan-name" data-plan-name="'+esc(p.code)+'" value="'+esc(p.name||'')+'">'
+      +'<input class="plan-amount" type="number" min="0" step="50" data-plan-amount="'+esc(p.code)+'" value="'+esc(p.amount||0)+'">'
+      +'<span class="plan-unit">دج / '+esc(p.duration||'موسم')+'</span></div>').join(''):'<p class="empty-cell">لا توجد اشتراكات محمّلة.</p>')
+    +'</div>'
+    +'<div class="plans-editor">'
+    +'<div class="plan-row"><span class="plan-unit">النقل</span><input class="plan-amount" type="number" min="0" step="50" id="extra-transport" value="'+esc(extras.transport||0)+'"><span class="plan-unit">دج</span></div>'
+    +'<div class="plan-row"><span class="plan-unit">البدلة الرياضية</span><input class="plan-amount" type="number" min="0" step="50" id="extra-uniform" value="'+esc(extras.uniform||0)+'"><span class="plan-unit">دج</span></div>'
+    +'</div>'
+    +'<p class="page-description">يتم احتساب المبلغ تلقائيًا في كل طلب تسجيل: قيمة الاشتراك + النقل + البدلة.</p></section>';
+  const sample='<section class="panel"><div class="panel-head"><div><h3>معاينة المبالغ</h3><p>حساب تجريبي حسب الاشتراك المختار</p></div></div>'
+    +'<div class="plans-editor">'+plans.filter(p=>p.active!==false).map(p=>'<div class="plan-row"><span class="plan-name">'+esc(p.name)+'</span><span class="plan-unit">+</span>'
+      +'<span class="plan-name">'+money(extras.transport)+' نقل</span><span class="plan-unit">+</span><span class="plan-name">'+money(extras.uniform)+' بدلة</span>'
+      +'<span class="plan-unit">=</span><b class="plan-total">'+money((Number(p.amount)||0)+(Number(extras.transport)||0)+(Number(extras.uniform)||0))+'</b></div>').join('')
+    +'</div></section>';
+  return '<div class="toolbar"><span class="page-description">الأسعار والخدمات التي يمكن لرئيس النادي تعديلها.</span>'
+    +'<div class="toolbar-group">'+printBtn('print-subscriptions','طباعة')+'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button></div></div>'+rows+sample;
+}
+function pageUsers(){
+  const q=(state.userQuery||'').trim();
+  const f=state.groupFilter||'all';
+  const list=(state.swimmers||[]).filter(s=>{
+    if(f!=='all'&&String(s.group||'')!==f)return false;
+    if(!q)return true;
+    return ((s.name||'')+' '+(s.id||'')+' '+(s.phone||'')).includes(q);
+  });
+  const groupNames=[...new Set([...(state.swimmers||[]).map(s=>s.group).filter(Boolean),...groups().map(g=>g.name)])];
+  return '<div class="toolbar"><div class="search">⌕<input placeholder="ابحث عن سباح..." id="user-search" value="'+esc(q)+'"></div>'
+    +'<div class="toolbar-group">'
+    +'<select class="filter" id="group-filter"><option value="all">كل الأفواج</option>'+groupNames.map(n=>'<option'+(n===f?' selected':'')+'>'+esc(n)+'</option>').join('')+'</select>'
+    +printBtn('print-swimmers','طباعة القائمة')
+    +'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button>'
+    +'<button class="btn btn-primary" data-action="add-swimmer">+ إضافة سباح</button>'
+    +'</div></div>'
+    +'<section class="panel table-panel"><div class="panel-head"><div><h3>قائمة السباحين</h3><p>'+list.length+' من '+(state.swimmers||[]).length+' سجل — الموسم '+esc(CLUB.season)+'</p></div></div>'
+    +'<div class="table-scroll"><table><thead><tr><th>السباح</th><th>رقم الانخراط</th><th>الفوج</th><th>الهاتف</th><th>الحالة</th><th>الحضور اليوم</th><th></th></tr></thead><tbody>'
+    +(list.length?list.map(s=>{const a=attendanceOf(s.id);return '<tr><td><span class="table-avatar">'+esc((s.name||'?')[0])+'</span><b>'+esc(s.name||'')+'</b></td>'
+      +'<td dir="ltr">'+esc(s.id||'')+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(s.phone||'—')+'</td>'
+      +'<td><span class="status '+(s.status==='نشط'?'success':'pending')+'">'+esc(s.status||'—')+'</span></td>'
+      +'<td>'+(a?'<span class="status '+(a.status==='present'?'success':a.status==='late'?'late':'absent')+'">'+esc(ATTENDANCE_LABELS[a.status]||a.status)+'</span>':'<small>لم يُسجّل</small>')+'</td>'
+      +'<td class="row-actions"><button class="check-btn" data-action="edit-swimmer" data-id="'+esc(s.id)+'">تعديل</button> <button class="check-btn no" data-action="delete-swimmer" data-id="'+esc(s.id)+'">حذف</button></td></tr>';}).join(''):emptyRow(7,'لا يوجد سباحون مطابقون.'))
+    +'</tbody></table></div></section>';
+}
+
+function weekRange(offset){
+  const base=new Date();
+  const shift=(offset||0)*7;
+  const day=base.getDay();
+  const backToSaturday=(day+1)%7;
+  const saturday=new Date(base);
+  saturday.setDate(base.getDate()-backToSaturday+shift);
+  const friday=new Date(saturday);
+  friday.setDate(saturday.getDate()+5);
+  return {start:saturday,end:friday,label:pad2(saturday.getDate())+' — '+pad2(friday.getDate())+' '+AR_MONTHS[friday.getMonth()]+' '+friday.getFullYear()};
+}
+function pageSchedule(){
+  const offset=state.weekOffset||0;
+  const range=weekRange(offset);
+  const sessions=state.schedules||[];
+  const byDay=Object.fromEntries(sessions.map(s=>[String(s.day_name||'').trim(),[]]));
+  sessions.forEach(s=>{(byDay[String(s.day_name||'').trim()]||(byDay[String(s.day_name||'').trim()]=[])).push(s);});
+  const week=range.start;
+  const cols=WEEK_DAYS.map((day,i)=>{
+    const d=new Date(week);
+    d.setDate(week.getDate()+i);
+    const list=byDay[day]||byDay[day.replace('الإثنين','الاثنين')]||[];
+    return '<div class="day-column"><h3>'+esc(day)+'<small>'+pad2(d.getDate())+' '+AR_MONTHS[d.getMonth()]+' · '+(list.length?list.length+' حصة':'راحة')+'</small></h3>'
+      +(list.length?list.map(s=>'<article class="session"><span class="session-time">'+esc(s.time_range||'')+'</span><strong>'+esc(s.group_name||'')+'</strong><small>'+esc(s.pool||'مسبح الصدارة')+'</small><em>'+esc(s.coach||'')+'</em>'
+        +'<div class="session-actions"><button class="row-more" data-action="edit-session" data-id="'+esc(s.id)+'">تعديل</button><button class="row-more danger" data-action="delete-session" data-id="'+esc(s.id)+'">حذف</button></div></article>').join('')
+        :'<div class="empty-day">لا توجد حصص</div>')
+      +'</div>';
+  }).join('');
+  return '<div class="toolbar"><div class="week-switch"><button data-action="week-prev" title="الأسبوع السابق">‹</button><b>'+esc(range.label)+'</b><button data-action="week-next" title="الأسبوع التالي">›</button>'
+    +'<button class="btn btn-outline" data-action="week-today"'+(offset===0?' disabled style="opacity:.45"':'')+'>هذا الأسبوع</button></div>'
+    +'<div class="toolbar-group">'+printBtn('print-schedule','طباعة البرنامج')+'<button class="btn btn-primary" data-action="add-session">+ إضافة حصة</button></div></div>'
+    +'<section class="schedule-grid">'+cols+'</section>'
+    +'<section class="panel print-a4"><div class="panel-head"><div><h3>جدول الحصص الأسبوعي</h3><p>نسخة منظمة للطباعة على ورق A4</p></div></div>'
+    +'<div class="table-scroll"><table><thead><tr><th>اليوم</th><th>التوقيت</th><th>الفوج</th><th>المدرب</th><th>المسبح</th></tr></thead><tbody>'
+    +(sessions.length?sessions.map(s=>'<tr><td><b>'+esc(s.day_name||'')+'</b></td><td dir="ltr">'+esc(s.time_range||'')+'</td><td>'+esc(s.group_name||'')+'</td><td>'+esc(s.coach||'')+'</td><td>'+esc(s.pool||'مسبح الصدارة')+'</td></tr>').join(''):emptyRow(5,'لا توجد حصص مبرمجة. استخدم زر "إضافة حصة".'))
+    +'</tbody></table></div></section>';
+}
+
+function pageAttendance(){
+  const list=state.swimmers||[];
+  const rate=attendanceRate();
+  const count=s=>list.filter(x=>{const a=attendanceOf(x.id);return a&&a.status===s;}).length;
+  const group=state.attendanceGroup||'all';
+  const shown=group==='all'?list:swimmersOf(group);
+  const opts=['present','late','absent'];
+  return '<div class="attendance-summary"><div><b>نسبة الحضور اليوم</b><strong>'+(rate===null?'—':rate+'%')+'</strong></div>'
+    +'<div><b>حاضر</b><strong class="green">'+count('present')+'</strong></div>'
+    +'<div><b>غائب</b><strong class="red-text">'+count('absent')+'</strong></div>'
+    +'<div><b>متأخر</b><strong class="orange">'+count('late')+'</strong></div></div>'
+    +'<div class="toolbar"><div class="toolbar-group">'
+    +'<select class="filter" id="attendance-group"><option value="all">كل الأفواج</option>'+groups().map(g=>'<option'+(g.name===group?' selected':'')+'>'+esc(g.name)+'</option>').join('')+'</select>'
+    +printBtn('print-attendance','طباعة كشف الحضور')
+    +'<button class="btn btn-outline" data-action="mark-all-present">✓ تأكيد الجميع</button>'
+    +'<button class="btn btn-outline" data-action="reset-attendance">↺ تصفير</button>'
+    +'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button>'
+    +'</div><span class="page-description">'+esc(longDate())+' · '+esc(todayISO())+'</span></div>'
+    +'<section class="panel table-panel"><div class="panel-head"><div><h3>حضور حصة اليوم</h3><p>'+shown.length+' سباح · اضغط على الحالة لتغييرها</p></div></div>'
+    +'<div class="table-scroll"><table><thead><tr><th>السباح</th><th>الفوج</th><th>وقت الدخول</th><th>الحالة</th><th>تغيير الحالة</th></tr></thead><tbody>'
+    +(shown.length?shown.map(s=>{const a=attendanceOf(s.id);const cur=a?a.status:'';return '<tr><td><span class="table-avatar">'+esc((s.name||'?')[0])+'</span><b>'+esc(s.name||'')+'</b></td>'
+      +'<td>'+esc(s.group||'—')+'</td><td dir="ltr">'+(a&&a.at?esc(String(a.at).slice(11,16)||'—'):'—')+'</td>'
+      +'<td><span class="status '+((a&&a.status==='present')?'success':(a&&a.status==='late')?'late':(a&&a.status==='absent')?'absent':'pending')+'">'+esc(a?ATTENDANCE_LABELS[a.status]||a.status:'لم يُسجّل')+'</span></td>'
+      +'<td>'+opts.map(o=>'<button class="check-btn'+(cur===o?' active':'')+'" data-action="mark-attendance" data-id="'+esc(s.id)+'" data-status="'+o+'">'+esc(ATTENDANCE_LABELS[o])+'</button> ').join('')+'</td></tr>';}).join(''):emptyRow(5,'لا يوجد سباحون في هذه المجموعة.'))
+    +'</tbody></table></div></section>';
+}
+
+function pageNotices(){
+  const list=state.notices||[];
+  return '<div class="toolbar"><span class="page-description">أرسل تحديثات مهمة إلى السباحين والأولياء.</span>'
+    +'<div class="toolbar-group">'+printBtn('print-notices','طباعة')+'<button class="btn btn-primary" data-action="add-notice">+ إعلان جديد</button></div></div>'
+    +'<div class="notice-list">'
+    +(list.length?list.map((n,i)=>'<article class="notice-card"><span class="notice-type '+((i%2)?'blue-type':'gold-type')+'">'+esc(n.type||'إعلان')+'</span>'
+      +'<div><h3>'+esc(n.title)+'</h3><p>'+esc(n.text)+'</p><small>'+esc(n.date||'')+'</small></div>'
+      +'<div class="notice-actions"><button class="check-btn" data-action="edit-notice" data-id="'+esc(n.id||'')+'">تعديل</button> <button class="check-btn no" data-action="delete-notice" data-id="'+esc(n.id||'')+'">حذف</button></div></article>').join('')
+      :'<p class="empty-cell">لا توجد إعلانات.</p>')
+    +'</div>';
+}
+
+function cardMarkup(s,i){
+  return '<article class="print-card" data-member="'+esc(s.id)+'">'
+    +'<div class="print-card-brand"><span class="logo"></span><b>'+esc(CLUB.name)+'</b></div>'
+    +'<div class="print-card-body"><div><strong>'+esc(s.name||'')+'</strong><small>'+esc(s.group||CLUB.unit)+'</small>'
+    +'<small dir="ltr">No: '+esc(s.id||'')+'</small></div><div class="qr-code" data-qr="'+esc(s.id)+'"></div></div>'
+    +'<footer><span>'+esc(CLUB.season)+'</span><span>'+esc(CLUB.phone)+'</span></footer></article>';
+}
+function pageCards(){
+  const list=state.swimmers||[];
+  const active=list.filter(s=>s.status==='نشط'||!s.status);
+  return '<section class="card-intro"><div><span class="eyebrow">بطاقات 8.5 × 5.5 سم</span><h2>بطاقات انخراط<br>بـ QR للحضور.</h2>'
+    +'<p>يمسح المشرف أو المدرب الرمز لتسجيل حضور السباح مباشرة.</p>'
+    +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-cards">🖨 طباعة كل البطاقات</button>'
+    +'<button class="btn btn-outline" data-action="print-registration">🖨 استمارة الانخراط</button></div></div>'
+    +'<div class="membership-card"><span>'+esc(CLUB.name)+'</span><b>🏊</b><strong>بطاقة العضو</strong><small>مقاس 8.5 × 5.5 سم</small><div><i dir="ltr">'+esc(CLUB.phone)+'</i><i>'+esc(CLUB.season)+'</i></div></div></section>'
+    +'<div class="toolbar"><span class="page-description">'+active.length+' بطاقة جاهزة للطباعة — انقر "طباعة" لبطاقة واحدة.</span>'
+    +'<div class="toolbar-group">'+printBtn('print-cards','طباعة الكل')+'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button></div></div>'
+    +'<section class="card-print-grid" id="card-print-grid">'
+    +(active.length?active.map(cardMarkup).join(''):'<div class="panel empty-cell">لا توجد بطاقات بعد اعتماد السباحين.</div>')
+    +'</section>';
+}
+
+function pageGroups(){
+  const list=groups();
+  const row=g=>{
+    const members=swimmersOf(g.name);
+    return '<article class="group-card" data-group="'+esc(g.id)+'"><div class="group-card-head"><span class="stat-icon blue">♟</span><span class="status success">نشط</span></div>'
+      +'<h3>'+esc(g.name)+'</h3><p><b>عدد السباحين:</b> '+members.length+'</p>'
+      +'<p><b>المدرب المشرف:</b> '+esc(g.coach||'—')+'</p><p><b>البرنامج:</b> '+esc(g.schedule||'—')+'</p>'
+      +'<div class="group-card-actions"><button class="check-btn" data-action="print-group" data-group="'+esc(g.id)+'">🖨 طباعة القائمة</button>'
+      +'<button class="check-btn" data-action="edit-group" data-group="'+esc(g.id)+'">تعديل</button>'
+      +'<button class="check-btn no" data-action="delete-group" data-group="'+esc(g.id)+'">حذف</button></div></article>';
+  };
+  return '<div class="toolbar"><span class="page-description">وزّع السباحين على الأفواج وحدد المدرب والمواعيد المشرفة على كل فوج.</span>'
+    +'<div class="toolbar-group">'+printBtn('print-groups','طباعة قائمة الأفواج A4')+'<button class="btn btn-primary" data-action="add-group">+ إضافة فوج</button></div></div>'
+    +'<section class="group-grid">'+(list.length?list.map(row).join(''):'<p class="empty-cell">لا توجد أفواج. أضف فوجًا للبدء.</p>')+'</section>'
+    +'<section class="panel print-a4"><div class="panel-head"><div><h3>قائمة الأفواج والمدربين</h3><p>نسخة منظمة للطباعة على ورق A4</p></div>'
+    +printBtn('print-groups','طباعة A4')+'</div>'
+    +'<div class="table-scroll"><table><thead><tr><th>الفوج</th><th>المدرب المشرف</th><th>البرنامج</th><th>عدد السباحين</th></tr></thead><tbody>'
+    +(list.length?list.map(g=>'<tr><td><b>'+esc(g.name)+'</b></td><td>'+esc(g.coach||'—')+'</td><td>'+esc(g.schedule||'—')+'</td><td>'+swimmersOf(g.name).length+'</td></tr>').join(''):emptyRow(4,'لا توجد أفواج.'))
+    +'</tbody></table></div></section>';
+}
+
+function pageSettings(){
+  const reqs=state.coachRequirements||[];
+  return '<div class="toolbar"><span class="page-description">بيانات النادي ووثائق تسجيل المدربين.</span>'
+    +'<div class="toolbar-group">'+printBtn('print-settings','طباعة')+'<button class="btn btn-primary" data-action="save-club">حفظ بيانات النادي</button></div></div>'
+    +'<section class="panel settings"><div class="panel-head"><div><h3>بيانات النادي</h3><p>تظهر في ترويسة الطباعة والتواصل.</p></div></div>'
+    +'<div class="form-two">'
+    +'<label>اسم النادي<input id="club-name" value="'+esc(CLUB.name)+'"></label>'
+    +'<label>الفوج<input id="club-unit" value="'+esc(CLUB.unit)+'"></label>'
+    +'<label>العنوان<input id="club-address" value="'+esc(CLUB.address)+'"></label>'
+    +'<label>الهاتف<input id="club-phone" dir="ltr" value="'+esc(CLUB.phone)+'"></label>'
+    +'<label>البريد الإلكتروني<input id="club-email" dir="ltr" value="'+esc(CLUB.email)+'"></label>'
+    +'<label>الموسم الرياضي<input id="club-season" value="'+esc(CLUB.season)+'"></label>'
+    +'</div>'
+    +'<p class="page-description">رابط الصفحة الرسمية: <a class="link" href="'+esc(CLUB.facebook)+'" target="_blank" rel="noopener noreferrer" dir="ltr">'+esc(CLUB.facebook)+'</a></p></section>'
+    +'<section class="panel settings"><div class="panel-head"><div><h3>وثائق تسجيل المدربين</h3><p>حدد الوثائق التي يجب أن يرفعها كل متقدم قبل إرسال طلبه.</p></div>'
+    +'<button class="btn btn-primary" data-action="save-coach-requirements">حفظ قائمة الوثائق</button></div>'
+    +'<div id="coach-requirements">'
+    +(reqs.length?reqs.map((r,i)=>'<div class="requirement-row"><input value="'+esc(r.label)+'" data-req-label="'+i+'"><label class="check-line"><input type="checkbox" data-req-required="'+i+'"'+(r.required!==false?' checked':'')+'> إلزامية</label></div>').join(''):'<p class="empty-cell">لا توجد وثائق. أضف أول وثيقة.</p>')
+    +'</div><button class="btn btn-outline" data-action="add-coach-requirement">+ إضافة وثيقة</button></section>'
+    +'<section class="panel settings"><div class="panel-head"><div><h3>النماذج الرسمية</h3><p>تُفتح مباشرة من المتصفح.</p></div></div>'
+    +'<div class="official-docs docs-grid">'
+    +'<a href="form-registration-01.jpg" target="_blank" rel="noopener">استمارة النادي</a>'
+    +'<a href="internal-regulations.jpg" target="_blank" rel="noopener">النظام الداخلي</a>'
+    +'<a href="form-registration-02.jpg" target="_blank" rel="noopener">استمارة النظام</a>'
+    +'<a href="registration-card.jpg" target="_blank" rel="noopener">نموذج بطاقة الانخراط</a>'
+    +'</div></section>';
+}
+
+pageTitle=function(p){return ({home:'نظرة عامة',applications:'طلبات التسجيل',subscriptions:'إدارة الاشتراكات',users:'إدارة السباحين',schedule:'البرنامج الأسبوعي',attendance:'سجل الحضور',notices:'الإعلانات والتنبيهات',card:'بطاقات الانخراط',groups:'الأفواج والمدربون',settings:'الإعدادات'}[p]||'نظرة عامة');};
+icons.groups='♟';
+const basePageView=pageView;
+pageView=function(p){
+  const map={home:pageOverview,applications:pageApplications,subscriptions:pageSubscriptions,users:pageUsers,schedule:pageSchedule,attendance:pageAttendance,notices:pageNotices,card:pageCards,groups:pageGroups,settings:pageSettings};
+  return '<div class="page-root" id="page-root">'+(map[p]||pageOverview)()+'</div>';
+};
+/* ---------------------- واجهة المدربين والرياضيين ---------------------- */
+const ROLE_LABELS={coach:'لوحة المدرب',swimmer_adult:'مساحة السباح',swimmer_minor:'مساحة السباح القاصر',parent:'لوحة الولي',member:'مساحة عضو النادي'};
+const ROLE_MENU={
+  coach:[['home','نظرة عامة','⌂'],['schedule','البرنامج','▦'],['attendance','تسجيل الحضور','✓'],['cards','البطاقات','▣'],['notices','الإعلانات','◈']],
+  swimmer_adult:[['home','نظرة عامة','⌂'],['schedule','البرنامج','▦'],['attendance','حضوري','✓'],['cards','بطاقتي','▣'],['notices','الإعلانات','◈']],
+  swimmer_minor:[['home','نظرة عامة','⌂'],['schedule','البرنامج','▦'],['cards','بطاقتي','▣'],['notices','الإعلانات','◈']],
+  parent:[['home','نظرة عامة','⌂'],['attendance','حضور الأبناء','✓'],['cards','البطاقات','▣'],['applications','الطلبات','▤'],['notices','الإعلانات','◈']],
+  member:[['home','نظرة عامة','⌂'],['schedule','البرنامج','▦'],['notices','الإعلانات','◈']]
+};
+function mySwimmer(){
+  const u=state.user||{};
+  const list=state.swimmers||[];
+  const no=(u.member_no||'').trim();
+  if(no)return list.find(s=>String(s.id)===no)||null;
+  const phone=String(u.phone||'').replace(/\s/g,'');
+  if(phone)return list.find(s=>String(s.phone||'').replace(/\s/g,'').endsWith(phone))||null;
+  const name=(u.name||'').trim();
+  if(name)return list.find(s=>String(s.name||'').trim()===name)||null;
+  return null;
+}
+function mySessions(){
+  const me=mySwimmer();
+  const coachGroup=(state.user?.group_name||'').trim();
+  const list=state.schedules||[];
+  if(coachGroup)return list.filter(s=>String(s.group_name||'').trim()===coachGroup);
+  if(me)return list.filter(s=>String(s.group_name||'').trim()===String(me.group||'').trim());
+  return list;
+}
+function myAttendance(){
+  const me=mySwimmer();
+  const out=[];
+  const days=state.attendanceByDay||{};
+  if(me)Object.keys(days).sort().forEach(k=>{const st=days[k][me.id];if(st)out.push({date:k,status:st});});
+  return out.reverse();
+}
+function roleHome(role){
+  const me=mySwimmer();
+  const sessions=mySessions();
+  const rate=attendanceRate();
+  const cards=activeCards().length;
+  const upcoming=sessions[0];
+  const notes=(state.notices||[]).slice(0,3);
+  return '<section class="role-hero"><div><span class="eyebrow">'+esc(ROLE_LABELS[role]||'فضاء العضو')+'</span>'
+    +'<h1>مرحبًا، '+esc(firstName())+' 👋</h1>'
+    +'<p>'+(role==='coach'?'سجّل حضور السباحين ووتابع أفواجك لحظة بلحظة.':role==='parent'?'تابع حضور أبنائك وبطاقاتهم واشتراكاتهم.':me?'هذه بطاقتك وحضورك في فوج السباحة.':'آخر أخبار النادي وبرامجه بين يديك.')+'</p></div>'
+    +'<div class="role-mark">'+({coach:'🏊‍♂️',parent:'👨‍👩‍👧',swimmer_adult:'🏊',swimmer_minor:'🏊',member:'⭐'}[role]||'⭐')+'</div></section>'
+    +'<div class="role-cards">'
+    +'<article><span class="stat-icon blue">▦</span><small>الحصة القادمة</small><strong>'+esc(upcoming?(upcoming.day_name||'—'):'—')+'</strong><p>'+esc(upcoming?(upcoming.time_range||''):'لا توجد حصة مبرمجة')+'</p></article>'
+    +'<article><span class="stat-icon mint">✓</span><small>'+(role==='coach'?'نسبة الحضور':me?'حضوري':'بطاقات نشطة')+'</small><strong>'+(role==='coach'?(rate===null?'—':rate+'%'):(role==='member'?cards:(me?myAttendance().filter(a=>a.status==='present').length:'—')))+'</strong><p>'+(role==='coach'?'تسجيلات اليوم':'هذا الموسم')+'</p></article>'
+    +'<article><span class="stat-icon gold">▣</span><small>رقم الانخراط</small><strong class="role-no">'+esc(me?me.id:'—')+'</strong><p>'+esc(me?me.group:'غير مربوط بحساب')+'</p></article>'
+    +'</div>'
+    +'<div class="role-grid"><section class="panel"><div class="panel-head"><div><h3>'+(role==='coach'?'حصصي التدريبية':me?'آخر حصوري':'آخر إعلانات النادي')+'</h3><p>معلومات محدثة من إدارة النادي</p></div></div>'
+    +(sessions.length&&role!=='member'
+      ?'<div class="role-list">'+sessions.slice(0,5).map(s=>'<div><b>'+esc(s.day_name||'')+' · '+esc(s.time_range||'')+'</b><span>'+esc(s.group_name||'')+' · '+esc(s.pool||'مسبح الصدارة')+' · '+esc(s.coach||'')+'</span></div>').join('')+'</div>'
+      :notes.length?'<div class="role-list">'+notes.map(n=>'<div><b>'+esc(n.title)+'</b><span>'+esc(n.text)+'</span></div>').join('')+'</div>'
+      :'<p class="empty-cell">لا توجد بيانات لعرضها بعد.</p>')
+    +'</section>'
+    +'<section class="panel role-side"><h3>روابط النادي</h3>'
+    +'<a class="role-link" href="'+esc(CLUB.facebook)+'" target="_blank" rel="noopener noreferrer">f — الصفحة الرسمية للنادي</a>'
+    +'<a class="role-link" href="tel:'+esc(CLUB.phone.replace(/\s/g,''))+'">☎ — اتصال بالنادي</a>'
+    +'<a class="role-link" href="mailto:'+esc(CLUB.email)+'">✉ — إرسال رسالة</a>'
+    +'<p class="page-description">العنوان: '+esc(CLUB.address)+'</p>'
+    +'</section></div>';
+}
+function roleSchedule(){
+  const sessions=mySessions();
+  return '<section class="panel"><div class="panel-head"><div><h3>البرنامج الأسبوعي</h3><p>'+sessions.length+' حصة — الموسم '+esc(CLUB.season)+'</p></div>'
+    +printBtn('print-role-schedule','طباعة البرنامج')+'</div>'
+    +(sessions.length?'<div class="table-scroll"><table><thead><tr><th>اليوم</th><th>التوقيت</th><th>الفوج</th><th>المدرب</th><th>المسبح</th></tr></thead><tbody>'
+      +sessions.map(s=>'<tr><td><b>'+esc(s.day_name||'')+'</b></td><td dir="ltr">'+esc(s.time_range||'')+'</td><td>'+esc(s.group_name||'')+'</td><td>'+esc(s.coach||'')+'</td><td>'+esc(s.pool||'مسبح الصدارة')+'</td></tr>').join('')
+      +'</tbody></table></div>':'<p class="empty-cell">لا توجد حصص مبرمجة لفوجك بعد.</p>')
+    +'</section>';
+}
+function roleAttendance(){
+  const role=state.user?.role;
+  if(role==='coach'||role==='parent'){
+    const list=role==='coach'?(state.swimmers||[]):[mySwimmer()].filter(Boolean);
+    const rate=attendanceRate(list);
+    return '<div class="attendance-summary"><div><b>نسبة الحضور اليوم</b><strong>'+(rate===null?'—':rate+'%')+'</strong></div>'
+      +'<div><b>حاضر</b><strong class="green">'+list.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='present';}).length+'</strong></div>'
+      +'<div><b>غائب</b><strong class="red-text">'+list.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='absent';}).length+'</strong></div>'
+      +'<div><b>متأخر</b><strong class="orange">'+list.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='late';}).length+'</strong></div></div>'
+      +'<div class="toolbar"><span class="page-description">'+esc(longDate())+'</span><div class="toolbar-group">'
+      +printBtn('print-role-attendance','طباعة الكشف')+(role==='coach'?'<button class="btn btn-primary" data-action="mark-all-present">✓ تأكيد الجميع</button>':'')+'</div></div>'
+      +'<section class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>السباح</th><th>الفوج</th><th>الحالة</th>'+(role==='coach'?'<th>تغيير الحالة</th>':'')+'</tr></thead><tbody>'
+      +(list.length?list.map(s=>{const a=attendanceOf(s.id);const cur=a?a.status:'';return '<tr><td><b>'+esc(s.name||'')+'</b></td><td>'+esc(s.group||'—')+'</td>'
+        +'<td><span class="status '+(cur==='present'?'success':cur==='late'?'late':cur==='absent'?'absent':'pending')+'">'+esc(a?ATTENDANCE_LABELS[a.status]||a.status:'لم يُسجّل')+'</span></td>'
+        +(role==='coach'?'<td>'+['present','late','absent'].map(o=>'<button class="check-btn'+(cur===o?' active':'')+'" data-action="mark-attendance" data-id="'+esc(s.id)+'" data-status="'+o+'">'+esc(ATTENDANCE_LABELS[o])+'</button> ').join('')+'</td>':'')
+        +'</tr>';}).join(''):emptyRow(4,'لا توجد بيانات.'))
+      +'</tbody></table></div></section>';
+  }
+  const rows=myAttendance();
+  const rate=attendanceRate(mySwimmer()?[mySwimmer()]:[]);
+  return '<div class="attendance-summary"><div><b>نسبة حضوري</b><strong>'+(rate===null?'—':rate+'%')+'</strong></div>'
+    +'<div><b>حصص حضرتها</b><strong class="green">'+rows.filter(a=>a.status==='present').length+'</strong></div>'
+    +'<div><b>غياب</b><strong class="red-text">'+rows.filter(a=>a.status==='absent').length+'</strong></div>'
+    +'<div><b>تأخر</b><strong class="orange">'+rows.filter(a=>a.status==='late').length+'</strong></div></div>'
+    +'<div class="toolbar"><span class="page-description">سجل حضورك في الموسم '+esc(CLUB.season)+'</span>'+printBtn('print-role-attendance','طباعة السجل')+'</div>'
+    +'<section class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>اليوم</th><th>الحالة</th></tr></thead><tbody>'
+    +(rows.length?rows.map(a=>{const d=new Date(a.date);return '<tr><td dir="ltr">'+esc(a.date)+'</td><td>'+esc(isNaN(d)?a.date:AR_DAYS[d.getDay()])+'</td>'
+      +'<td><span class="status '+(a.status==='present'?'success':a.status==='late'?'late':'absent')+'">'+esc(ATTENDANCE_LABELS[a.status]||a.status)+'</span></td></tr>';}).join(''):emptyRow(3,'لا يوجد سجل حضور بعد.'))
+    +'</tbody></table></div></section>';
+}
+function roleCards(){
+  const me=mySwimmer();
+  if(!me)return '<section class="panel"><p class="empty-cell">حسابك غير مربوط ببطاقة انخراط. تواصل مع إدارة النادي لربط رقم العضوية.</p></section>';
+  return '<section class="card-intro"><div><span class="eyebrow">بطاقتك الرقمية</span><h2>بطاقة انخراط<br>في جيبك.</h2>'
+    +'<p>اعرض هذه البطاقة عند المدرب أو المشرف لتسجيل حضورك بسريعة.</p>'
+    +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-role-card">🖨 طباعة بطاقة</button>'
+    +'<button class="btn btn-outline" data-action="print-all-cards">🖨 كل البطاقات</button></div></div>'
+    +'<div class="membership-card"><span>'+esc(CLUB.name)+'</span><b>🏊</b><strong>بطاقة العضو</strong>'
+    +'<small>'+esc(me.group||CLUB.unit)+' · '+esc(CLUB.season)+'</small><div><i>'+esc(me.name||'')+'</i><i dir="ltr">'+esc(me.id||'')+'</i></div></div></section>'
+    +'<section class="card-print-grid single">'+cardMarkup(me,0)+'</section>';
+}
+function roleNotices(){
+  const list=state.notices||[];
+  return '<div class="toolbar"><span class="page-description">آخر تحديثات إدارة النادي.</span>'+printBtn('print-role-notices','طباعة')+'</div>'
+    +'<div class="notice-list">'+(list.length?list.map((n,i)=>'<article class="notice-card"><span class="notice-type '+((i%2)?'blue-type':'gold-type')+'">'+esc(n.type||'إعلان')+'</span>'
+      +'<div><h3>'+esc(n.title)+'</h3><p>'+esc(n.text)+'</p><small>'+esc(n.date||'')+'</small></div></article>').join(''):'<p class="empty-cell">لا توجد إعلانات.</p>')+'</div>';
+}
+function roleApplications(){
+  const phone=String(state.user?.phone||'').replace(/\s/g,'');
+  const mine=(state.applications||[]).filter(a=>String(a.phone||'').replace(/\s/g,'')===phone);
+  return '<div class="toolbar"><span class="page-description">طلبات التسجيل والاشتراكات الخاصة بك.</span>'
+    +'<div class="toolbar-group">'+printBtn('print-role-applications','طباعة')+'<button class="btn btn-primary" data-action="register">+ طلب تسجيل جديد</button></div></div>'
+    +'<section class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>رقم الطلب</th><th>الرياضي</th><th>الاشتراك</th><th>المبلغ</th><th>الحالة</th></tr></thead><tbody>'
+    +(mine.length?mine.map(a=>'<tr><td dir="ltr">'+esc(a.application_no||a.id)+'</td><td><b>'+esc(appName(a))+'</b></td><td>'+esc(planName(a.subscription_code))+'</td>'
+      +'<td>'+esc(money(a.expected_amount))+'</td><td><span class="status '+(a.status==='approved'?'success':'pending')+'">'+esc(stateLabel(a.status))+'</span></td></tr>').join('')
+      :emptyRow(5,'لا توجد طلبات. استخدم زر "طلب تسجيل جديد".'))
+    +'</tbody></table></div></section>';
+}
+function roleDashboard(){
+  const role=state.user?.role||'member';
+  const menu=ROLE_MENU[role]||ROLE_MENU.member;
+  const key=menu.some(m=>m[0]===state.rolePage)?state.rolePage:'home';
+  const title=(menu.find(m=>m[0]===key)||menu[0])[1];
+  const views={home:()=>roleHome(role),schedule:roleSchedule,attendance:roleAttendance,cards:roleCards,notices:roleNotices,applications:roleApplications};
+  return '<div class="role-shell"><header class="role-top"><a class="brand"><span class="logo">🏊</span><span><b>الصدارة</b><small>فوج السباحة</small></span></a>'
+    +'<div class="role-actions"><span>'+esc(ROLE_LABELS[role]||'عضو النادي')+'</span><button class="icon-btn" data-action="theme">'+(state.dark?'☀':'◐')+'</button>'
+    +'<button class="btn btn-outline" data-action="logout">تسجيل الخروج</button></div></header>'
+    +'<nav class="role-nav">'+menu.map(m=>'<button class="'+(m[0]===key?'active':'')+'" data-role-page="'+m[0]+'"><i>'+m[2]+'</i>'+esc(m[1])+'</button>').join('')+'</nav>'
+    +'<main class="role-main"><h2 class="role-page-title">'+esc(title)+'</h2>'+(views[key]||views.home)()+'</main></div>';
+}
+/* ---------------------- النوافذ والأفعال ---------------------- */
+function openModal(html){document.querySelector('.modal-backdrop')?.remove();document.body.insertAdjacentHTML('beforeend',html);bind();}
+function formModal(title,body,action,extra){return '<div class="modal-backdrop"><div class="modal registration-modal"><button class="close" data-action="close">×</button><div class="modal-heading"><span class="logo">🏊</span><h2>'+esc(title)+'</h2></div>'+body+'<button class="btn btn-primary full" data-action="'+action+'"'+(extra||'')+'>حفظ</button></div></div>';}
+function groupOptions(value){return groups().map(g=>'<option'+(g.name===value?' selected':'')+'>'+esc(g.name)+'</option>').join('');}
+function printTable(title,headers,rows,sub,notes){
+  const box=document.createElement('section');
+  box.className='roster';
+  box.innerHTML='<table class="print-table"><thead><tr>'+headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+(rows.length?rows.join(''):emptyRow(headers.length,'لا توجد بيانات لعرضها.'))+'</tbody></table>';
+  return printArea(box,{title,sub,notes,variant:'roster'});
+}
+async function api(path,method,body){
+  const res=await fetch(path,{method,headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(body||{})});
+  let data={};
+  try{data=await res.json()}catch(_){}
+  if(!res.ok)throw new Error(data.error||'تعذر تنفيذ العملية');
+  return data;
+}
+function swimmerModal(s){
+  const isEdit=!!s;
+  return formModal(isEdit?'تعديل بيانات السباح':'إضافة سباح جديد',
+    '<div class="form-two">'
+    +'<label>الاسم واللقب *<input id="sw-name" value="'+esc(s?.name||'')+'"></label>'
+    +'<label>رقم الانخراط<input id="sw-no" dir="ltr" value="'+esc(s?.id||'')+'"'+(isEdit?' disabled':'')+' placeholder="يُولَّد تلقائيًا"></label>'
+    +'<label>الفوج<select id="sw-group">'+groupOptions(s?.group)+'</select></label>'
+    +'<label>الهاتف<input id="sw-phone" dir="ltr" value="'+esc(s?.phone||'')+'"></label>'
+    +'<label>الحالة<select id="sw-status"><option value="نشط"'+(s?.status==='نشط'?' selected':'')+'>نشط</option><option value="موقوف"'+(s?.status==='موقوف'?' selected':'')+'>موقوف</option><option value="بانتظار"'+(s?.status==='بانتظار'?' selected':'')+'>بانتظار</option></select></label>'
+    +'</div>',
+    'save-swimmer',s?' data-id="'+esc(s.id)+'"':'');
+}
+function sessionModal(s){
+  const isEdit=!!s;
+  const opts=(list,val)=>list.map(v=>'<option'+(v===val?' selected':'')+'>'+esc(v)+'</option>').join('');
+  return formModal(isEdit?'تعديل الحصة':'إضافة حصة',
+    '<div class="form-two">'
+    +'<label>اليوم<select id="se-day">'+opts(WEEK_DAYS,s?.day_name)+'</select></label>'
+    +'<label>التوقيت<input id="se-time" dir="ltr" value="'+esc(s?.time_range||'16:00 - 17:30')+'" placeholder="16:00 - 17:30"></label>'
+    +'<label>الفوج<select id="se-group">'+groupOptions(s?.group_name)+'</select></label>'
+    +'<label>المدرب<input id="se-coach" value="'+esc(s?.coach||'')+'"></label>'
+    +'<label>المسبح<input id="se-pool" value="'+esc(s?.pool||'مسبح الصدارة')+'"></label>'
+    +'</div>',
+    'save-session',s?' data-id="'+esc(s.id)+'"':'');
+}
+function noticeModal(n){
+  const isEdit=!!n;
+  return formModal(isEdit?'تعديل الإعلان':'إعلان جديد',
+    '<label>العنوان *<input id="no-title" value="'+esc(n?.title||'')+'"></label>'
+    +'<label>النص<textarea id="no-body" rows="4">'+esc(n?.text||'')+'</textarea></label>'
+    +'<label>النوع<select id="no-kind"><option>إعلان</option><option>مهم</option><option>تذكير</option><option>نتيجة</option></select></label>',
+    'save-notice',n?' data-id="'+esc(n.id||'')+'"':'');
+}
+
+const coreAction=action;
+action=async function(a,el){
+  /* ---------- الطباعة ---------- */
+  if(a==='print-applications'){printPage('طلبات التسجيل والمدربين','عدد الطلبات: '+(state.applications||[]).length);return}
+  if(a==='print-subscriptions'){printPage('الأسعار والخدمات','الموسم '+CLUB.season);return}
+  if(a==='print-swimmers'){printPage('قائمة السباحين','الموسم '+CLUB.season);return}
+  if(a==='print-schedule'){printPage('البرنامج الأسبوعي',weekRange(state.weekOffset||0).label);return}
+  if(a==='print-notices'){printPage('الإعلانات والتنبيهات');return}
+  if(a==='print-settings'){printPage('إعدادات المنصة');return}
+  if(a==='print-attendance'){printAttendanceSheet();return}
+  if(a==='print-cards'||a==='print-all-cards'){printCardsSheet();return}
+  if(a==='print-cards-quick'){state.page='card';save();render();printCardsSheet();return}
+  if(a==='print-registration'){printRegistrationFormA4();return}
+  if(a==='print-groups'){printGroupsSheet();return}
+  if(a==='print-group'){printGroupRoster(el.dataset.group);return}
+  if(a==='print-role-card'){const me=mySwimmer();if(me)printSingleCard(me.id);else showToast('حسابك غير مربوط ببطاقة انخراط.','error');return}
+  if(a==='print-role-schedule'){printTable('البرنامج الأسبوعي',['اليوم','التوقيت','الفوج','المدرب','المسبح'],mySessions().map(s=>'<tr><td><b>'+esc(s.day_name||'')+'</b></td><td dir="ltr">'+esc(s.time_range||'')+'</td><td>'+esc(s.group_name||'')+'</td><td>'+esc(s.coach||'')+'</td><td>'+esc(s.pool||'مسبح الصدارة')+'</td></tr>'),'الموسم '+CLUB.season);return}
+  if(a==='print-role-attendance'){
+    if(state.user?.role==='coach'){printAttendanceSheet();return}
+    printTable('سجل الحضور',['التاريخ','اليوم','الحالة'],myAttendance().map(x=>{const d=new Date(x.date);return '<tr><td dir="ltr">'+esc(x.date)+'</td><td>'+esc(isNaN(d)?x.date:AR_DAYS[d.getDay()])+'</td><td><span class="status success">'+esc(ATTENDANCE_LABELS[x.status]||x.status)+'</span></td></tr>';}),'الموسم '+CLUB.season);return}
+  if(a==='print-role-notices'){printTable('إعلانات النادي',['العنوان','النص','النوع','التاريخ'],(state.notices||[]).map(n=>'<tr><td><b>'+esc(n.title)+'</b></td><td>'+esc(n.text)+'</td><td>'+esc(n.type||'')+'</td><td>'+esc(n.date||'')+'</td></tr>')) ;return}
+  if(a==='print-role-applications'){const phone=String(state.user?.phone||'').replace(/\s/g,'');printTable('طلبات التسجيل',['رقم الطلب','الرياضي','الاشتراك','المبلغ','الحالة'],(state.applications||[]).filter(x=>String(x.phone||'').replace(/\s/g,'')===phone).map(x=>'<tr><td dir="ltr">'+esc(x.application_no||x.id)+'</td><td><b>'+esc(appName(x))+'</b></td><td>'+esc(planName(x.subscription_code))+'</td><td>'+esc(money(x.expected_amount))+'</td><td><span class="status success">'+esc(stateLabel(x.status))+'</span></td></tr>'));return}
+
+  /* ---------- الوثائق ---------- */
+  if(a==='open-coach-doc'){
+    const path=el.dataset.path;
+    try{
+      if(!window.firebase||!firebase.storage)throw new Error('تخزين الملفات غير مفعّل');
+      const url=await firebase.storage().ref(path).getDownloadURL();
+      window.open(url,'_blank','noopener');
+    }catch(e){showToast(e.message||'تعذر فتح الوثيقة. تأكد من صلاحية الحساب.','error')}
+    return;
+  }
+
+  /* ---------- الطلبات ---------- */
+  if(a==='edit-app'){
+    const app=(state.applications||[]).find(x=>String(x.id)===String(el.dataset.id));
+    if(!app){showToast('تعذر العثور على الطلب.','error');return}
+    openModal(formModal('تعديل الطلب '+esc(app.application_no||app.id),
+      '<div class="applicant-box"><b>'+esc(appName(app))+'</b><span>'+esc(catLabel(app.application_type==='coach'?'coach':app.category))+' · '+esc(appContact(app)||'')+'</span></div>'
+      +applicationFormBody(app,state.subscriptions||[],state.extras||{}),
+      'save-app',' data-id="'+esc(app.id)+'"'));
+    return;
+  }
+  if(a==='save-app'){
+    const app=(state.applications||[]).find(x=>String(x.id)===String(el.dataset.id));
+    if(!app){showToast('تعذر العثور على الطلب.','error');return}
+    const payload={subscription_code:$('#edit-plan').value,transport:$('#edit-transport').checked,uniform:$('#edit-uniform').checked,payment_method:$('#edit-payment').value,facility:$('#edit-facility').value,status:$('#edit-status').value,decision_reason:$('#edit-note').value.trim()};
+    payload.expected_amount=recalcAmount({...app,...payload});
+    try{await api('/api/applications/'+encodeURIComponent(app.id),'PATCH',payload);showToast('تم تحديث الطلب واحتساب المبلغ.');document.querySelector('.modal-backdrop')?.remove();await syncApi();render()}catch(e){showToast(e.message,'error')}
+    return;
+  }
+  if(a==='approve-app'){
+    try{await api('/api/applications/'+encodeURIComponent(el.dataset.id),'PATCH',{status:'approved'});showToast('تم اعتماد الطلب.');await syncApi();render()}catch(e){showToast(e.message,'error')}
+    return;
+  }
+  if(a==='reject-app'){
+    const reason=prompt('سبب رفض الطلب:','الوثائق ناقصة');
+    if(reason===null)return;
+    try{await api('/api/applications/'+encodeURIComponent(el.dataset.id),'PATCH',{status:'rejected',decision_reason:reason});showToast('تم رفض الطلب وتسجيل السبب.');await syncApi();render()}catch(e){showToast(e.message,'error')}
+    return;
+  }
+
+  /* ---------- السباحون ---------- */
+  if(a==='add-swimmer'){openModal(swimmerModal(null));return}
+  if(a==='edit-swimmer'){
+    const s=(state.swimmers||[]).find(x=>String(x.id)===String(el.dataset.id));
+    if(!s){showToast('تعذر العثور على السباح.','error');return}
+    openModal(swimmerModal(s));
+    return;
+  }
+  if(a==='save-swimmer'){
+    const name=$('#sw-name')?.value.trim();
+    if(!name){showToast('أدخل اسم السباح.','error');return}
+    const payload={name,group_name:$('#sw-group').value,phone:$('#sw-phone').value.trim(),status:$('#sw-status').value};
+    try{
+      if(el.dataset.id){payload.id=el.dataset.id;await api('/api/swimmers','PUT',payload);showToast('تم تحديث بيانات السباح.')}
+      else{payload.membership_no=$('#sw-no')?.value.trim();await api('/api/swimmers','POST',payload);showToast('تمت إضافة السباح.')}
+      document.querySelector('.modal-backdrop')?.remove();await syncApi();render();
+    }catch(e){showToast(e.message,'error')}
+    return;
+  }
+  if(a==='delete-swimmer'){
+    const s=(state.swimmers||[]).find(x=>String(x.id)===String(el.dataset.id));
+    if(!s||!confirm('حذف السباح "'+(s.name||'')+'" نهائيًا؟'))return;
+    try{await api('/api/swimmers','DELETE',{id:s.id});showToast('تم حذف السباح.');await syncApi();render()}catch(e){showToast(e.message,'error')}
+    return;
+  }
+
+  /* ---------- الإعلانات ---------- */
+  if(a==='add-notice'){openModal(noticeModal(null));return}
+  if(a==='edit-notice'){
+    const n=(state.notices||[]).find(x=>String(x.id)===String(el.dataset.id));
+    if(!n){showToast('تعذر العثور على الإعلان.','error');return}
+    openModal(noticeModal(n));
+    return;
+  }
+  if(a==='save-notice'){
+    const title=$('#no-title')?.value.trim();
+    if(!title){showToast('أدخل عنوان الإعلان.','error');return}
+    const payload={title,body:$('#no-body').value.trim(),kind:$('#no-kind').value};
+    try{
+      if(el.dataset.id){payload.id=el.dataset.id;await api('/api/notices','PUT',payload);showToast('تم تعديل الإعلان.')}
+      else{await api('/api/notices','POST',payload);showToast('تم نشر الإعلان.')}
+      document.querySelector('.modal-backdrop')?.remove();await syncApi();render();
+    }catch(e){showToast(e.message,'error')}
+    return;
+  }
+  if(a==='delete-notice'){
+    const n=(state.notices||[]).find(x=>String(x.id)===String(el.dataset.id));
+    if(!n||!confirm('حذف الإعلان "'+(n.title||'')+'"؟'))return;
+    try{await api('/api/notices','DELETE',{id:n.id});showToast('تم حذف الإعلان.');await syncApi();render()}catch(e){showToast(e.message,'error')}
+    return;
+  }
+
+  /* ---------- البرنامج ---------- */
+  if(a==='add-session'){openModal(sessionModal(null));return}
+  if(a==='edit-session'){
+    const s=(state.schedules||[]).find(x=>String(x.id)===String(el.dataset.id));
+    if(!s){showToast('تعذر العثور على الحصة.','error');return}
+    openModal(sessionModal(s));
+    return;
+  }
+  if(a==='save-session'){
+    const payload={day_name:$('#se-day').value,time_range:$('#se-time').value.trim(),group_name:$('#se-group').value,coach:$('#se-coach').value.trim(),pool:$('#se-pool').value.trim()};
+    try{
+      if(el.dataset.id){payload.id=el.dataset.id;await api('/api/schedule','PUT',payload);showToast('تم تعديل الحصة.')}
+      else{await api('/api/schedule','POST',payload);showToast('تمت إضافة الحصة.')}
+      document.querySelector('.modal-backdrop')?.remove();await syncApi();render();
+    }catch(e){showToast(e.message,'error')}
+    return;
+  }
+  if(a==='delete-session'){
+    if(!confirm('حذف هذه الحصة من البرنامج؟'))return;
+    try{await api('/api/schedule','DELETE',{id:el.dataset.id});showToast('تم حذف الحصة.');await syncApi();render()}catch(e){showToast(e.message,'error')}
+    return;
+  }
+  if(a==='week-prev'){state.weekOffset=(state.weekOffset||0)-1;save();render();return}
+  if(a==='week-next'){state.weekOffset=(state.weekOffset||0)+1;save();render();return}
+  if(a==='week-today'){state.weekOffset=0;save();render();return}
+
+  /* ---------- الحضور ---------- */
+  if(a==='mark-attendance'){
+    const id=el.dataset.id,status=el.dataset.status;
+    try{
+      await api('/api/attendance','POST',{member_id:id,swimmer_id:id,status});
+      const bucket=state.attendance[id]=state.attendance[id]||[];
+      bucket.push({status,at:new Date().toISOString(),date:todayISO()});
+      (state.attendanceByDay[todayISO()]||(state.attendanceByDay[todayISO()]={}))[id]=status;
+      save();render();
+    }catch(e){showToast(e.message||'تعذر تسجيل الحضور.','error')}
+    return;
+  }
+  if(a==='mark-all-present'){
+    const list=state.swimmers||[];
+    if(!list.length){showToast('لا يوجد سباحون لتسجيل حضورهم.','error');return}
+    if(!confirm('تسجيل حضور '+list.length+' سباح اليوم؟'))return;
+    let done=0;
+    for(const s of list){
+      try{await api('/api/attendance','POST',{member_id:s.id,swimmer_id:s.id,status:'present'});done++}catch(_){}
+    }
+    list.forEach(s=>{const b=state.attendance[s.id]=state.attendance[s.id]||[];b.push({status:'present',at:new Date().toISOString(),date:todayISO()});(state.attendanceByDay[todayISO()]||(state.attendanceByDay[todayISO()]={}))[s.id]='present';});
+    save();render();showToast('تم تسجيل حضور '+done+' سباح.');
+    return;
+  }
+  if(a==='reset-attendance'){
+    if(!confirm('تصفير سجل حضور اليوم محليًا؟ (سجل الخادم لا يُحذف)'))return;
+    state.attendance={};state.attendanceByDay={};save();render();showToast('تم تصفير سجل اليوم.');
+    return;
+  }
+
+  /* ---------- الأفواج ---------- */
+  if(a==='add-group'||a==='edit-group'){
+    const g=a==='edit-group'?groups().find(x=>x.id===el.dataset.group):null;
+    openModal(formModal(a==='edit-group'?'تعديل الفوج':'إضافة فوج',
+      '<label>اسم الفوج *<input id="gr-name" value="'+esc(g?.name||'')+'"></label>'
+      +'<label>المدرب المشرف<input id="gr-coach" value="'+esc(g?.coach||'')+'"></label>'
+      +'<label>البرنامج الأسبوعي<input id="gr-schedule" value="'+esc(g?.schedule||'')+'" placeholder="السبت · 16:00"></label>',
+      'save-group',g?' data-group="'+esc(g.id)+'"':''));
+    return;
+  }
+  if(a==='save-group'){
+    const name=$('#gr-name')?.value.trim();
+    if(!name){showToast('أدخل اسم الفوج.','error');return}
+    const coach=$('#gr-coach').value.trim()||'غير محدد';
+    const schedule=$('#gr-schedule').value.trim()||'يحدد لاحقًا';
+    if(el.dataset.group){const g=groups().find(x=>x.id===el.dataset.group);if(g){g.name=name;g.coach=coach;g.schedule=schedule}}
+    else groups().push({id:'g'+Date.now().toString(36),name,coach,schedule});
+    save();document.querySelector('.modal-backdrop')?.remove();render();showToast('تم حفظ الفوج.');
+    return;
+  }
+  if(a==='delete-group'){
+    const g=groups().find(x=>x.id===el.dataset.group);
+    if(!g||!confirm('حذف الفوج "'+(g.name||'')+'"؟ لن تتأثر بيانات سباحيه.'))return;
+    state.groups=groups().filter(x=>x.id!==g.id);save();render();showToast('تم حذف الفوج.');
+    return;
+  }
+
+  /* ---------- الاشتراكات والإعدادات ---------- */
+  if(a==='save-plans'){
+    const plans=[...document.querySelectorAll('[data-plan-name]')].map(inp=>{
+      const code=inp.dataset.planName;
+      const amountEl=document.querySelector('[data-plan-amount="'+CSS.escape(code)+'"]');
+      const activeEl=document.querySelector('[data-plan-active="'+CSS.escape(code)+'"]');
+      const old=(state.subscriptions||[]).find(p=>p.code===code)||{};
+      return {id:old.id||code,code,name:inp.value.trim(),amount:Number(amountEl?.value)||0,duration:old.duration||'موسم',active:activeEl?activeEl.checked:true};
+    });
+    const extras={transport:Number($('#extra-transport')?.value)||0,uniform:Number($('#extra-uniform')?.value)||0};
+    try{await api('/api/subscription-plans','PUT',{plans,extras});state.subscriptions=plans;state.extras=extras;save();await syncApi();render();showToast('تم حفظ الأسعار والخدمات.')}catch(e){showToast(e.message,'error')}
+    return;
+  }
+  if(a==='save-club'){
+    state.club={name:$('#club-name').value.trim()||CLUB.name,unit:$('#club-unit').value.trim()||CLUB.unit,address:$('#club-address').value.trim(),phone:$('#club-phone').value.trim(),email:$('#club-email').value.trim(),season:$('#club-season').value.trim()||CLUB.season};
+    Object.assign(CLUB,state.club);save();render();showToast('تم حفظ بيانات النادي.');
+    return;
+  }
+  if(a==='add-coach-requirement'){
+    const box=$('#coach-requirements');
+    if(box)box.insertAdjacentHTML('beforeend','<div class="requirement-row"><input placeholder="اسم الوثيقة" data-req-label><label class="check-line"><input type="checkbox" data-req-required checked> إلزامية</label></div>');
+    return;
+  }
+
+  /* ---------- إغلاق ---------- */
+  if(a==='close'){document.querySelector('.modal-backdrop')?.remove();return}
+  return coreAction(a,el);
+};
+
+/* ---------------------- الربط والتزامن ---------------------- */
+function baseBind(){document.querySelectorAll('[data-page]').forEach(e=>e.onclick=()=>{state.page=e.dataset.page;save();render()});document.querySelectorAll('[data-action]').forEach(e=>e.onclick=()=>action(e.dataset.action,e));document.querySelectorAll('.close').forEach(e=>e.onclick=()=>e.closest('.modal-backdrop').remove());}
+bind=function(){
+  baseBind();
+  document.querySelectorAll('[data-role-page]').forEach(e=>e.onclick=()=>{state.rolePage=e.dataset.rolePage;save();render()});
+  const live=(sel,fn)=>{const el=document.querySelector(sel);if(el){el.oninput=fn;el.onchange=fn;el.onkeyup=fn}};
+  live('#app-search',e=>{state.appQuery=e.target.value;renderPageOnly()});
+  live('#app-filter',e=>{state.appFilter=e.target.value;renderPageOnly()});
+  live('#user-search',e=>{state.userQuery=e.target.value;renderPageOnly()});
+  live('#group-filter',e=>{state.groupFilter=e.target.value;renderPageOnly()});
+  live('#attendance-group',e=>{state.attendanceGroup=e.target.value;renderPageOnly()});
+};
+function renderPageOnly(){
+  const p=state.page;
+  const host=document.querySelector('#page-root');
+  if(!host)return;
+  const map={home:pageOverview,applications:pageApplications,subscriptions:pageSubscriptions,users:pageUsers,schedule:pageSchedule,attendance:pageAttendance,notices:pageNotices,card:pageCards,groups:pageGroups,settings:pageSettings};
+  const scrollY=window.scrollY;
+  host.innerHTML=(map[p]||pageOverview)();
+  document.title=pageTitle(p)+' | '+CLUB.name;
+  bind();
+  buildQRCodes();
+  window.scrollTo(0,scrollY);
+}
+/* ---------------------- مزامنة البيانات ---------------------- */
+function tsToIso(v){
+  if(!v)return '';
+  if(typeof v.toDate==='function')return v.toDate().toISOString();
+  return String(v);
+}
+async function syncApi(){
+  const get=async p=>{try{const r=await fetch(p,{credentials:'same-origin'});return r.ok?await r.json():null}catch(_){return null}};
+  const [sw,nt,apps,plans,reqs,sch,att,cd,fees]=await Promise.all([
+    get('/api/swimmers'),get('/api/notices'),get('/api/applications'),get('/api/subscriptions'),
+    get('/api/coach-requirements'),get('/api/schedule'),get('/api/attendance'),get('/api/cards'),get('/api/subscription-plans')]);
+  if(Array.isArray(sw)&&sw.length)
+    state.swimmers=sw.map(x=>({id:x.membership_no||x.id,name:x.name||'',group:x.group_name||x.group||'',phone:x.phone||'',status:x.status==='active'?'نشط':(x.status||'نشط')}));
+  if(Array.isArray(nt))
+    state.notices=nt.map(x=>({id:x.id,title:x.title||'',text:x.text||x.body||'',date:x.date||x.published_at||'',type:x.kind||'إعلان'}));
+  if(Array.isArray(apps))state.applications=apps;
+  if(Array.isArray(plans)&&plans.length)state.subscriptions=plans;
+  if(Array.isArray(reqs)&&reqs.length)state.coachRequirements=reqs;
+  if(Array.isArray(sch))state.schedules=sch;
+  if(Array.isArray(cd))state.cards=cd;
+  if(fees&&fees.extras)state.extras=fees.extras;
+  if(Array.isArray(att)){
+    const bucket={},byDay={};
+    att.forEach(r=>{
+      const key=r.member_id||r.swimmer_id;
+      if(!key)return;
+      const status=r.status||'present';
+      const at=tsToIso(r.check_in||r.marked_at||r.time);
+      let date=r.session_date||r.date||todayISO();
+      const m=String(at).match(/(\d{4}-\d{2}-\d{2})/);
+      if(m)date=m[1];
+      (bucket[key]=bucket[key]||[]).push({status,at,date});
+      (byDay[date]=byDay[date]||{})[key]=status;
+    });
+    state.attendance=bucket;
+    state.attendanceByDay=byDay;
+  }
+  if(state.club)Object.assign(CLUB,state.club);
+  save();
+}
+if(state.club)Object.assign(CLUB,state.club);
+state.club=state.club||null;
+const coreRender=render;
+render=function(){
+  coreRender();
+  document.title=(state.user?pageTitle(state.page)+' — '+CLUB.name:'منصة السباحة — '+CLUB.name);
+};

@@ -35,7 +35,11 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
 );
 CREATE TABLE IF NOT EXISTS applications (
   id INTEGER PRIMARY KEY AUTOINCREMENT, application_no TEXT UNIQUE NOT NULL,
-  sport TEXT NOT NULL DEFAULT 'السباحة', category TEXT NOT NULL, swimming_strokes TEXT,
+  sport TEXT NOT NULL DEFAULT 'السباحة', category TEXT NOT NULL,
+  application_type TEXT NOT NULL DEFAULT 'swimmer', applicant_uid TEXT,
+  coach_name TEXT, coach_email TEXT, coach_phone TEXT, coach_experience TEXT,
+  coach_specialty TEXT, coach_notes TEXT, documents TEXT,
+  swimming_strokes TEXT,
   first_name_ar TEXT NOT NULL, last_name_ar TEXT NOT NULL, first_name_fr TEXT, last_name_fr TEXT,
   national_id TEXT, birth_certificate_no TEXT, birth_place TEXT, wilaya TEXT, birth_date TEXT NOT NULL,
   gender TEXT, blood_group TEXT, level TEXT, phone TEXT NOT NULL, whatsapp TEXT, address TEXT,
@@ -59,4 +63,10 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, action TEXT NOT NULL,
   entity_type TEXT, entity_id INTEGER, details TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
+CREATE TABLE IF NOT EXISTS fee_settings (
+  key TEXT PRIMARY KEY, value INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS coach_requirements (
+  id TEXT PRIMARY KEY, label TEXT NOT NULL, required INTEGER NOT NULL DEFAULT 1,
+  position INTEGER NOT NULL DEFAULT 0
+);

@@ -2,27 +2,65 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function manager() {
-      return signedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'president'];
+    function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function manager() { return signedIn() && profile().role in ['admin', 'president']; }
+    function staff() { return signedIn() && profile().role in ['admin', 'president', 'coach']; }
+
+    match /users/{id} {
+      allow read: if signedIn() && (request.auth.uid == id || manager());
+      allow write: if manager();
     }
-    match /applications/{id} {
-      allow create: if request.resource.data.application_type == 'coach'
-        ? signedIn() && request.resource.data.applicant_uid == request.auth.uid
-        : true;
-      allow read: if manager() || (signedIn() && resource.data.application_type == 'coach' && resource.data.applicant_uid == request.auth.uid);
-      allow update: if manager();
+
+    match /subscription_plans/{id} {
+      allow read: if true;
+      allow write: if manager();
     }
+
+    match /fee_settings/{id} {
+      allow read: if true;
+      allow write: if manager();
+    }
+
     match /coach_requirements/{id} {
       allow read: if true;
       allow write: if manager();
     }
-    match /users/{id} { allow read: if signedIn() && request.auth.uid == id; allow write: if manager(); }
-    match /subscription_plans/{id} { allow read: if true; allow write: if manager(); }
-    match /swimmers/{id} { allow read: if signedIn(); allow write: if manager(); }
-    match /notices/{id} { allow read: if true; allow write: if manager(); }
-    match /schedules/{id} { allow read: if signedIn(); allow write: if manager(); }
-    match /cards/{id} { allow read: if signedIn(); allow write: if manager(); }
-    match /attendance/{id} { allow read: if signedIn(); allow write: if signedIn(); }
+
+    match /applications/{id} {
+      // Coach files are tied to the applicant account; public sign-ups start as pending.
+      allow create: if (request.resource.data.application_type == 'coach')
+        ? (signedIn() && request.resource.data.applicant_uid == request.auth.uid)
+        : (request.resource.data.status == 'pending');
+      allow read: if manager()
+        || (signedIn() && resource.data.application_type == 'coach' && resource.data.applicant_uid == request.auth.uid);
+      allow update: if manager();
+      allow delete: if manager();
+    }
+
+    match /swimmers/{id} {
+      allow read: if signedIn();
+      allow write: if manager();
+    }
+
+    match /notices/{id} {
+      allow read: if true;
+      allow write: if manager();
+    }
+
+    match /schedules/{id} {
+      allow read: if signedIn();
+      allow write: if manager();
+    }
+
+    match /cards/{id} {
+      allow read: if signedIn();
+      allow write: if manager();
+    }
+
+    match /attendance/{id} {
+      allow read: if signedIn();
+      allow create, update: if staff();
+      allow delete: if manager();
+    }
   }
 }
-

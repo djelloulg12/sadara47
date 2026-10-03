@@ -13,6 +13,22 @@ def connect():
     c.execute('PRAGMA foreign_keys=ON')
     return c
 
+def read_extras(c):
+    values = {r['key']: r['value'] for r in c.execute('SELECT key,value FROM fee_settings')}
+    return {'transport': values.get('transport', 900), 'uniform': values.get('uniform', 2500)}
+
+def write_extras(c, data):
+    for key in ('transport', 'uniform'):
+        if key in data:
+            c.execute('INSERT INTO fee_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (key, int(data[key] or 0)))
+
+def ensure_columns(c, table, spec):
+    """Add columns introduced after a database was first created."""
+    existing = {r['name'] for r in c.execute('PRAGMA table_info(' + table + ')')}
+    for name, decl in spec.items():
+        if name not in existing:
+            c.execute('ALTER TABLE ' + table + ' ADD COLUMN ' + name + ' ' + decl)
+
 def password_hash(password, salt=None):
     salt = salt or secrets.token_hex(16)
     value = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 120000).hex()
@@ -27,6 +43,11 @@ def init_db():
     c = connect()
     with open(os.path.join(ROOT, 'schema.sql'), encoding='utf-8') as f:
         c.executescript(f.read())
+    ensure_columns(c, 'applications', {
+        'application_type': "TEXT NOT NULL DEFAULT 'swimmer'", 'applicant_uid': 'TEXT',
+        'coach_name': 'TEXT', 'coach_email': 'TEXT', 'coach_phone': 'TEXT',
+        'coach_experience': 'TEXT', 'coach_specialty': 'TEXT', 'coach_notes': 'TEXT',
+        'documents': 'TEXT'})
     # Production-safe account bootstrap: credentials are supplied only through
     # environment variables and are never stored in the public source tree.
     accounts = [
@@ -40,6 +61,7 @@ def init_db():
             c.execute('INSERT OR IGNORE INTO users(first_name,last_name,email,password_hash,role) VALUES(?,?,?,?,?)', (first_name,last_name,email,password_hash(password),role))
     if not c.execute('SELECT 1 FROM subscription_plans LIMIT 1').fetchone():
         c.executemany('INSERT INTO subscription_plans(code,name,amount,duration) VALUES(?,?,?,?)', [('season','اشتراك حر',3000,'موسم'),('quarter','اشتراك فصلي',1000,'3 أشهر'),('agreement','ضمن اتفاقية معتمدة',3000,'موسم')])
+    write_extras(c, {'transport': 900, 'uniform': 2500})
     if not c.execute('SELECT 1 FROM notices LIMIT 1').fetchone():
         c.executemany('INSERT INTO notices(title,body,kind) VALUES(?,?,?)', [('فتح التسجيل للموسم الجديد','التسجيل مفتوح لفوج السباحة. المقاعد محدودة.','مهم'),('تذكير بالحصة التدريبية','يرجى الحضور قبل الموعد بـ 15 دقيقة.','تذكير')])
     if not c.execute('SELECT 1 FROM schedules LIMIT 1').fetchone():
@@ -68,7 +90,7 @@ class App(SimpleHTTPRequestHandler):
         path=urlparse(self.path).path
         if not path.startswith('/api/'): return super().do_GET()
         user=self.current_user()
-        if path not in ('/api/subscriptions',) and not user:
+        if path not in ('/api/subscriptions','/api/subscription-plans','/api/coach-requirements') and not user:
             self.send_json({'error':'يرجى تسجيل الدخول'},401); return
         c=connect()
         queries={
@@ -76,11 +98,17 @@ class App(SimpleHTTPRequestHandler):
             '/api/notices':"SELECT id,title,body AS text,kind,date(published_at) AS date FROM notices ORDER BY id DESC",
             '/api/schedule':'SELECT * FROM schedules ORDER BY id',
             '/api/cards':'SELECT cards.*,swimmers.name FROM cards JOIN swimmers ON swimmers.id=cards.swimmer_id ORDER BY cards.id DESC',
-            '/api/attendance':"SELECT attendance.*,swimmers.name,swimmers.group_name FROM attendance JOIN swimmers ON swimmers.id=attendance.swimmer_id WHERE session_date=date('now') ORDER BY attendance.id",
+            '/api/attendance':"SELECT attendance.*,cast(attendance.swimmer_id AS TEXT) AS member_id,swimmers.name,swimmers.group_name FROM attendance JOIN swimmers ON swimmers.id=attendance.swimmer_id WHERE session_date=date('now') ORDER BY attendance.id",
             '/api/subscriptions':'SELECT * FROM subscription_plans WHERE active=1 ORDER BY id',
             '/api/applications':"SELECT a.*,p.name AS subscription_name FROM applications a LEFT JOIN subscription_plans p ON p.code=a.subscription_code ORDER BY a.id DESC"
         }
         if path == '/api/session': self.send_json({'user':user}); c.close(); return
+        if path == '/api/subscription-plans':
+            self.send_json({'plans':[dict(x) for x in c.execute('SELECT * FROM subscription_plans ORDER BY id')],'extras':read_extras(c)}); c.close(); return
+        if path == '/api/coach-requirements':
+            rows=[{'id':r['id'],'label':r['label'],'required':bool(r['required']),'order':r['position']} for r in c.execute('SELECT * FROM coach_requirements ORDER BY position')]
+            if not rows: rows=[{'id':'identity','label':'نسخة بطاقة التعريف الوطنية','required':True,'order':1},{'id':'cv','label':'السيرة الذاتية والشهادات التدريبية','required':True,'order':2},{'id':'medical','label':'شهادة طبية تثبت القدرة على التدريب','required':True,'order':3},{'id':'criminal-record','label':'صحيفة السوابق العدلية','required':False,'order':4}]
+            self.send_json(rows); c.close(); return
         if path in queries: self.send_json([dict(x) for x in c.execute(queries[path]).fetchall()]); c.close(); return
         c.close(); self.send_json({'error':'المسار غير موجود'},404)
     def do_POST(self):
@@ -96,10 +124,29 @@ class App(SimpleHTTPRequestHandler):
             c=connect()
             try:
                 d=data; category=d.get('category','adult'); minor=category=='minor'
+                extras=read_extras(c)
                 plan=c.execute('SELECT amount FROM subscription_plans WHERE code=? AND active=1',(d.get('subscription_code','quarter'),)).fetchone()
-                amount=(plan['amount'] if plan else 0)+ (900 if d.get('transport') else 0) + (2500 if d.get('uniform') else 0)
-                no='APP-'+date.today().strftime('%Y%m%d')+'-'+secrets.token_hex(2).upper()
-                cur=c.execute('''INSERT INTO applications(application_no,sport,category,swimming_strokes,first_name_ar,last_name_ar,first_name_fr,last_name_fr,national_id,birth_certificate_no,birth_place,wilaya,birth_date,gender,blood_group,level,phone,whatsapp,address,facility,subscription_code,transport,uniform,payment_method,expected_amount) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', (no,d.get('sport','السباحة'),category,d.get('swimming_strokes',''),d.get('first_name_ar',''),d.get('last_name_ar',''),d.get('first_name_fr',''),d.get('last_name_fr',''),d.get('national_id','') if not minor else '',d.get('birth_certificate_no','') if minor else '',d.get('birth_place',''),d.get('wilaya',''),d.get('birth_date',''),d.get('gender',''),d.get('blood_group',''),d.get('level','مبتدئ'),d.get('phone',''),d.get('whatsapp',''),d.get('address',''),d.get('facility','المسبح الأولمبي'),d.get('subscription_code','quarter'),int(bool(d.get('transport'))),int(bool(d.get('uniform'))),d.get('payment_method','cash'),amount))
+                amount=(plan['amount'] if plan else 0)+ (extras['transport'] if d.get('transport') else 0) + (extras['uniform'] if d.get('uniform') else 0)
+                no=d.get('application_no') or 'APP-'+date.today().strftime('%Y%m%d')+'-'+secrets.token_hex(2).upper()
+                record={'application_no':no,'sport':d.get('sport','السباحة'),'category':category,
+                    'application_type':d.get('application_type','swimmer'),'applicant_uid':d.get('applicant_uid',''),
+                    'coach_name':d.get('coach_name',''),'coach_email':d.get('coach_email',''),'coach_phone':d.get('coach_phone',''),
+                    'coach_experience':str(d.get('coach_experience','')),'coach_specialty':d.get('coach_specialty',''),
+                    'coach_notes':d.get('coach_notes',''),'documents':json.dumps(d['documents'],ensure_ascii=False) if d.get('documents') else None,
+                    'swimming_strokes':d.get('swimming_strokes',''),
+                    'first_name_ar':d.get('first_name_ar','') or d.get('coach_name',''),'last_name_ar':d.get('last_name_ar',''),
+                    'first_name_fr':d.get('first_name_fr',''),'last_name_fr':d.get('last_name_fr',''),
+                    'national_id':'' if minor else d.get('national_id',''),
+                    'birth_certificate_no':d.get('birth_certificate_no','') if minor else '',
+                    'birth_place':d.get('birth_place',''),'wilaya':d.get('wilaya',''),
+                    'birth_date':d.get('birth_date') or '2000-01-01',
+                    'gender':d.get('gender',''),'blood_group':d.get('blood_group',''),'level':d.get('level','مبتدئ'),
+                    'phone':d.get('phone','') or d.get('coach_phone',''),'whatsapp':d.get('whatsapp',''),'address':d.get('address',''),
+                    'facility':d.get('facility','المسبح الأولمبي'),
+                    'subscription_code':d.get('subscription_code','quarter'),
+                    'transport':int(bool(d.get('transport'))),'uniform':int(bool(d.get('uniform'))),
+                    'payment_method':d.get('payment_method','cash'),'expected_amount':amount}
+                cur=c.execute('INSERT INTO applications('+','.join(record)+') VALUES('+','.join('?'*len(record))+')',tuple(record.values()))
                 app_id=cur.lastrowid
                 if minor and d.get('guardian_first_name'):
                     c.execute('INSERT INTO guardians(application_id,first_name,last_name,relation,national_id,phone,whatsapp,address,consent) VALUES(?,?,?,?,?,?,?,?,?)',(app_id,d.get('guardian_first_name'),d.get('guardian_last_name',''),d.get('guardian_relation','ولي'),d.get('guardian_national_id',''),d.get('guardian_phone',''),d.get('guardian_whatsapp',''),d.get('guardian_address',''),int(bool(d.get('guardian_consent')))))
@@ -114,10 +161,63 @@ class App(SimpleHTTPRequestHandler):
             if path == '/api/swimmers':
                 no=data.get('membership_no') or 'SDR-'+secrets.token_hex(2).upper(); c.execute('INSERT INTO swimmers(membership_no,name,group_name,phone) VALUES(?,?,?,?)',(no,data.get('name',''),data.get('group_name','المبتدئون'),data.get('phone','')))
             elif path == '/api/notices': c.execute('INSERT INTO notices(title,body,kind) VALUES(?,?,?)',(data.get('title',''),data.get('body',''),data.get('kind','إعلان')))
-            elif path == '/api/attendance': c.execute("INSERT INTO attendance(swimmer_id,session_date,status,check_in) VALUES(?,date('now'),?,datetime('now')) ON CONFLICT(swimmer_id,session_date) DO UPDATE SET status=excluded.status,check_in=excluded.check_in",(data['swimmer_id'],data.get('status','present')))
+            elif path == '/api/attendance': c.execute("INSERT INTO attendance(swimmer_id,session_date,status,check_in) VALUES(?,date('now'),?,datetime('now')) ON CONFLICT(swimmer_id,session_date) DO UPDATE SET status=excluded.status,check_in=excluded.check_in",(int(data.get('swimmer_id') or data.get('member_id')),data.get('status','present')))
+            elif path == '/api/schedule': c.execute('INSERT INTO schedules(day_name,time_range,group_name,coach,pool) VALUES(?,?,?,?,?)',(data.get('day_name','السبت'),data.get('time_range',''),data.get('group_name','المبتدئون'),data.get('coach',''),data.get('pool','مسبح الصدارة')))
             else: c.close(); self.send_json({'error':'المسار غير موجود'},404); return
             c.commit(); self.send_json({'ok':True})
-        except (sqlite3.IntegrityError, KeyError) as e: self.send_json({'error':str(e)},400)
+        except (sqlite3.IntegrityError, KeyError, ValueError) as e: self.send_json({'error':str(e)},400)
+        finally: c.close()
+
+    def do_PUT(self):
+        path=urlparse(self.path).path; data=self.read_json()
+        user=self.authorized()
+        if not user: return
+        if user['role'] not in ('admin','president'):
+            self.send_json({'error':'هذه العملية لرئيس النادي فقط'},403); return
+        c=connect()
+        try:
+            if path == '/api/subscription-plans':
+                for plan in data.get('plans',[]):
+                    if not plan.get('code'): continue
+                    c.execute('''INSERT INTO subscription_plans(code,name,amount,duration,active) VALUES(?,?,?,?,?)
+                                 ON CONFLICT(code) DO UPDATE SET name=excluded.name,amount=excluded.amount,duration=excluded.duration,active=excluded.active''',
+                              (plan['code'],plan.get('name') or plan['code'],int(plan.get('amount') or 0),plan.get('duration') or 'موسم',1 if plan.get('active',True) else 0))
+                write_extras(c, data.get('extras') or {})
+            elif path == '/api/swimmers':
+                if not data.get('id'): c.close(); self.send_json({'error':'معرّف السباح مطلوب'},400); return
+                c.execute('UPDATE swimmers SET name=?,group_name=?,phone=?,status=? WHERE membership_no=?',
+                          (data.get('name',''),data.get('group_name','المبتدئون'),data.get('phone',''),data.get('status','active'),data['id']))
+            elif path == '/api/notices':
+                if not data.get('id'): c.close(); self.send_json({'error':'معرّف الإعلان مطلوب'},400); return
+                c.execute('UPDATE notices SET title=?,body=?,kind=? WHERE id=?',(data.get('title',''),data.get('body',''),data.get('kind','إعلان'),int(data['id'])))
+            elif path == '/api/schedule':
+                if not data.get('id'): c.close(); self.send_json({'error':'معرّف الحصة مطلوب'},400); return
+                c.execute('UPDATE schedules SET day_name=?,time_range=?,group_name=?,coach=?,pool=? WHERE id=?',
+                          (data.get('day_name',''),data.get('time_range',''),data.get('group_name',''),data.get('coach',''),data.get('pool','مسبح الصدارة'),int(data['id'])))
+            elif path == '/api/coach-requirements':
+                items=[x for x in (data.get('requirements') or []) if x and x.get('label')]
+                c.execute('DELETE FROM coach_requirements')
+                c.executemany('INSERT INTO coach_requirements(id,label,required,position) VALUES(?,?,?,?)',[(x.get('id') or 'req-'+str(i),x['label'],1 if x.get('required',True) else 0,i+1) for i,x in enumerate(items)])
+            else: c.close(); self.send_json({'error':'المسار غير موجود'},404); return
+            c.commit(); self.send_json({'ok':True})
+        except (sqlite3.IntegrityError, ValueError) as e: self.send_json({'error':str(e)},400)
+        finally: c.close()
+
+    def do_DELETE(self):
+        path=urlparse(self.path).path; data=self.read_json()
+        user=self.authorized()
+        if not user: return
+        if user['role'] not in ('admin','president'):
+            self.send_json({'error':'هذه العملية لرئيس النادي فقط'},403); return
+        if not data.get('id'):
+            self.send_json({'error':'معرّف السجل مطلوب'},400); return
+        table={'/api/swimmers':'swimmers','/api/notices':'notices','/api/schedule':'schedules'}.get(path)
+        if not table: self.send_json({'error':'المسار غير موجود'},404); return
+        c=connect()
+        key='membership_no' if table=='swimmers' else 'id'
+        try:
+            c.execute(f'DELETE FROM {table} WHERE {key}=?',(data['id'],)); c.commit(); self.send_json({'ok':True})
+        except sqlite3.Error as e: self.send_json({'error':str(e)},400)
         finally: c.close()
 
     def do_PATCH(self):
@@ -127,11 +227,12 @@ class App(SimpleHTTPRequestHandler):
             self.send_json({'error':'لا تملك صلاحية تعديل الطلبات'},403); return
         data=self.read_json(); match=re.match(r'^/api/applications/(\d+)$',path)
         if not match: self.send_json({'error':'المسار غير موجود'},404); return
+        if 'decision_reason' in data: data['decision_note']=data['decision_reason']
         c=connect(); app_id=int(match.group(1)); fields=[]; values=[]
         for key in ('subscription_code','transport','uniform','payment_method','status','decision_note','facility'):
             if key in data: fields.append(key+'=?'); values.append(data[key])
         if 'subscription_code' in data or 'transport' in data or 'uniform' in data:
-            current=c.execute('SELECT * FROM applications WHERE id=?',(app_id,)).fetchone(); code=data.get('subscription_code',current['subscription_code']); plan=c.execute('SELECT amount FROM subscription_plans WHERE code=?',(code,)).fetchone(); amount=(plan['amount'] if plan else 0)+(900 if data.get('transport',current['transport']) else 0)+(2500 if data.get('uniform',current['uniform']) else 0); fields.append('expected_amount=?'); values.append(amount)
+            current=c.execute('SELECT * FROM applications WHERE id=?',(app_id,)).fetchone(); code=data.get('subscription_code',current['subscription_code']); plan=c.execute('SELECT amount FROM subscription_plans WHERE code=?',(code,)).fetchone(); extras=read_extras(c); amount=(plan['amount'] if plan else 0)+(extras['transport'] if data.get('transport',current['transport']) else 0)+(extras['uniform'] if data.get('uniform',current['uniform']) else 0); fields.append('expected_amount=?'); values.append(amount)
         if not fields: c.close(); self.send_json({'error':'لا توجد تغييرات'},400); return
         fields.append("updated_at=datetime('now')"); values.append(app_id); c.execute('UPDATE applications SET '+','.join(fields)+' WHERE id=?',values); c.execute('INSERT INTO audit_logs(user_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?)',(user['id'],'تعديل طلب','application',app_id,json.dumps(data,ensure_ascii=False))); c.commit(); c.close(); self.send_json({'ok':True})
 
@@ -140,4 +241,3 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', '4173'))
     print(f'Sadara platform listening on port {port}')
     ThreadingHTTPServer(('0.0.0.0', port), App).serve_forever()
-

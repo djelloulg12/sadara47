@@ -1,8 +1,26 @@
+# Build output
 node_modules/
-.env
 dist/
 *.log
-sadara.db
-__pycache__/
-.env
 
+# Secrets and local configuration
+.env
+.env.*
+*.pem
+*.key
+
+# Local database (never publish member data)
+sadara.db
+*.db-journal
+__pycache__/
+*.pyc
+
+# Personal data and private club documents
+المرفقات/
+Card Number.docx
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

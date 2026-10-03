@@ -2,7 +2,8 @@ name: Deploy Sadara to Firebase Hosting
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -10,6 +11,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Verify the deployable copy matches the source tree
+        run: |
+          set -e
+          for f in app.js styles.css index.html firebase-adapter.js firebase-config.js; do
+            if ! diff -q "$f" "firebase-public/$f" >/dev/null; then
+              echo "::error file=$f::firebase-public/$f is out of sync with the root copy"
+              exit 1
+            fi
+          done
+
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -17,10 +29,10 @@ jobs:
           projectId: sadara-platform
           channelId: live
           entryPoint: .
+
       - name: Deploy Firestore and Storage rules
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
         run: |
           printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$GOOGLE_APPLICATION_CREDENTIALS"
           npx --yes firebase-tools deploy --only firestore:rules,storage --project sadara-platform
-
