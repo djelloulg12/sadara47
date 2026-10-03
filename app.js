@@ -23,13 +23,13 @@ function render() {
   bind();
 }
 function home() {
-  return `<header class="topbar public-nav"><a class="brand" href="#"><span class="logo">🏊</span><span><b>الصدارة</b><small>فوج السباحة</small></span></a><nav><a href="#activities">نشاطاتنا</a><a href="#about">عن النادي</a><a href="#contact">تواصل معنا</a></nav><button class="btn btn-outline" data-action="login">تسجيل الدخول</button></header>
+  return `<header class="topbar public-nav"><a class="brand" href="#"><span class="logo brand-logo">🏊</span><span><b>الصدارة</b><small>فوج السباحة</small></span></a><nav><a href="#activities">نشاطاتنا</a><a href="#about">عن النادي</a><a href="#contact">تواصل معنا</a></nav><button class="btn btn-outline" data-action="login">تسجيل الدخول</button></header>
   <main class="landing"><section class="hero"><div class="hero-copy"><span class="eyebrow">النادي الرياضي الصدارة</span><h1>نصنع أبطالًا<br><em>بشغف وانضباط.</em></h1><p>منصة رقمية متكاملة لإدارة فوج السباحة، متابعة التقدم، وتنظيم كل ما يخص أبطالنا.</p><div class="hero-actions"><button class="btn btn-primary" data-action="login">الدخول إلى المنصة <span>←</span></button><button class="btn btn-ghost" data-action="register">طلب التسجيل</button></div><div class="mini-stats"><span><b>+120</b><small>سباحًا</small></span><span><b>08</b><small>مدربين</small></span><span><b>12</b><small>حصة أسبوعية</small></span></div></div><div class="hero-art"><div class="ring ring-one"></div><div class="ring ring-two"></div><div class="water-card"><span>الموسم الرياضي</span><strong>2026 — 2027</strong><div class="wave">〰〰〰</div><small>اسبح أبعد من حدودك</small></div><div class="bubble b1">✦</div><div class="bubble b2">✧</div></div></section>
   <section class="feature-grid" id="activities"><article><span class="feature-icon blue">◷</span><h3>برنامج واضح</h3><p>اطّلع على حصصك ومواعيد التدريب في أي وقت.</p></article><article><span class="feature-icon gold">✓</span><h3>متابعة مستمرة</h3><p>سجّل الحضور وتابع تطور السباحين بدقة.</p></article><article><span class="feature-icon mint">♧</span><h3>مجتمع واحد</h3><p>تواصل سهل بين الإدارة والمدربين والأولياء.</p></article></section>
   <section class="public-section" id="about"><div><span class="eyebrow">لماذا الصدارة؟</span><h2>كل ما يحتاجه النادي<br>في مكان واحد.</h2></div><p>نمنح الطاقم الإداري والمدربين والأولياء تجربة بسيطة وآمنة تساعدهم على التركيز في الأهم: بناء جيل رياضي متميز.</p></section>
   <footer id="contact"><b>الصدارة</b><span>النادي الرياضي الصدارة — فوج السباحة</span><span>© 2026 جميع الحقوق محفوظة</span></footer></main>`;
 }
-function loginModal() { return `<div class="modal-backdrop"><div class="modal"><button class="close" data-action="close">×</button><div class="modal-heading"><span class="logo">🏊</span><h2>مرحبًا بعودتك</h2><p>سجّل الدخول إلى مساحة النادي</p></div><label>البريد الإلكتروني<input id="email" type="email" placeholder="name@example.com"></label><label>كلمة المرور<input id="password" type="password" placeholder="••••••••"></label><button class="btn btn-primary full" data-action="do-login">دخول المنصة</button></div></div>`; }
+function loginModal() { return `<div class="modal-backdrop"><div class="modal auth-modal"><button class="close" data-action="close">×</button><div class="modal-heading"><span class="logo auth-logo">🏊</span><h2>مرحبًا بعودتك</h2><p>سجّل الدخول إلى مساحة نادي الصدارة</p></div><div class="form-message" id="auth-message" role="status"></div><label>البريد الإلكتروني<input id="email" type="email" autocomplete="email" placeholder="name@example.com"></label><label>كلمة المرور<input id="password" type="password" autocomplete="current-password" placeholder="••••••••"></label><button class="btn btn-primary full" data-action="do-login">دخول المنصة</button><div class="auth-links"><button type="button" data-action="forgot-password">نسيت كلمة المرور؟</button><span>ليس لديك حساب؟</span><button type="button" data-action="register">طلب التسجيل</button></div><button class="btn btn-sms full" data-action="phone-login">الدخول أو الاستعادة برمز SMS</button><p class="hint">سيتم إرسال رمز تحقق إلى رقم الهاتف المسجل في Firebase.</p></div></div>`; }
 function dashboard() {
   const page = state.page;
   return `<div class="app-shell"><aside class="sidebar"><a class="brand side-brand"><span class="logo">🏊</span><span><b>الصدارة</b><small>فوج السباحة</small></span></a><div class="side-user"><span class="avatar">م</span><div><b>${state.user?.name||'رئيس الجمعية'}</b><small>${state.user?.role==='president'?'رئيس الجمعية':'مسير النادي'}</small></div></div><nav class="side-nav">${[['home','نظرة عامة'],['applications','طلبات التسجيل'],['subscriptions','الاشتراكات'],['users','السباحون'],['schedule','البرنامج الأسبوعي'],['attendance','الحضور'],['notices','الإعلانات'],['card','بطاقات الانخراط']].map(([key,label])=>`<a class="${page===key?'active':''}" data-page="${key}"><i>${icons[key]||'◈'}</i>${label}</a>`).join('')}</nav><div class="side-bottom"><a data-page="settings"><i>⚙</i>الإعدادات</a><a data-action="logout"><i>↪</i>تسجيل الخروج</a></div></aside><main class="main-content"><header class="dash-header"><div><span class="mobile-menu">☰</span><span class="breadcrumb">الصدارة <b>/</b> ${pageTitle(page)}</span><h1>${pageTitle(page)}</h1></div><div class="header-actions"><button class="icon-btn" data-action="theme">${state.dark?'☀':'◐'}</button><button class="icon-btn notification">♢<span></span></button><div class="header-avatar">م</div></div></header>${pageView(page)}</main></div>`;
@@ -59,7 +59,7 @@ boot();
 function fullRegisterModal(){return `<div class="modal-backdrop"><div class="modal registration-modal"><button class="close" data-action="close">×</button><div class="modal-heading"><span class="logo">🏊</span><h2>استمارة التسجيل</h2><p>بطاقة المعلومات الرسمية لنادي الصدارة</p></div><div class="form-section-title">1. الاختيار الرياضي والاشتراك</div><label>الرياضة<select id="reg-sport"><option>السباحة</option><option>العدو الريفي</option><option>العدو السريع</option></select></label><label>الفئة<select id="reg-category"><option value="minor">أصاغر — بيانات الولي مطلوبة</option><option value="adult">أكابر — تسجيل مباشر</option></select></label><label>نمط السباحة<input id="reg-strokes" placeholder="حرة، ظهر، صدر، فراشة، متناوبة"></label><label>الاشتراك<select id="reg-plan"><option value="quarter">فصلي — 1000 دج</option><option value="season">موسمي — 3000 دج</option><option value="agreement">اتفاقية — 3000 دج</option></select></label><label>المسبح أو المنشأة<select id="reg-facility"><option>المسبح الأولمبي</option><option>المسبح النصف أولمبي</option><option>الملعب البلدي</option><option>غابة غرداية</option></select></label><label class="check-line"><input id="reg-transport" type="checkbox"> النقل — 900 دج</label><label class="check-line"><input id="reg-uniform" type="checkbox"> البدلة الرياضية — 2500 دج</label><label>طريقة الدفع<select id="reg-payment"><option value="cash">نقدًا</option><option value="postal_check">صك بريدي</option><option value="postal_transfer">حوالة بريدية</option></select></label><div class="form-section-title">2. معلومات الرياضي</div><div class="form-two"><label>الاسم بالعربية *<input id="reg-first-ar"></label><label>اللقب بالعربية *<input id="reg-last-ar"></label><label>الاسم بالفرنسية<input id="reg-first-fr"></label><label>اللقب بالفرنسية<input id="reg-last-fr"></label><label>رقم التعريف الوطني<input id="reg-nin"></label><label>رقم شهادة الميلاد<input id="reg-birth-cert"></label><label>بلدية الميلاد<input id="reg-birth-place"></label><label>الولاية<input id="reg-wilaya" placeholder="غرداية"></label></div><label>تاريخ الميلاد *<input id="reg-birth" type="date"></label><div class="form-two"><label>الجنس<select id="reg-gender"><option>ذكر</option><option>أنثى</option></select></label><label>فصيلة الدم<select id="reg-blood"><option>O+</option><option>O-</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option></select></label><label>المستوى الرياضي<select id="reg-level"><option>مبتدئ</option><option>متوسط</option><option>متقدم</option><option>نخبة</option></select></label><label>الهاتف *<input id="reg-phone" placeholder="05xx xx xx xx"></label></div><label>رقم واتساب<input id="reg-whatsapp"></label><label>العنوان *<input id="reg-address"></label><label>الصورة الشخصية<input id="reg-photo" type="file" accept="image/*"></label><div class="form-section-title">3. معلومات الولي والتصريح</div><div class="form-two"><label>اسم الولي<input id="reg-guardian-first"></label><label>لقب الولي<input id="reg-guardian-last"></label><label>صلة القرابة<input id="reg-guardian-relation" value="الأب"></label><label>هاتف الولي<input id="reg-guardian-phone"></label></div><label>رقم تعريف الولي<input id="reg-guardian-nin"></label><label class="check-line"><input id="reg-guardian-consent" type="checkbox"> أقر بصحة المعلومات وأوافق على ممارسة النشاط الرياضي</label><div class="official-docs"><a href="assets/registration-card.jpg" target="_blank">معاينة بطاقة التسجيل الرسمية</a><a href="assets/internal-regulations.jpg" target="_blank">معاينة النظام الداخلي</a></div><button class="btn btn-primary full" data-action="send-full-request">إرسال طلب التسجيل</button></div></div>`}
 const legacyAction = action;
 action = async function(a,el){
-  if(a==='register'){document.body.insertAdjacentHTML('beforeend',fullRegisterModal());bind();return}
+  if(a==='register'){document.querySelector('.modal-backdrop')?.remove();document.body.insertAdjacentHTML('beforeend',fullRegisterModal());bind();return}
   if(a==='send-full-request'){
     const payload={sport:$('#reg-sport').value,category:$('#reg-category').value,swimming_strokes:$('#reg-strokes').value,subscription_code:$('#reg-plan').value,facility:$('#reg-facility').value,transport:$('#reg-transport').checked,uniform:$('#reg-uniform').checked,payment_method:$('#reg-payment').value,first_name_ar:$('#reg-first-ar').value,last_name_ar:$('#reg-last-ar').value,first_name_fr:$('#reg-first-fr').value,last_name_fr:$('#reg-last-fr').value,national_id:$('#reg-nin').value,birth_certificate_no:$('#reg-birth-cert').value,birth_place:$('#reg-birth-place').value,wilaya:$('#reg-wilaya').value,birth_date:$('#reg-birth').value,gender:$('#reg-gender').value,blood_group:$('#reg-blood').value,level:$('#reg-level').value,phone:$('#reg-phone').value,whatsapp:$('#reg-whatsapp').value,address:$('#reg-address').value,guardian_first_name:$('#reg-guardian-first').value,guardian_last_name:$('#reg-guardian-last').value,guardian_relation:$('#reg-guardian-relation').value,guardian_phone:$('#reg-guardian-phone').value,guardian_national_id:$('#reg-guardian-nin').value,guardian_consent:$('#reg-guardian-consent').checked};
     if(!payload.first_name_ar||!payload.last_name_ar||!payload.birth_date||!payload.phone||!payload.address){alert('يرجى إكمال الحقول الإلزامية');return}
@@ -78,7 +78,53 @@ function roleDashboard(){
 const adminDashboard=dashboard;
 dashboard=function(){return ['coach','swimmer_adult','swimmer_minor','parent','member'].includes(state.user?.role)?roleDashboard():adminDashboard()};
 const currentAction=action;
+function authMessage(text, kind='info') {
+  const box = document.querySelector('#auth-message');
+  if (box) { box.textContent = text; box.className = 'form-message ' + kind; }
+}
+function showToast(text, kind='success') {
+  document.querySelector('.toast-message')?.remove();
+  const node = document.createElement('div'); node.className = 'toast-message ' + kind; node.textContent = text;
+  document.body.appendChild(node); setTimeout(() => node.remove(), 5000);
+}
+function phoneRecoveryModal() {
+  document.querySelector('.modal-backdrop')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop"><div class="modal auth-modal"><button class="close" data-action="close">×</button><div class="modal-heading"><span class="logo auth-logo">🏊</span><h2>الدخول عبر الهاتف</h2><p>تحقق من رقمك برسالة SMS للوصول الآمن.</p></div><div class="form-message" id="phone-message" role="status"></div><label>رقم الهاتف<input id="phone-number" type="tel" autocomplete="tel" placeholder="+213 5xx xx xx xx"></label><div id="recaptcha-container"></div><button class="btn btn-primary full" data-action="send-phone-code">إرسال رمز التحقق</button><label id="phone-code-wrap" hidden>رمز التحقق<input id="phone-code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></label><button class="btn btn-sms full" data-action="verify-phone-code" hidden>تأكيد الرمز والدخول</button><p class="hint">هذه الطريقة تتحقق من الهاتف وتتيح الدخول للحساب المرتبط به. إعادة تعيين كلمة مرور البريد تتم عبر رابط البريد الإلكتروني.</p></div></div>`); bind();
+}
 action=async function(a,el){
+  if(a==='do-login'){
+    const email=$('#email')?.value.trim(), password=$('#password')?.value;
+    if(!email||!password){authMessage('أدخل البريد الإلكتروني وكلمة المرور.','error');return}
+    const res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({email,password})});
+    const data=await res.json();
+    if(!res.ok){authMessage(data.error||'تعذر تسجيل الدخول. تحقق من البيانات.','error');return}
+    state.user=data.user;state.page='home';save();document.querySelector('.modal-backdrop')?.remove();await syncApi();render();showToast('تم تسجيل الدخول بنجاح.');return;
+  }
+  if(a==='forgot-password'){
+    const email=$('#email')?.value.trim();
+    if(!email){authMessage('اكتب بريدك الإلكتروني أولًا لاستلام رابط الاستعادة.','error');return}
+    try { await firebase.auth().sendPasswordResetEmail(email); authMessage('تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني. افحص البريد غير المرغوب فيه أيضًا.','success'); }
+    catch(e){ authMessage(e.code==='auth/user-not-found'?'لا يوجد حساب بهذا البريد.':(e.message||'تعذر إرسال رابط الاستعادة.'),'error'); }
+    return;
+  }
+  if(a==='phone-login'){phoneRecoveryModal();return}
+  if(a==='send-phone-code'){
+    const phone=$('#phone-number')?.value.trim(); const box=$('#phone-message');
+    if(!phone){if(box){box.textContent='أدخل رقم الهاتف بصيغة دولية مثل +213...';box.className='form-message error'}return}
+    try{
+      window.sadaraRecaptcha ||= new firebase.auth.RecaptchaVerifier('recaptcha-container',{size:'invisible'});
+      window.sadaraPhoneConfirmation=await firebase.auth().signInWithPhoneNumber(phone,window.sadaraRecaptcha);
+      $('#phone-code-wrap').hidden=false; document.querySelector('[data-action="verify-phone-code"]').hidden=false; document.querySelector('[data-action="send-phone-code"]').disabled=true;
+      if(box){box.textContent='أُرسل الرمز. أدخله خلال دقائق لإكمال الدخول.';box.className='form-message success'}
+    }catch(e){if(box){box.textContent='تعذر إرسال الرمز. تأكد من الرقم وتفعيل Phone Authentication في Firebase.';box.className='form-message error'}console.error(e)}
+    return;
+  }
+  if(a==='verify-phone-code'){
+    const code=$('#phone-code')?.value.trim(); const box=$('#phone-message');
+    try{const credential=await window.sadaraPhoneConfirmation.confirm(code);const data={user:{id:credential.user.uid,name:credential.user.phoneNumber||'عضو النادي',role:'member',email:''}};state.user=data.user;state.page='home';save();document.querySelector('.modal-backdrop')?.remove();await syncApi();render();showToast('تم التحقق من رقم الهاتف وتسجيل الدخول.');}
+    catch(e){if(box){box.textContent='الرمز غير صحيح أو منتهي الصلاحية.';box.className='form-message error'}}
+    return;
+  }
   if(a==='add-swimmer'){
     const name=prompt('اسم السباح الكامل'); if(!name)return;
     const phone=prompt('رقم الهاتف',''); const group=prompt('المجموعة','المبتدئون');
