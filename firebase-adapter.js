@@ -12,8 +12,9 @@
   });
   const userView = async user => {
     if (!user) return null;
-    const snap = await db.collection('users').doc(user.uid).get();
-    const profile = snap.exists ? snap.data() : {};
+    let profile = {};
+    try { const snap = await db.collection('users').doc(user.uid).get(); profile = snap.exists ? snap.data() : {}; }
+    catch (error) { console.warn('Firestore profile unavailable; using Auth account', error); }
     return { id: user.uid, name: profile.name || user.email || 'عضو النادي', role: profile.role || 'member', email: user.email || '' };
   };
   const rows = async (name) => (await db.collection(name).get()).docs.map(d => ({ id: d.id, ...d.data() }));
