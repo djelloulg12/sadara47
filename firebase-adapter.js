@@ -52,6 +52,11 @@
       if (path === '/api/schedule' && method === 'GET') return jsonResponse(await rows('schedules'));
       if (path === '/api/cards' && method === 'GET') return jsonResponse(await rows('cards'));
       if (path === '/api/attendance' && method === 'GET') return jsonResponse(await rows('attendance'));
+      if (path === '/api/attendance' && method === 'POST') {
+        const user = await currentUser(); if (!user) return jsonResponse({ error: 'يرجى تسجيل الدخول قبل تسجيل الحضور' }, 401);
+        await db.collection('attendance').add({ member_id: body.member_id || '', status: body.status || 'present', marked_by: user.uid, marked_at: firebase.firestore.FieldValue.serverTimestamp() });
+        return jsonResponse({ ok: true, message: 'تم تسجيل الحضور بنجاح' }, 201);
+      }
       if (path === '/api/applications' && method === 'GET') return jsonResponse(await rows('applications'));
       if (path === '/api/applications' && method === 'POST') {
         const plans = await rows('subscription_plans');
