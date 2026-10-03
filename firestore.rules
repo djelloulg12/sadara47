@@ -6,9 +6,15 @@ service cloud.firestore {
       return signedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'president'];
     }
     match /applications/{id} {
-      allow create: if true;
-      allow read: if signedIn();
+      allow create: if request.resource.data.application_type == 'coach'
+        ? signedIn() && request.resource.data.applicant_uid == request.auth.uid
+        : true;
+      allow read: if manager() || (signedIn() && resource.data.application_type == 'coach' && resource.data.applicant_uid == request.auth.uid);
       allow update: if manager();
+    }
+    match /coach_requirements/{id} {
+      allow read: if true;
+      allow write: if manager();
     }
     match /users/{id} { allow read: if signedIn() && request.auth.uid == id; allow write: if manager(); }
     match /subscription_plans/{id} { allow read: if true; allow write: if manager(); }
