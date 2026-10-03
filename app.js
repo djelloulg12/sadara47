@@ -140,4 +140,5 @@ action=async function(a,el){
   return currentAction(a,el);
 };
 document.addEventListener('click',e=>{if(e.target.closest('.notification'))action('notification')});
+document.addEventListener('click',e=>{const link=e.target.closest('.official-docs a');if(!link)return;e.preventDefault();const file=link.getAttribute('href').split('/').pop();window.open('https://raw.githubusercontent.com/djelloulg12/sadara47/main/assets/'+file,'_blank','noopener');});
 
