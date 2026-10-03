@@ -111,7 +111,7 @@ function setupRegistrationMode() {
   const toggle = () => { const visible = category.value === 'minor'; guardianNodes.forEach(x => { x.hidden = !visible; }); if (!visible) guardianNodes.forEach(x => x.querySelectorAll?.('input').forEach(i => { if (i.type !== 'checkbox') i.value = ''; i.checked = false; })); };
   category.addEventListener('change', toggle); toggle();
   const submit = document.querySelector('[data-action="send-full-request"]');
-  if (submit && !document.querySelector('.attached-registration-forms')) submit.insertAdjacentHTML('beforebegin','<div class="official-docs attached-registration-forms"><a href="form-registration-01.jpg" target="_blank" rel="noopener">معاينة استمارة النادي</a><a href="form-registration-02.jpg" target="_blank" rel="noopener">معاينة النظام الداخلي المرفق</a></div>');
+  if (submit && !document.querySelector('.attached-registration-forms')) submit.insertAdjacentHTML('beforebegin','<div class="official-docs attached-registration-forms"><a href="assets/form-registration-01.jpg" target="_blank" rel="noopener">معاينة استمارة النادي</a><a href="assets/form-registration-02.jpg" target="_blank" rel="noopener">معاينة النظام الداخلي المرفق</a></div>');
   if (submit && !document.querySelector('[data-action="print-registration-form"]')) submit.insertAdjacentHTML('beforebegin','<button class="btn btn-outline full" data-action="print-registration-form">طباعة نموذج التسجيل A4</button>');
   bind();
 }
