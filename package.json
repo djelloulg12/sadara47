@@ -1,11 +1,25 @@
 {
-  "name": "sadara-swimming-platform",
+  "name": "sadara-platform",
   "version": "1.0.0",
   "private": true,
-  "description": "منصة النادي الرياضي الصدارة - فوج السباحة",
+  "description": "منصة النادي الرياضي الصدارة — فوج السباحة",
   "scripts": {
-    "start": "python server.py",
-    "preview": "python server.py"
+    "serve": "python server.py",
+    "build": "python tools/build/build-app.py",
+    "check": "node tools/verify.js",
+    "user": "python tools/create-user.py",
+    "preview:form": "node tools/tests/packet-preview.js",
+    "login": "firebase login --add-project sadara-platform",
+    "whoami": "firebase login:list",
+    "deploy": "npm run check && firebase deploy --project sadara-platform",
+    "deploy:rules": "firebase deploy --only firestore:rules,storage --project sadara-platform",
+    "preview": "npm run check && firebase hosting:channel:deploy preview --project sadara-platform"
+  },
+  "dependencies": {
+    "firebase-tools": "^15.32.1"
+  },
+  "devDependencies": {
+    "firebase-tools": "^13.0.0",
+    "jsdom": "^25.0.0"
   }
 }
-

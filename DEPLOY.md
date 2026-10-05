@@ -1,63 +1,66 @@
-# النشر
+# النشر — Sadara Platform
 
-المنصة تُنشر على **Firebase Hosting** مع Firebase Auth وFirestore وStorage. ملفات `server.py` و`schema.sql` هي نسخة مكافئة للتشغيل المحلي والاختبار فقط، وليست جزءًا من النشر السحابي.
+## أول مرة فقط (يومان)
 
-## 1. النشر التلقائي عبر GitHub
+```powershell
+# 1) حساب Google (يفتح المتصفح)
+npm run login
 
-1. اربط المستودع بمشروع Firebase `sadara-platform` (موجود في `.firebaserc`).
-2. أضف السر `FIREBASE_SERVICE_ACCOUNT` في **Settings → Secrets and المتغيرات → Actions**.
-3. ادفع إلى `main` أو `master`، أو شغّل_workflow يدويًا من تبويب Actions.
+# 2) أسرار النشر في GitHub — انسخ JSON الخاص بخدمة Firebase كما هو
+& "C:\Program Files\GitHub CLI\gh.exe" auth login
+& "C:\Program Files\GitHub CLI\gh.exe" secret set FIREBASE_SERVICE_ACCOUNT --repo djelloulg12/sadara47
 
-الـ workflow يقوم بثلاث خطوات:
-
-1. يتحقق أن `firebase-public/` مطابقة لمجلد المصدر (وإلا يفشل النشر).
-2. ينشر `firebase-public/` على Hosting حسب `firebase.json`.
-3. ينشر `firestore.rules` و`storage.rules`.
-
-## 2. النشر اليدوي
-
-```bash
-npx firebase-tools login
-npx firebase-tools deploy --only hosting,firestore:rules,storage --project sadara-platform
+# 3) ادفع، والمهملة تتكفّل بالباقي
+git push origin main
 ```
 
-## المتغيرات السرية
+`FIREBASE_SERVICE_ACCOUNT` هو **JSON خام** وليس base64.
+تأخذه من: Firebase Console ← Project Settings ← Service accounts ← Generate new
+private key ← ثم انسخ **محتوى الملف** كاملاً.
 
-### للنشر على Render / Docker
+## بعدها، النشر”按钮 واحد
 
-- `SADARA_ADMIN_EMAIL` و`SADARA_ADMIN_PASSWORD`
-- `SADARA_PRESIDENT_EMAIL` و`SADARA_PRESIDENT_PASSWORD`
-- `SADARA_COACH_EMAIL` و`SADARA_COACH_PASSWORD`
-- `PORT` (اختياري، الافتراضي 4173)
-- `SADARA_DB_PATH` (اختياري، مسار قاعدة SQLite)
+```powershell
+npm run deploy        # فحص + نشر الموقع + نشر قواعد الأمان
+npm run preview       # معاينة برابط مؤقت قبل النشر الحقيقي
+```
 
-لا تضع كلمات المرور داخل GitHub أو داخل ملفات المشروع. الخادم ينشئ حسابات الإدارة من هذه المتariables عند أول تشغيل فقط (INSERT OR IGNORE).
+## ما الذي يفعله الـ CI تلقائياً
 
-### في Firebase
+| المهمة | الوظيفة |
+|---|---|
+| `verify` | يفحص تطابق `firebase-public` مع المصدر · كل أصل مطلوب موجود · لا ملف خاص في git · الـ workflow نفسه صارم |
+| `deploy` | ينشر الموقع + قواعد Firestore + قواعد Storage |
 
-بيانات `firebase-config.js` عامة بطبيعتها (قيود أمانها في `firestore.rules`)، لكن **يجب** ضبط:
+مهمة `deploy` **تُتخطّى** حتى تضع السر، فالمستودع يبقى أخضر قبل ذلك.
 
-- Authentication → Sign-in method: Email/Password (مفعّل) وPhone إن أردت الدخول عبر SMS.
-- Authorized domains: أضف نطاق الاستضافة custom domain.
-- Cloud Firestore: أنشئ قاعدة البيانات في نفس المشروع.
+## الأوامر اليومية
 
-## خطوة إلزامية: أدوار الحسابات
+| الأمر | الغرض |
+|---|---|
+| `npm run serve` | تشغيل الخادم المحلي على المنفذ 4173 |
+| `npm run build` | إعادة بناء `app.js` من الأساس المُختبَر + الطبقات |
+| `npm run check` | تشغيل مجموعات الاختبار التسع |
+| `npm run user -- --help` | إنشاء حساب staff في قاعدة البيانات المحلية |
+| `npm run preview:form` | توليد نموذج الحزمة للطباعة ومعاينته |
 
-قواعد Firestore تقرأ الدور من مستند `users/{uid}`. أنشئ هذه المستندات من Firestore Console، مثلًا:
+## البنية
 
-| الحقل | مثال |
-| --- | --- |
-| `name` | `رئيس النادي` |
-| `role` | `president` أو `admin` أو `coach` أو `swimmer_adult` أو `parent` |
-| `member_no` | رقم الانخراط (اختياري — يربط الحساب ببطاقة السباح) |
-| `phone` | رقم الهاتف (اختياري — بديل للربط) |
+```
+app.js                 يُبنى من tools/build (لا تُعدّله يدويًا)
+firebase-public/       النسخة القابلة للنشر، مطابقة للمصدر
+tools/build/           الأساس المُختبَر + الطبقات + سكربت التجميع
+tools/tests/           مجموعات الاختبار التسع
+server.py              واجهة برمجية محلية (SQLite) — نفس الـ 15 نقطة نهاية
+firebase-adapter.js    يحوّل fetch إلى Firestore
+firestore.rules        صلاحيات قاعدة البيانات
+storage.rules          صلاحيات الملفات
+schema.sql             مخطط قاعدة البيانات
+```
 
-حساب يفتقد هذا المستند يُعامل كـ `member` فقط.
+## تنبيهات
 
-## ملاحظات إنتاجية
-
-- حدّد النطاق المخصص وفعّل HTTPS.
-- فعّل Firebase App Check إن أردت حماية إضافية.
-- راجع `firestore.rules`: طلبات التسجيل العامة تُحفظ دائمًا بحالة `pending`، وطلبات المدربين مرتبطة بحساب صاحب الطلب، وملفات PDF للمدربين يقرأها رؤساء النادي أو صاحب الطلب.
-- لا تنشر `sadara.db` ولا `.env`.
-- احتفظ بنسخة احتياطية دورية لـ Firestore (الاشتراك المدفوع أو التصدير اليدوي).
+- **لا تعدّل `app.js` مباشرة.** عدّل `tools/build/part-*.js` ثم `npm run build`.
+- `uploads/scans/` يحتوي وثائق موقّعة شخصية — مستثنى من git تلقائيًا.
+- `Card Number.docx` و `*.db` و `*.txt` مستثنية. لا ترفعها.
+- للنشر على النطاق: Firebase Console ← Hosting ← Add custom domain.
