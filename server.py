@@ -48,6 +48,8 @@ def init_db():
         'coach_name': 'TEXT', 'coach_email': 'TEXT', 'coach_phone': 'TEXT',
         'coach_experience': 'TEXT', 'coach_specialty': 'TEXT', 'coach_notes': 'TEXT',
         'documents': 'TEXT'})
+    ensure_columns(c, 'users', {
+        'member_no': 'TEXT', 'group_name': 'TEXT'})
     # Production-safe account bootstrap: credentials are supplied only through
     # environment variables and are never stored in the public source tree.
     accounts = [
@@ -79,6 +81,10 @@ class App(SimpleHTTPRequestHandler):
     def read_json(self):
         n=int(self.headers.get('Content-Length','0'))
         return json.loads(self.rfile.read(n) or b'{}')
+    def session_user(self, row):
+        return {'id': row['id'], 'name': row['first_name'] + ' ' + row['last_name'], 'role': row['role'],
+                'email': row['email'], 'phone': row['phone'] or '',
+                'member_no': row['member_no'] or '', 'group_name': row['group_name'] or ''}
     def current_user(self):
         token=self.headers.get('Cookie','').replace('sadara_session=','').split(';')[0]
         return SESSIONS.get(token)
@@ -86,23 +92,51 @@ class App(SimpleHTTPRequestHandler):
         user=self.current_user()
         if not user: self.send_json({'error':'يرجى تسجيل الدخول'},401)
         return user
+
+    def require_roles(self, roles):
+        """Signed in, and holding one of these roles. Mirrors firestore.rules."""
+        user=self.authorized()
+        if not user: return None
+        if user['role'] not in roles:
+            self.send_json({'error':'هذه الصلاحية محموة لك'},403)
+            return None
+        return user
     def do_GET(self):
         path=urlparse(self.path).path
         if not path.startswith('/api/'): return super().do_GET()
         user=self.current_user()
-        if path not in ('/api/subscriptions','/api/subscription-plans','/api/coach-requirements') and not user:
+        # a visitor may read prices, the weekly timetable and the announcements
+        public = ('/api/subscriptions', '/api/subscription-plans', '/api/coach-requirements',
+                  '/api/notices', '/api/schedule')
+        if path not in public and not user:
             self.send_json({'error':'يرجى تسجيل الدخول'},401); return
+        # other people's records stay inside the staff, exactly like firestore.rules
+        manager_read = ('/api/applications', '/api/audit')
+        staff_read = ('/api/swimmers', '/api/attendance', '/api/cards')
+        if path in manager_read or path in staff_read:
+            roles = ('admin', 'president') if path in manager_read else ('admin', 'president', 'coach')
+            if not self.require_roles(roles): return
         c=connect()
         queries={
             '/api/swimmers':'SELECT * FROM swimmers ORDER BY id DESC',
             '/api/notices':"SELECT id,title,body AS text,kind,date(published_at) AS date FROM notices ORDER BY id DESC",
             '/api/schedule':'SELECT * FROM schedules ORDER BY id',
             '/api/cards':'SELECT cards.*,swimmers.name FROM cards JOIN swimmers ON swimmers.id=cards.swimmer_id ORDER BY cards.id DESC',
-            '/api/attendance':"SELECT attendance.*,cast(attendance.swimmer_id AS TEXT) AS member_id,swimmers.name,swimmers.group_name FROM attendance JOIN swimmers ON swimmers.id=attendance.swimmer_id WHERE session_date=date('now') ORDER BY attendance.id",
+            '/api/attendance':"SELECT attendance.*,swimmers.membership_no AS member_id,swimmers.name,swimmers.group_name FROM attendance JOIN swimmers ON swimmers.id=attendance.swimmer_id WHERE session_date=date('now') ORDER BY attendance.id",
             '/api/subscriptions':'SELECT * FROM subscription_plans WHERE active=1 ORDER BY id',
             '/api/applications':"SELECT a.*,p.name AS subscription_name FROM applications a LEFT JOIN subscription_plans p ON p.code=a.subscription_code ORDER BY a.id DESC"
         }
         if path == '/api/session': self.send_json({'user':user}); c.close(); return
+        if path == '/api/audit':
+            rows=[{'action':r['action'],'entity_type':r['entity_type'],'entity_id':r['entity_id'],
+                   'details':json.loads(r['details']) if r['details'] else {},'actor':r['user_id'],
+                   'created_at':r['created_at']} for r in c.execute('SELECT * FROM audit_logs ORDER BY id DESC LIMIT 200')]
+            c.close(); self.send_json({'audit':rows}); return
+        if path == '/api/profile':
+            row=c.execute('SELECT data FROM member_profiles WHERE user_id=?',(user['id'],)).fetchone()
+            try: data=json.loads(row['data']) if row else {}
+            except json.JSONDecodeError: data={}
+            c.close(); self.send_json({'profile':data}); return
         if path == '/api/subscription-plans':
             self.send_json({'plans':[dict(x) for x in c.execute('SELECT * FROM subscription_plans ORDER BY id')],'extras':read_extras(c)}); c.close(); return
         if path == '/api/coach-requirements':
@@ -116,7 +150,7 @@ class App(SimpleHTTPRequestHandler):
         if path == '/api/login':
             c=connect(); row=c.execute("SELECT * FROM users WHERE email=? AND status='active'",(data.get('email',''),)).fetchone(); c.close()
             if not row or not password_ok(data.get('password',''),row['password_hash']): self.send_json({'error':'البريد الإلكتروني أو كلمة المرور غير صحيحة'},401); return
-            token=secrets.token_urlsafe(32); user={'id':row['id'],'name':row['first_name']+' '+row['last_name'],'role':row['role']}; SESSIONS[token]=user
+            token=secrets.token_urlsafe(32); user=self.session_user(row); SESSIONS[token]=user
             self.send_json({'user':user},extra={'Set-Cookie':f'sadara_session={token}; HttpOnly; SameSite=Lax; Path=/' }); return
         if path == '/api/logout':
             token=self.headers.get('Cookie','').replace('sadara_session=','').split(';')[0]; SESSIONS.pop(token,None); self.send_json({'ok':True}); return
@@ -156,15 +190,35 @@ class App(SimpleHTTPRequestHandler):
             finally: c.close()
             return
         if not self.authorized(): return
+        if path == '/api/audit':
+            if self.current_user()['role'] not in ('admin','president'):
+                self.send_json({'error':'سجل التدقيق للرئيس فقط'},403); return
+            c=connect()
+            try:
+                c.execute('INSERT INTO audit_logs(user_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?)',
+                          (self.current_user()['id'],str(data.get('action',''))[:120],str(data.get('entity_type',''))[:40],
+                           str(data.get('entity_id',''))[:60],json.dumps(data.get('details') or {},ensure_ascii=False)))
+                c.commit(); self.send_json({'ok':True},201)
+            finally: c.close()
+            return
+        # a coach records attendance; only management edits the club's records
+        roles = ('admin', 'president', 'coach') if path == '/api/attendance' else ('admin', 'president')
+        user = self.require_roles(roles)
+        if not user: return
         c=connect()
+        created={}
         try:
             if path == '/api/swimmers':
-                no=data.get('membership_no') or 'SDR-'+secrets.token_hex(2).upper(); c.execute('INSERT INTO swimmers(membership_no,name,group_name,phone) VALUES(?,?,?,?)',(no,data.get('name',''),data.get('group_name','المبتدئون'),data.get('phone','')))
-            elif path == '/api/notices': c.execute('INSERT INTO notices(title,body,kind) VALUES(?,?,?)',(data.get('title',''),data.get('body',''),data.get('kind','إعلان')))
-            elif path == '/api/attendance': c.execute("INSERT INTO attendance(swimmer_id,session_date,status,check_in) VALUES(?,date('now'),?,datetime('now')) ON CONFLICT(swimmer_id,session_date) DO UPDATE SET status=excluded.status,check_in=excluded.check_in",(int(data.get('swimmer_id') or data.get('member_id')),data.get('status','present')))
+                no=data.get('membership_no') or 'SDR-'+secrets.token_hex(2).upper(); cur=c.execute('INSERT INTO swimmers(membership_no,name,group_name,phone) VALUES(?,?,?,?)',(no,data.get('name',''),data.get('group_name','المبتدئون'),data.get('phone',''))); created={'membership_no':no,'id':cur.lastrowid}
+            elif path == '/api/notices': cur=c.execute('INSERT INTO notices(title,body,kind) VALUES(?,?,?)',(data.get('title',''),data.get('body',''),data.get('kind','إعلان'))); created={'id':cur.lastrowid}
+            elif path == '/api/attendance':
+                row=c.execute('SELECT id FROM swimmers WHERE membership_no=?',(str(data.get('member_id') or ''),)).fetchone()
+                swimmer_id=row['id'] if row else data.get('swimmer_id')
+                if not swimmer_id: c.close(); self.send_json({'error':'يجب تحديد السباح برقم الانخراط'},400); return
+                c.execute("INSERT INTO attendance(swimmer_id,session_date,status,check_in) VALUES(?,date('now'),?,datetime('now')) ON CONFLICT(swimmer_id,session_date) DO UPDATE SET status=excluded.status,check_in=excluded.check_in",(int(swimmer_id),data.get('status','present')))
             elif path == '/api/schedule': c.execute('INSERT INTO schedules(day_name,time_range,group_name,coach,pool) VALUES(?,?,?,?,?)',(data.get('day_name','السبت'),data.get('time_range',''),data.get('group_name','المبتدئون'),data.get('coach',''),data.get('pool','مسبح الصدارة')))
             else: c.close(); self.send_json({'error':'المسار غير موجود'},404); return
-            c.commit(); self.send_json({'ok':True})
+            c.commit(); self.send_json({'ok':True, **created})
         except (sqlite3.IntegrityError, KeyError, ValueError) as e: self.send_json({'error':str(e)},400)
         finally: c.close()
 
@@ -172,8 +226,34 @@ class App(SimpleHTTPRequestHandler):
         path=urlparse(self.path).path; data=self.read_json()
         user=self.authorized()
         if not user: return
+        if path == '/api/profile':
+            allowed={k:str(v)[:2000] for k,v in data.items() if k in (
+                'name','first_name_fr','last_name_fr','birth_date','birth_place','wilaya','address',
+                'phone','whatsapp','blood_group','gender','national_id','height','weight',
+                'emergency_name','emergency_phone','medical_notes','notes','member_no','group_name','photo')}
+            if 'extras' in data:
+                items=[x for x in (data.get('extras') or []) if isinstance(x,dict) and (x.get('label') or x.get('value'))][:20]
+                allowed['extras']=[{'label':str(x.get('label',''))[:80],'value':str(x.get('value',''))[:400]} for x in items]
+            c=connect()
+            try:
+                row=c.execute('SELECT data FROM member_profiles WHERE user_id=?',(user['id'],)).fetchone()
+                try: current=json.loads(row['data']) if row else {}
+                except json.JSONDecodeError: current={}
+                merged=dict(current)
+                for k,v in allowed.items():
+                    if v!='' or k in ('extras','phone'): merged[k]=v
+                c.execute('INSERT INTO member_profiles(user_id,data) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET data=excluded.data,updated_at=CURRENT_TIMESTAMP',
+                          (user['id'],json.dumps(merged,ensure_ascii=False)))
+                if allowed.get('name'): c.execute('UPDATE users SET first_name=? WHERE id=?',(str(allowed['name']).split(' ')[0],user['id']))
+                if allowed.get('phone'): c.execute('UPDATE users SET phone=? WHERE id=?',(allowed['phone'],user['id']))
+                c.commit(); self.send_json({'ok':True,'profile':merged})
+            except sqlite3.Error as e: self.send_json({'error':str(e)},400)
+            finally: c.close()
+            return
         if user['role'] not in ('admin','president'):
             self.send_json({'error':'هذه العملية لرئيس النادي فقط'},403); return
+
+        if not self.require_roles(('admin', 'president')): return
         c=connect()
         try:
             if path == '/api/subscription-plans':

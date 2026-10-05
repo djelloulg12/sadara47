@@ -1,44 +1,67 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
     function signedIn() { return request.auth != null; }
     function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function manager() { return signedIn() && profile().role in ['admin', 'president']; }
-    function staff() { return signedIn() && profile().role in ['admin', 'president', 'coach']; }
+    function role() { return profile().role; }
+    function manager() { return signedIn() && role() in ['admin', 'president']; }
+    function coach() { return signedIn() && role() == 'coach'; }
+    function staff() { return manager() || coach(); }
 
+    // Accounts: a member reads only their own document; management reads all.
     match /users/{id} {
       allow read: if signedIn() && (request.auth.uid == id || manager());
-      allow write: if manager();
+      allow create: if signedIn() && request.auth.uid == id;
+      allow update: if signedIn() && (request.auth.uid == id || manager());
+      allow delete: if manager();
     }
 
+    // Prices are public so the sign-up page can show them.
     match /subscription_plans/{id} {
       allow read: if true;
       allow write: if manager();
     }
-
     match /fee_settings/{id} {
       allow read: if true;
       allow write: if manager();
     }
-
     match /coach_requirements/{id} {
       allow read: if true;
       allow write: if manager();
     }
 
+    // Applications: public sign-ups always start pending; coach files belong to the applicant.
     match /applications/{id} {
-      // Coach files are tied to the applicant account; public sign-ups start as pending.
       allow create: if (request.resource.data.application_type == 'coach')
-        ? (signedIn() && request.resource.data.applicant_uid == request.auth.uid)
-        : (request.resource.data.status == 'pending');
+        ? (signedIn() && request.resource.data.applicant_uid == request.auth.uid
+           && request.resource.data.status == 'pending')
+        : (request.resource.data.status == 'pending'
+           && !('reviewed_by' in request.resource.data));
       allow read: if manager()
-        || (signedIn() && resource.data.application_type == 'coach' && resource.data.applicant_uid == request.auth.uid);
+        || (signedIn() && resource.data.application_type == 'coach'
+            && resource.data.applicant_uid == request.auth.uid);
       allow update: if manager();
       allow delete: if manager();
     }
 
+    // Roster: management and coaches only. A member reads their own card from users/{uid}.
     match /swimmers/{id} {
-      allow read: if signedIn();
+      allow read: if staff();
+      allow write: if manager();
+    }
+
+    // Attendance: staff write, everyone signed in can read only their own group totals,
+    // so keep reads for management and coaches to avoid leaking other members' days.
+    match /attendance/{id} {
+      allow read: if staff();
+      allow create, update: if staff();
+      allow delete: if manager();
+    }
+
+    // Cards belong to the member; management and coaches issue them.
+    match /cards/{id} {
+      allow read: if staff() || (signedIn() && resource.data.member_no == profile().member_no);
       allow write: if manager();
     }
 
@@ -46,21 +69,17 @@ service cloud.firestore {
       allow read: if true;
       allow write: if manager();
     }
-
+    // the weekly timetable is published on the club's public page
     match /schedules/{id} {
-      allow read: if signedIn();
+      allow read: if true;
       allow write: if manager();
     }
 
-    match /cards/{id} {
-      allow read: if signedIn();
-      allow write: if manager();
-    }
-
-    match /attendance/{id} {
-      allow read: if signedIn();
-      allow create, update: if staff();
-      allow delete: if manager();
+    // Decision trail, written by the client after a successful API call.
+    match /audit_logs/{id} {
+      allow read: if manager();
+      allow create: if manager();
+      allow update, delete: if false;
     }
   }
 }

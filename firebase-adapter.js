@@ -3,6 +3,13 @@
 (function () {
   const config = window.SADARA_FIREBASE_CONFIG;
   if (!config || !window.firebase) return;
+  // When the page is served by the local Python server, let it handle /api/*
+  // directly so its session auth and SQLite data are used during development.
+  const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  if (isLocal || window.SADARA_LOCAL_API === true) {
+    console.info('Sadara: using the local Python API for', location.origin);
+    return;
+  }
   firebase.initializeApp(config);
   const auth = firebase.auth();
   const db = firebase.firestore();
@@ -33,7 +40,9 @@
     if (!profile || !['admin', 'president'].includes(profile.role)) return { error: message, status: 403 };
     return { profile };
   };
-  const rows = async name => (await db.collection(name).get()).docs.map(d => ({ id: d.id, ...d.data() }));
+  const ROW_LIMIT = 1000;
+  const rows = async name => (await db.collection(name).limit(ROW_LIMIT).get())
+    .docs.map(d => ({ id: d.id, ...d.data() }));
   const extrasDoc = () => db.collection('fee_settings').doc('extras');
   const readExtras = async () => {
     try { const snap = await extrasDoc().get(); return snap.exists ? (snap.data() || {}) : {}; }
@@ -77,6 +86,25 @@
       }
 
       /* ---------------- plans & extras ---------------- */
+      /* ---------------- own profile ---------------- */
+      if (path === '/api/profile' && method === 'GET') {
+        const user = await currentUser();
+        if (!user) return jsonResponse({ error: '\u064a\u0631\u062c\u0649 \u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644' }, 401);
+        return jsonResponse({ profile: await userView(user) });
+      }
+      if (path === '/api/profile' && method === 'PUT') {
+        const user = await currentUser();
+        if (!user) return jsonResponse({ error: '\u064a\u0631\u062c\u0649 \u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644' }, 401);
+        const profile = await userView(user);
+        if (profile.role === 'member' && !profile.member_no && !profile.phone)
+          return jsonResponse({ error: '\u062d\u0633\u0627\u0628\u0643 \u063a\u064a\u0631 \u0645\u0631\u0628\u0648\u0637 \u0628\u0648\u0637\u0627\u0642\u0629 \u0623\u0648 \u0631\u0642\u0645 \u0647\u0627\u062a\u0641' }, 403);
+        const extras = Array.isArray(body.extras)
+          ? body.extras.filter(x => x && (x.label || x.value)).slice(0, 20).map(x => ({ label: String(x.label || ''), value: String(x.value || '') }))
+          : [];
+        await db.collection('users').doc(user.uid).set({ ...profile, ...body, extras, id: undefined, updated_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        return jsonResponse({ ok: true, profile: { ...profile, ...body, extras } });
+      }
+
       if (path === '/api/subscriptions' && method === 'GET') {
         const plans = (await rows('subscription_plans')).filter(p => p.active !== false);
         return jsonResponse(plans.length ? plans : DEFAULT_PLANS);
@@ -105,6 +133,21 @@
         return jsonResponse({ ok: true });
       }
 
+      /* ---------------- decision trail ---------------- */
+      if (path === '/api/audit' && method === 'POST') {
+        const gate = await managerView('\u0633\u062c\u0644 \u0627\u0644\u062a\u062f\u0642\u064a\u0642 \u0644\u0644\u0631\u0626\u064a\u0633\u0629 \u0641\u0642\u0637');
+        if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
+        await db.collection('audit_logs').add({
+          action: String(body.action || '').slice(0, 120),
+          entity_type: String(body.entity_type || '').slice(0, 40),
+          entity_id: String(body.entity_id || '').slice(0, 60),
+          details: body.details && typeof body.details === 'object' ? body.details : {},
+          actor: gate.profile.id,
+          created_at: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        return jsonResponse({ ok: true }, 201);
+      }
+
       /* ---------------- coach documents ---------------- */
       if (path === '/api/coach-requirements' && method === 'GET') {
         const saved = await rows('coach_requirements');
@@ -126,7 +169,15 @@
       }
 
       /* ---------------- swimmers ---------------- */
-      if (path === '/api/swimmers' && method === 'GET') return jsonResponse(await rows('swimmers'));
+      if (path === '/api/swimmers' && method === 'GET') {
+        const user = await currentUser();
+        const profile = user ? await userView(user) : null;
+        const isStaff = profile && ['admin', 'president', 'coach'].includes(profile.role);
+        const list = await rows('swimmers');
+        if (isStaff) return jsonResponse(list);
+        const mine = String(profile.member_no || '');
+        return jsonResponse(mine ? list.filter(x => String(x.membership_no) === mine) : []);
+      }
       if (path === '/api/swimmers' && method === 'POST') {
         const gate = await managerView('هذه العملية لرئيس النادي فقط');
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
