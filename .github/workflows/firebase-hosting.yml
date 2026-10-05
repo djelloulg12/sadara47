@@ -5,8 +5,14 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  deploy:
+  # Always runs, so a broken deployable copy is caught even before the
+  # Firebase service account exists.
+  verify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -15,24 +21,63 @@ jobs:
       - name: Verify the deployable copy matches the source tree
         run: |
           set -e
-          for f in app.js styles.css index.html firebase-adapter.js firebase-config.js; do
-            if ! diff -q "$f" "firebase-public/$f" >/dev/null; then
+          for f in app.js styles.css index.html firebase-adapter.js firebase-config.js sw.js manifest.webmanifest; do
+            if ! diff -q "$f" "firebase-public/$f" >/dev/null 2>&1; then
               echo "::error file=$f::firebase-public/$f is out of sync with the root copy"
               exit 1
             fi
           done
 
-      - name: Deploy to Firebase Hosting
+      - name: Every asset the site references must be published
+        run: |
+          set -e
+          for f in assets/logo.png assets/form-registration-01.jpg assets/form-registration-02.jpg \
+                   assets/internal-regulations.jpg assets/registration-card.jpg \
+                   assets/icon-192.png assets/icon-512.png assets/icon-maskable.png; do
+            if [ ! -f "firebase-public/$f" ]; then
+              echo "::error file=$f::missing from firebase-public, the site would 404"
+              exit 1
+            fi
+          done
+
+      - name: Nothing private may reach the repository
+        run: |
+          set -e
+          for f in sadara.db sadara-local.db "Card Number.docx"; do
+            if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+              echo "::error file=$f::a private file is tracked in the repository"
+              exit 1
+            fi
+          done
+          if git ls-files 'uploads/*' | grep -q .; then
+            echo "::error::signed registration copies must never be committed"
+            exit 1
+          fi
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    # Skipped until the service account is stored, so a fresh fork stays green.
+    if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write the service account to disk
+        run: |
+          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "${{ runner.temp }}/firebase-sa.json"
+          test -s "${{ runner.temp }}/firebase-sa.json" || { echo "::error::FIREBASE_SERVICE_ACCOUNT is empty"; exit 1; }
+
+      - name: Deploy Firestore and Storage rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
+        run: |
+          npx --yes firebase-tools@latest deploy --only firestore:rules,storage --project sadara-platform --non-interactive
+
+      - name: Deploy Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           projectId: sadara-platform
           channelId: live
           entryPoint: .
-
-      - name: Deploy Firestore and Storage rules
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
-        run: |
-          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$GOOGLE_APPLICATION_CREDENTIALS"
-          npx --yes firebase-tools deploy --only firestore:rules,storage --project sadara-platform
