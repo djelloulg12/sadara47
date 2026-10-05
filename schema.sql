@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS guardians (
 CREATE TABLE IF NOT EXISTS payments (
   id INTEGER PRIMARY KEY AUTOINCREMENT, application_id INTEGER NOT NULL, amount INTEGER NOT NULL,
   method TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', receipt_no TEXT UNIQUE,
-  paid_at TEXT, note TEXT, FOREIGN KEY(application_id) REFERENCES applications(id) ON DELETE CASCADE
+  paid_at TEXT, cashier_name TEXT, note TEXT, FOREIGN KEY(application_id) REFERENCES applications(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, action TEXT NOT NULL,
@@ -74,3 +74,9 @@ CREATE TABLE IF NOT EXISTS member_profiles (
   user_id INTEGER PRIMARY KEY, data TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+-- Traffic counter: a row per visit, no identifier for the visitor.
+CREATE TABLE IF NOT EXISTS visits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, visited_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  page TEXT NOT NULL DEFAULT '/', source TEXT NOT NULL DEFAULT 'direct');
+CREATE INDEX IF NOT EXISTS idx_visits_visited_at ON visits(visited_at);

@@ -1,4 +1,4 @@
-import hashlib, hmac, json, os, secrets, sqlite3, re
+import base64, hashlib, hmac, json, os, re, secrets, sqlite3, time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 from datetime import date
@@ -21,6 +21,29 @@ def write_extras(c, data):
     for key in ('transport', 'uniform'):
         if key in data:
             c.execute('INSERT INTO fee_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (key, int(data[key] or 0)))
+
+SCAN_DIR = os.path.join(ROOT, 'uploads', 'scans')
+
+def store_inline_scan(app_id, data_url, name):
+    """Persist a data URL as a file; returns the stored name, or None if it is not usable."""
+    if not data_url.startswith('data:'):
+        return None
+    try:
+        header, payload = data_url.split(',', 1)
+        mime = header[5:].split(';')[0] or 'application/octet-stream'
+        ext = {'application/pdf': '.pdf', 'image/jpeg': '.jpg', 'image/png': '.png',
+               'image/webp': '.webp'}.get(mime, '.bin')
+        blob = base64.b64decode(payload)
+    except Exception:
+        return None
+    if not blob or len(blob) > 10 * 1024 * 1024:
+        return None
+    os.makedirs(SCAN_DIR, exist_ok=True)
+    fname = 'app-%s-%s%s' % (app_id, int(time.time()), ext)
+    with open(os.path.join(SCAN_DIR, fname), 'wb') as fh:
+        fh.write(blob)
+    return {'path': 'uploads/scans/' + fname, 'name': name, 'size': len(blob)}
+
 
 def ensure_columns(c, table, spec):
     """Add columns introduced after a database was first created."""
@@ -50,6 +73,11 @@ def init_db():
         'documents': 'TEXT'})
     ensure_columns(c, 'users', {
         'member_no': 'TEXT', 'group_name': 'TEXT'})
+    ensure_columns(c, 'payments', {'cashier_name': 'TEXT'})
+    ensure_columns(c, 'applications', {
+        'payment_status': "TEXT NOT NULL DEFAULT 'unpaid'", 'cashier_name': 'TEXT',
+        'paid_at': 'TEXT', 'scan_path': 'TEXT', 'scan_name': 'TEXT',
+        'scan_size': 'INTEGER', 'scan_note': 'TEXT'})
     # Production-safe account bootstrap: credentials are supplied only through
     # environment variables and are never stored in the public source tree.
     accounts = [
@@ -126,6 +154,11 @@ class App(SimpleHTTPRequestHandler):
             '/api/subscriptions':'SELECT * FROM subscription_plans WHERE active=1 ORDER BY id',
             '/api/applications':"SELECT a.*,p.name AS subscription_name FROM applications a LEFT JOIN subscription_plans p ON p.code=a.subscription_code ORDER BY a.id DESC"
         }
+        if path == '/api/visits':
+            total = c.execute('SELECT COUNT(*) AS n FROM visits').fetchone()['n']
+            today = c.execute("SELECT COUNT(*) AS n FROM visits WHERE date(visited_at)=date('now')").fetchone()['n']
+            week = c.execute("SELECT COUNT(*) AS n FROM visits WHERE visited_at >= date('now','-7 day')").fetchone()['n']
+            c.close(); self.send_json({'visits': total, 'today': today, 'week': week}); return
         if path == '/api/session': self.send_json({'user':user}); c.close(); return
         if path == '/api/audit':
             rows=[{'action':r['action'],'entity_type':r['entity_type'],'entity_id':r['entity_id'],
@@ -152,6 +185,17 @@ class App(SimpleHTTPRequestHandler):
             if not row or not password_ok(data.get('password',''),row['password_hash']): self.send_json({'error':'البريد الإلكتروني أو كلمة المرور غير صحيحة'},401); return
             token=secrets.token_urlsafe(32); user=self.session_user(row); SESSIONS[token]=user
             self.send_json({'user':user},extra={'Set-Cookie':f'sadara_session={token}; HttpOnly; SameSite=Lax; Path=/' }); return
+        if path == '/api/visit':
+            c=connect()
+            try:
+                c.execute('INSERT INTO visits(page,source) VALUES(?,?)',
+                          (str(data.get('page','/'))[:120], str(data.get('ref','direct'))[:40]))
+                c.commit()
+                total = c.execute('SELECT COUNT(*) AS n FROM visits').fetchone()['n']
+                c.close(); self.send_json({'ok':True,'visits':total},201)
+            except sqlite3.Error as e:
+                c.close(); self.send_json({'error':str(e)},400)
+            return
         if path == '/api/logout':
             token=self.headers.get('Cookie','').replace('sadara_session=','').split(';')[0]; SESSIONS.pop(token,None); self.send_json({'ok':True}); return
         if path == '/api/applications':
@@ -308,13 +352,46 @@ class App(SimpleHTTPRequestHandler):
         data=self.read_json(); match=re.match(r'^/api/applications/(\d+)$',path)
         if not match: self.send_json({'error':'المسار غير موجود'},404); return
         if 'decision_reason' in data: data['decision_note']=data['decision_reason']
-        c=connect(); app_id=int(match.group(1)); fields=[]; values=[]
-        for key in ('subscription_code','transport','uniform','payment_method','status','decision_note','facility'):
-            if key in data: fields.append(key+'=?'); values.append(data[key])
-        if 'subscription_code' in data or 'transport' in data or 'uniform' in data:
-            current=c.execute('SELECT * FROM applications WHERE id=?',(app_id,)).fetchone(); code=data.get('subscription_code',current['subscription_code']); plan=c.execute('SELECT amount FROM subscription_plans WHERE code=?',(code,)).fetchone(); extras=read_extras(c); amount=(plan['amount'] if plan else 0)+(extras['transport'] if data.get('transport',current['transport']) else 0)+(extras['uniform'] if data.get('uniform',current['uniform']) else 0); fields.append('expected_amount=?'); values.append(amount)
-        if not fields: c.close(); self.send_json({'error':'لا توجد تغييرات'},400); return
-        fields.append("updated_at=datetime('now')"); values.append(app_id); c.execute('UPDATE applications SET '+','.join(fields)+' WHERE id=?',values); c.execute('INSERT INTO audit_logs(user_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?)',(user['id'],'تعديل طلب','application',app_id,json.dumps(data,ensure_ascii=False))); c.commit(); c.close(); self.send_json({'ok':True})
+        # a signed scan arrives as a data URL and is stored as a real file
+        inline = data.pop('scan_data_url', '') if isinstance(data.get('scan_data_url'), str) else ''
+        wanted_name = str(data.get('scan_name') or '')[:120]
+        c=connect()
+        try:
+            app_id=int(match.group(1)); fields=[]; values=[]
+            # when the copy travels inline the stored file decides these three columns,
+            # so they must not also come from the body or the bindings would not line up
+            if inline:
+                for key in ('scan_path','scan_name','scan_size'): data.pop(key, None)
+            for key in ('subscription_code','transport','uniform','payment_method','status','decision_note','facility',
+                        'payment_status','cashier_name','paid_at','scan_note','scan_path','scan_name','scan_size'):
+                if key in data and data[key] is not None: fields.append(key+'=?'); values.append(data[key])
+            if 'subscription_code' in data or 'transport' in data or 'uniform' in data:
+                current=c.execute('SELECT * FROM applications WHERE id=?',(app_id,)).fetchone()
+                if not current: c.close(); self.send_json({'error':'الطلب غير موجود'},404); return
+                code=data.get('subscription_code',current['subscription_code']); plan=c.execute('SELECT amount FROM subscription_plans WHERE code=?',(code,)).fetchone(); extras=read_extras(c); amount=(plan['amount'] if plan else 0)+(extras['transport'] if data.get('transport',current['transport']) else 0)+(extras['uniform'] if data.get('uniform',current['uniform']) else 0); fields.append('expected_amount=?'); values.append(amount)
+            if inline:
+                stored = store_inline_scan(app_id, inline, wanted_name or 'scan')
+                if stored is None:
+                    c.close(); self.send_json({'error':'تعذّر حفظ النسخة'},400); return
+                data['scan_path'] = stored['path']; data['scan_name'] = stored['name']
+                data['scan_size'] = stored['size']
+                fields += ['scan_path=?', 'scan_name=?', 'scan_size=?']
+                values += [stored['path'], stored['name'], stored['size']]
+            if not fields: c.close(); self.send_json({'error':'لا توجد تغييرات'},400); return
+            if data.get('payment_status') == 'paid':
+                c.execute("INSERT INTO payments(application_id,amount,method,paid_at,cashier_name) "
+                          "SELECT id,expected_amount,COALESCE(?,'cash'),?,? FROM applications WHERE id=?",
+                          (data.get('payment_method'), data.get('paid_at') or None,
+                           data.get('cashier_name') or '', app_id))
+            fields.append("updated_at=datetime('now')"); values.append(app_id)
+            c.execute('UPDATE applications SET '+','.join(fields)+' WHERE id=?',values)
+            c.execute('INSERT INTO audit_logs(user_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?)',
+                      (user['id'],'تعديل طلب','application',app_id,json.dumps(data,ensure_ascii=False)))
+            c.commit(); self.send_json({'ok':True})
+        except sqlite3.Error as e:
+            self.send_json({'error':str(e)},400)
+        finally:
+            c.close()
 
 if __name__ == '__main__':
     init_db()

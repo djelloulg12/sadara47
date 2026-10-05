@@ -75,6 +75,13 @@ service cloud.firestore {
       allow write: if manager();
     }
 
+    // Cash ledger: written when a request is settled, read by management only.
+    match /payments/{id} {
+      allow read: if manager();
+      allow create: if manager();
+      allow update, delete: if false;
+    }
+
     // Decision trail, written by the client after a successful API call.
     match /audit_logs/{id} {
       allow read: if manager();

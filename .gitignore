@@ -12,6 +12,7 @@ dist/
 # Local database (never publish member data)
 sadara.db
 sadara-local.db
+uploads/
 *.db-journal
 __pycache__/
 *.pyc

@@ -2267,6 +2267,682 @@ async function loadPublicData(){
   if (!state.user) render();
 }
 
+/* ==========================================================
+   حزمة التسجيل — استمارة رسمية + وصل دفع المستحقات + النظام الداخلي
+   تُطبع فور ملء الاستمارة من قبل المسجّل، وتُرفع النسخة الموقّعة
+   إلى المنصة بعد المصادقة بحساب المحاسب أو المسيّر.
+   ========================================================== */
+
+/* ---------------- الأرقام بالحروف لِصحة الوصل ---------------- */
+const AR_UNITS = ['', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة', 'عشرة',
+  'أحد عشر', 'اثنا عشر', 'ثلاثة عشر', 'أربعة عشر', 'خمسة عشر', 'ستة عشر', 'سبعة عشر', 'ثمانية عشر', 'تسعة عشر'];
+const AR_TENS = ['', '', 'عشرون', 'ثلاثون', 'أربعون', 'خمسون', 'ستون', 'سبعون', 'ثمانون', 'تسعون'];
+const AR_HUNDREDS = ['', 'مئة', 'مئتان', 'ثلاثمئة', 'أربعمئة', 'خمسمئة', 'ستمئة', 'سبعمئة', 'ثمانمئة', 'تسعمئة'];
+const AR_SCOPES = ['', 'ألف', 'مليون', 'مليار'];
+
+function chunkWords(n) {
+  const parts = [];
+  const unit = n % 1000;
+  const h = Math.floor(unit / 100), t = Math.floor((unit % 100) / 10), o = unit % 10;
+  if (h) parts.push(AR_HUNDREDS[h]);
+  // 11-19 form one word; above that the unit comes before the ten
+  if (t === 1 && o) parts.push(AR_UNITS[10 + o]);
+  else {
+    if (o) parts.push(AR_UNITS[o]);
+    if (t) parts.push(AR_TENS[t]);
+  }
+  return parts.join(' \u0648');
+}
+const AR_SCOPE_PLURAL = { '\u0623\u0644\u0641': '\u0622\u0644\u0627\u0641', '\u0645\u0644\u064a\u0648\u0646': '\u0645\u0644\u0627\u064a\u064a\u0646', '\u0645\u0644\u064a\u0627\u0631': '\u0645\u0644\u064a\u0627\u0631\u0627\u062a' };
+function scopeWords(words, n, level) {
+  const scope = AR_SCOPES[level];
+  if (!scope) return words;
+  if (n === 1) return scope;                                  // \u0623\u0644\u0641
+  if (n === 2) return scope === '\u0623\u0644\u0641' ? '\u0623\u0644\u0641\u0627\u0646' : scope + '\u0627\u0646';  // \u0623\u0644\u0641\u0627\u0646
+  if (n <= 10) return words + ' ' + (AR_SCOPE_PLURAL[scope] || scope);        // \u0622\u0644\u0627\u0641
+  return words + ' ' + scope;                                 // \u0623\u062d\u062f\u0639\u0634\u0631 \u0623\u0644\u0641
+}
+function moneyWords(value) {
+  let n = Math.round(Number(value) || 0);
+  if (!n) return '\u0635\u0641\u0631';
+  const groups = [];
+  while (n > 0) { groups.push(n % 1000); n = Math.floor(n / 1000); }
+  const out = [];
+  for (let i = groups.length - 1; i >= 0; i--) {
+    if (!groups[i]) continue;
+    out.push(scopeWords(chunkWords(groups[i]), groups[i], i));
+  }
+  return out.join(' \u0648');
+}
+
+/* ---------------- بنود الفاتورة ---------------- */
+function packetLines(a) {
+  const plans = state.subscriptions || [];
+  const extras = state.extras || {};
+  const code = a.subscription_code || 'quarter';
+  const plan = plans.find(p => p.code === code);
+  const lines = [{
+    label: 'اشتراك ' + (plan && plan.name ? plan.name : planName(code)),
+    detail: (plan && plan.duration) || '',
+    amount: plan ? Number(plan.amount || 0) : Number(a.expected_amount || 0)
+  }];
+  if (a.transport) lines.push({ label: 'النقل', detail: 'خدمة النقل الموسمي', amount: Number(extras.transport || 900) });
+  if (a.uniform) lines.push({ label: 'البدلة الرياضية', detail: 'بدلة رسمية للنادي', amount: Number(extras.uniform || 2500) });
+  return lines;
+}
+function receiptTotal(a) {
+  const lines = packetLines(a);
+  const sum = lines.reduce((acc, l) => acc + (Number(l.amount) || 0), 0);
+  return sum || Number(a.expected_amount || 0);
+}
+
+/* ---------------- صفحة الوصل ---------------- */
+function receiptSheet(a) {
+  const lines = packetLines(a);
+  const total = receiptTotal(a);
+  const today = new Date();
+  const methodLabel = { cash: 'نقدًا', postal_check: 'صك بريدي', postal_transfer: 'حوالة بريدية', online: 'أونلاين' };
+  const method = methodLabel[a.payment_method] || methodLabel.cash;
+  const receiptNo = (a.application_no || 'APP') + '-REC';
+  const row = l => '<tr><td>' + esc(l.label) + (l.detail ? '<br><small>' + esc(l.detail) + '</small>' : '') +
+    '</td><td class="num">' + esc(money(l.amount)) + '</td></tr>';
+  return '<section class="pk-page pk-receipt">' +
+    '<div class="pk-inner">' +
+      '<header class="pk-head">' +
+        '<div><h1>النادي الرياضي الصدارة</h1><p>فوج السباحة — ' + esc(CLUB.city) + ' · وصل استلام مستحقات</p></div>' +
+        '<div class="pk-stamp"><b>وصل</b><span dir="ltr">' + esc(receiptNo) + '</span></div>' +
+      '</header>' +
+      '<div class="pk-meta">' +
+        '<span>رقم الطلب</span><b dir="ltr">' + esc(a.application_no || '—') + '</b>' +
+        '<span>تاريخ الاستلام</span><b>' + esc(today.toISOString().slice(0, 10)) + '</b>' +
+        '<span>الاسم واللقب</span><b>' + esc(appName(a) || '—') + '</b>' +
+        '<span>الصفة</span><b>' + esc(catLabel(a.category === 'minor' ? 'minor' : 'adult')) + '</b>' +
+        '<span>الفوج / المنشأة</span><b>' + esc(a.facility || '—') + '</b>' +
+        '<span>الهاتف</span><b dir="ltr">' + esc(a.phone || '—') + '</b>' +
+      '</div>' +
+      '<table class="pk-table"><thead><tr><th>البيان</th><th>المبلغ (دج)</th></tr></thead><tbody>' +
+        lines.map(row).join('') +
+        '<tr class="pk-total"><td>المبلغ الإجمالي</td><td class="num">' + esc(money(total)) + '</td></tr>' +
+      '</tbody></table>' +
+      '<p class="pk-words">فقط: <b>' + esc(moneyWords(total)) + '</b> دينار جزائري لا غير.</p>' +
+'<p class="pk-paid">أقرّ أنا الموقّع أسفله بأنّني استلمت المبلغ المذكور أعلاه '
+        + '<span class="pk-method">' + esc(method === 'نقدًا' ? 'نقدًا لدى خزينة النادي' : method + ' لدى محاسب النادي') + '</span>'
+        + '، وأُدرجت قيمته في سجلّ مستحقات النادي للحساب الجاري.</p>' +
+      '<div class="pk-sign">' +
+        '<div><b>المحاسب</b><span class="pk-line"></span><small>الاسم والتوقيع</small></div>' +
+        '<div><b>المسيّر</b><span class="pk-line"></span><small>الاسم والتوقيع</small></div>' +
+        '<div class="pk-seal"><b>ختم النادي</b><span class="pk-ring"></span></div>' +
+      '</div>' +
+      '<footer class="pk-foot">' +
+        '<span>تُوقّع نسختان: واحدة للنادي وأخرى للولي/المنخرط.</span>' +
+        '<span>ترفع النسخة الموقّعة إلى المنصة بعد الدخول بحساب المحاسب أو المسيّر.</span>' +
+        '<span>' + esc(CLUB.address) + ' · <span dir="ltr">' + esc(CLUB.phone) + '</span></span>' +
+      '</footer>' +
+    '</div>' +
+  '</section>';
+}
+
+/* ---------------- صفحة النظام الداخلي ---------------- */
+function regulationsSheet() {
+  return '<section class="pk-page pk-regs">' +
+    '<div class="pk-inner">' +
+      '<header class="pk-head">' +
+        '<div><h1>النظام الداخلي</h1><p>نادي الصدارة الرياضي — فوج السباحة · ' + esc(CLUB.season) + '</p></div>' +
+        '<div class="pk-stamp"><b>وثيقة</b><span>وقّع هنا</span></div>' +
+      '</header>' +
+      '<div class="pk-regs-body"><img src="' + esc(assetUrl('assets/internal-regulations.jpg')) + '" alt="النظام الداخلي"></div>' +
+      '<div class="pk-sign">' +
+        '<div><b>المنخرط / الولي</b><span class="pk-line"></span><small>التاريخ والتوقيع</small></div>' +
+        '<div><b>المدرب المسؤول</b><span class="pk-line"></span><small>التوقيع</small></div>' +
+        '<div class="pk-seal"><b>ختم النادي</b><span class="pk-ring"></span></div>' +
+      '</div>' +
+    '</div>' +
+  '</section>';
+}
+
+/* ---------------- تنسيق الحزمة ---------------- */
+function packetCSS() {
+  return officialFormCSS() + '' +
+'@page{size:A4 portrait;margin:0}' +
+'html,body{background:#fff}' +
+'.pk-page{position:relative;width:210mm;height:297mm;overflow:hidden;background:#fff;' +
+  'page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;color:#12333f}' +
+'.pk-page:last-of-type{page-break-after:auto;break-after:auto}' +
+'.pk-inner{position:absolute;inset:0;padding:16mm 15mm 12mm;display:flex;flex-direction:column}' +
+'.pk-receipt{background:#ffffff}' +
+'.pk-regs{background:#fdfefe}' +
+'.pk-regs .pk-inner{padding:14mm 15mm 12mm}' +
+'.pk-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10mm;' +
+  'border-bottom:2.5px solid #0e8f9c;padding-bottom:5mm}' +
+'.pk-head h1{margin:0;font-size:20pt;letter-spacing:.2px;color:#071a35}' +
+'.pk-head p{margin:2mm 0 0;font-size:9.5pt;color:#5d7386}' +
+'.pk-stamp{border:2px solid #c8a45c;border-radius:3mm;padding:3mm 5mm;text-align:center;min-width:34mm}' +
+'.pk-stamp b{display:block;font-size:12pt;color:#c8a45c}' +
+'.pk-stamp span{display:block;font-size:7.5pt;color:#5d7386;margin-top:1mm}' +
+'.pk-meta{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:2mm 4mm;margin:6mm 0 5mm;font-size:9.5pt}' +
+'.pk-meta span{color:#5d7386}' +
+'.pk-meta b{font-weight:700}' +
+'.pk-table{width:100%;border-collapse:collapse;font-size:10pt}' +
+'.pk-table th{background:#eaf6f7;color:#071a35;text-align:right;padding:2.6mm 3mm;border:1px solid #cfe2e6}' +
+'.pk-table td{padding:3mm;border:1px solid #dbe6ec}' +
+'.pk-table small{color:#5d7386;font-size:8pt}' +
+'.pk-table .num{direction:ltr;text-align:left;font-weight:700;white-space:nowrap}' +
+'.pk-total td{background:#071a35;color:#fff;font-weight:800}' +
+'.pk-words{margin:4mm 0 0;font-size:10.5pt}' +
+'.pk-paid{margin:6mm 0 0;font-size:10pt;line-height:1.9;border:1px dashed #cfe2e6;border-radius:2mm;padding:3mm 4mm;background:#f8fcfc}' +
+'.pk-method{font-weight:700;color:#0e8f9c}' +
+'.pk-sign{display:grid;grid-template-columns:1fr 1fr 34mm;gap:8mm;margin-top:auto}' +
+'.pk-sign>div{display:flex;flex-direction:column;justify-content:flex-end;font-size:9.5pt}' +
+'.pk-sign b{color:#071a35}' +
+'.pk-line{display:block;border-bottom:1px solid #12333f;height:12mm;margin:2mm 0 1mm}' +
+'.pk-sign small{color:#5d7386;font-size:8pt}' +
+'.pk-seal{align-items:center;text-align:center;justify-content:center}' +
+'.pk-ring{display:block;border:1.5px dashed #c8a45c;border-radius:50%;height:26mm;width:26mm;margin-top:2mm}' +
+'.pk-foot{margin-top:6mm;border-top:1px solid #dbe6ec;padding-top:3mm;display:flex;flex-direction:column;gap:1.2mm;font-size:8pt;color:#5d7386}' +
+'.pk-regs-body{flex:1;margin:5mm 0;display:grid;place-items:start center;overflow:hidden}' +
+'.pk-regs-body img{max-width:100%;max-height:225mm;object-fit:contain;border:1px solid #dbe6ec;border-radius:2mm}' +
+'@media print{.pk-hint{display:none}}' +
+'.pk-hint{margin:0 0 4mm;background:#eaf6f7;border-right:4px solid #0e8f9c;padding:3mm 4mm;font-size:9pt;border-radius:1mm}' +
+'.pk-hint b{color:#071a35}';
+}
+
+/* ---------------- بناء الحزمة وطباعتها ---------------- */
+function packetDocument(app, what) {
+  const only = what || 'all';
+  const pages = [];
+  if (only === 'all' || only === 'form') pages.push(overlaySheet(app));
+  if (only === 'all' || only === 'receipt') pages.push(receiptSheet(app));
+  if (only === 'all' || only === 'regs') pages.push(regulationsSheet());
+  const label = only === 'all'
+    ? '\u0627\u0644\u0627\u0633\u062a\u0645\u0627\u0631\u0629 \u0627\u0644\u0631\u0633\u0645\u064a\u0629\u060c \u0648\u0635\u0644 \u0627\u0633\u062a\u0644\u0627\u0645 \u0627\u0644\u0645\u0633\u062a\u062d\u0642\u0627\u062a\u060c \u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u062f\u0627\u062e\u0644\u064a.'
+    : only === 'receipt' ? '\u0648\u0635\u0644 \u0627\u0633\u062a\u0644\u0627\u0645 \u0627\u0644\u0645\u0633\u062a\u062d\u0642\u0627\u062a.'
+      : only === 'regs' ? '\u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u062f\u0627\u062e\u0644\u064a.'
+        : '\u0627\u0644\u0627\u0633\u062a\u0645\u0627\u0631\u0629 \u0627\u0644\u0631\u0633\u0645\u064a\u0629.';
+  return '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">' +
+    '<title>\u062d\u0632\u0645\u0629 \u062a\u0633\u062c\u064a\u0644 \u2014 ' + esc(CLUB_AR) + ' \u2014 ' + esc(app.application_no || '') + '</title>' +
+    '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=block" rel="stylesheet">' +
+    '<style>' + packetCSS() + '</style></head><body>' +
+    '<p class="pk-hint"><b>\u062c\u0627\u0647\u0632\u0629 \u0644\u0644\u0637\u0628\u0627\u0639\u0629:</b> \u0627\u0633\u062a\u0639\u0645\u0644 Ctrl+P \u062b\u0645 \u0627\u062e\u062a\u0631 \u00ab\u062d\u0641\u0638 \u0628\u0635\u064a\u063a\u0629 PDF\u00bb. ' +
+    '\u062a\u062d\u062a\u0648\u064a \u0647\u0630\u0647 \u0627\u0644\u0648\u062b\u064a\u0642\u0629 ' + pages.length + ' \u0635\u0641\u062d\u0629: ' + label + '</p>' +
+    pages.join('') + '</body></html>';
+}
+function printPacket(app, what) {
+  const doc = packetDocument(app, what);
+  const win = window.open('', '_blank', 'noopener,noreferrer');
+  if (!win) { showToast('اسمح بالنوافذ المنبثقة لطباعة الحزمة.', 'error'); return false; }
+  try {
+    win.document.open();
+    win.document.write(doc);
+    win.document.close();
+  } catch (_) { /* the popup raced the click */ }
+  const go = () => {
+    try {
+      const fonts = win.document.fonts && win.document.fonts.ready ? win.document.fonts.ready : Promise.resolve();
+      fonts.then(() => setTimeout(() => { try { win.focus(); win.print(); } catch (_) {} }, 320));
+    } catch (_) { setTimeout(() => { try { win.print(); } catch (_) {} }, 800); }
+  };
+  setTimeout(go, 950);
+  return true;
+}
+
+/* ---------------- شاشة ما بعد الإرسال ---------------- */
+function registrationDoneModal(a) {
+  const total = receiptTotal(a);
+  const box = document.createElement('div');
+  box.className = 'modal-backdrop';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.setAttribute('aria-label', 'تم استلام طلب التسجيل');
+  box.innerHTML = '<div class="modal done-modal">' +
+    '<div class="done-mark">✓</div>' +
+    '<h2>تم استلام الطلب</h2>' +
+    '<p class="done-no">رقم الطلب <b dir="ltr">' + esc(a.application_no || '—') + '</b></p>' +
+    '<p class="done-amount">المبلغ المستحق <b>' + esc(money(total)) + '</b> <small>' + esc(moneyWords(total)) + '</small></p>' +
+    '<div class="done-steps">' +
+      '<div><i>1</i><span>اضغط «طباعة الحزمة» لتحصل على الاستمارة الرسمية ووصل الاستلام والنظام الداخلي.</span></div>' +
+      '<div><i>2</i><span>وقّع الاستمارة والوصل من طرف المحاسب أو المسيّر، وختمهما.</span></div>' +
+      '<div><i>3</i><span>ادخل إلى المنصة بحساب المحاسب أو المسيّر وارفع النسخة الموقّعة من صفحة الطلبات.</span></div>' +
+    '</div>' +
+    '<div class="done-actions">' +
+      '<button class="btn btn-primary" data-action="print-packet">🖨 طباعة الحزمة كاملة</button>' +
+      '<button class="btn btn-outline" data-action="print-receipt-only">وصل الاستلام فقط</button>' +
+      '<button class="btn btn-outline" data-action="print-regs-only">النظام الداخلي فقط</button>' +
+    '</div>' +
+    '<button class="btn btn-ghost full" data-action="close">إغلاق</button>' +
+  '</div>';
+  document.body.appendChild(box);
+  bind();
+  setTimeout(() => { const f = box.querySelector('[data-action="print-packet"]'); if (f) f.focus(); }, 40);
+  return box;
+}
+
+/* keeps the packet available for reprint without asking the visitor again */
+let lastPacket = null;
+
+/* ==========================================================
+   تفعيل حزمة التسجيل: إرسال → طباعة فورية → رفع النسخة الموقّعة
+   ========================================================== */
+
+/* رفع النسخة الموقّعة: التخزين على Firebase، أو نص مُرمّز على الخادم المحلي */
+async function uploadSignedForm(file, applicationNo) {
+  if (!file) throw new Error('اختر الملف أولاً');
+  const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+  if (allowed.indexOf(file.type) < 0) throw new Error('الملف يجب أن يكون PDF أو صورة');
+  if (file.size > 10 * 1024 * 1024) throw new Error('حجم الملف يتجاوز 10 ميغابايت');
+  const safeNo = String(applicationNo || 'APP').replace(/[^\w-]/g, '');
+
+  if (window.firebase && firebase.storage && firebase.auth && firebase.auth().currentUser) {
+    const ref = firebase.storage().ref('application-scans/' + safeNo + '/' + Date.now() + '-' + file.name);
+    await ref.put(file, { contentType: file.type });
+    return { path: ref.fullPath, name: file.name, size: file.size, stored: 'storage' };
+  }
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('تعذّرت قراءة الملف'));
+    reader.readAsDataURL(file);
+  });
+  return { path: 'local:' + safeNo, name: file.name, size: file.size, stored: 'inline', data_url: dataUrl };
+}
+
+function scanFieldFor(modal) {
+  return modal && modal.querySelector('#scan-file') ? modal.querySelector('#scan-file') : null;
+}
+function attachScanModal(app) {
+  const box = document.createElement('div');
+  box.className = 'modal-backdrop';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.setAttribute('aria-label', 'رفع النسخة الموقّعة');
+  box.innerHTML = '<div class="modal attach-modal">' +
+    '<button class="close" data-action="close" aria-label="إغلاق">×</button>' +
+    '<div class="modal-heading"><span class="logo">📄</span><h2>رفع النسخة الموقّعة</h2>' +
+    '<p>طلب <b dir="ltr">' + esc(app.application_no || app.id) + '</b> — ' + esc(appName(app)) + '</p></div>' +
+    (app.scan_name ? '<p class="scan-current">مرفوع مسبقًا: <b>' + esc(app.scan_name) + '</b></p>' : '') +
+    '<label>الاستمارة الموقّعة (PDF أو صورة)<input id="scan-file" type="file" accept="application/pdf,image/*"></label>' +
+    '<label>ملاحظات<input id="scan-note" placeholder="مثال: وقّع عليها المحاسب بتاريخ 12/10"></label>' +
+    '<div class="two-actions">' +
+      '<button class="btn btn-outline" data-action="close">إلغاء</button>' +
+      '<button class="btn btn-primary" data-action="save-scan" data-id="' + esc(app.id) + '">رفع النسخة</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(box);
+  bind();
+  const f = scanFieldFor(box);
+  if (f) setTimeout(() => f.focus(), 40);
+  return box;
+}
+function receiptModal(app) {
+  const total = receiptTotal(app);
+  const lines = packetLines(app);
+  const box = document.createElement('div');
+  box.className = 'modal-backdrop';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.setAttribute('aria-label', 'وصل استلام المستحقات');
+  box.innerHTML = '<div class="modal receipt-modal">' +
+    '<button class="close" data-action="close" aria-label="إغلاق">×</button>' +
+    '<div class="modal-heading"><span class="logo">🧾</span><h2>وصل استلام المستحقات</h2>' +
+    '<p>طلب <b dir="ltr">' + esc(app.application_no || app.id) + '</b> — ' + esc(appName(app)) + '</p></div>' +
+    '<table class="receipt-table"><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody>' +
+      lines.map(l => '<tr><td>' + esc(l.label) + '</td><td class="num">' + esc(money(l.amount)) + '</td></tr>').join('') +
+      '<tr class="pk-total"><td>الإجمالي</td><td class="num">' + esc(money(total)) + '</td></tr>' +
+    '</tbody></table>' +
+    '<p class="pk-words">فقط: <b>' + esc(moneyWords(total)) + '</b> دينار جزائري.</p>' +
+    '<label class="check-line"><input id="paid-check" type="checkbox"' +
+      (app.payment_status === 'paid' ? ' checked' : '') + '> تمّ استلام المبلغ نقدًا</label>' +
+    '<label>اسم المحاسب<input id="paid-by" value="' + esc(app.cashier_name || '') + '" placeholder="مثال: أمين المحاسب"></label>' +
+    '<div class="two-actions">' +
+      '<button class="btn btn-outline" data-action="print-receipt-only" data-id="' + esc(app.id) + '">🖨 طباعة الوصل</button>' +
+      '<button class="btn btn-primary" data-action="save-paid" data-id="' + esc(app.id) + '">حفظ التسديد</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(box);
+  bind();
+  return box;
+}
+
+const coreActionPacket = action;
+action = async function (a, el) {
+  if (a==='send-full-request') {
+    const q = id => { const n = document.querySelector(id); return n ? n.value : ''; };
+    const cb = id => { const n = document.querySelector(id); return n ? n.checked : false; };
+    const payload = {
+      sport: q('#reg-sport'), category: q('#reg-category'), swimming_strokes: q('#reg-strokes'),
+      subscription_code: q('#reg-plan'), facility: q('#reg-facility'),
+      transport: cb('#reg-transport'), uniform: cb('#reg-uniform'), payment_method: q('#reg-payment'),
+      first_name_ar: q('#reg-first-ar'), last_name_ar: q('#reg-last-ar'),
+      first_name_fr: q('#reg-first-fr'), last_name_fr: q('#reg-last-fr'),
+      national_id: q('#reg-nin'), birth_certificate_no: q('#reg-birth-cert'),
+      birth_place: q('#reg-birth-place'), wilaya: q('#reg-wilaya'), birth_date: q('#reg-birth'),
+      gender: q('#reg-gender'), blood_group: q('#reg-blood'), level: q('#reg-level'),
+      phone: q('#reg-phone'), whatsapp: q('#reg-whatsapp'), address: q('#reg-address'),
+      guardian_first_name: q('#reg-guardian-first'), guardian_last_name: q('#reg-guardian-last'),
+      guardian_relation: q('#reg-guardian-relation'), guardian_phone: q('#reg-guardian-phone'),
+      guardian_national_id: q('#reg-guardian-nin'), guardian_consent: cb('#reg-guardian-consent')
+    };
+    const missing = [];
+    if (!payload.first_name_ar) missing.push('الاسم بالعربية');
+    if (!payload.last_name_ar) missing.push('اللقب بالعربية');
+    if (!payload.birth_date) missing.push('تاريخ الميلاد');
+    if (!payload.phone) missing.push('الهاتف');
+    if (!payload.address) missing.push('العنوان');
+    if (missing.length) { showToast('يرجى إكمال: ' + missing.join('، '), 'error'); return; }
+
+    let photoData = '';
+    const photoInput = document.querySelector('#reg-photo');
+    if (photoInput && photoInput.files && photoInput.files[0]) {
+      try {
+        photoData = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('تعذّرت قراءة الصورة'));
+          reader.readAsDataURL(photoInput.files[0]);
+        });
+      } catch (_) { photoData = ''; }
+    }
+    payload.photo_data_url = photoData;
+    payload.doctor = '';
+    payload.card_issue_place = 'غرداية';
+    payload.guardian_child = payload.first_name_ar;
+
+    const btn = document.querySelector('[data-action="send-full-request"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'جارٍ الإرسال…'; }
+    try {
+      const res = await fetch('/api/applications', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin', body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || 'تعذّر إرسال الطلب', 'error'); return; }
+      const record = Object.assign({}, payload, {
+        application_no: data.application_no, expected_amount: data.expected_amount
+      });
+      lastPacket = record;
+      document.querySelector('.modal-backdrop')?.remove();
+      registrationDoneModal(record);
+      printPacket(record);
+      showToast('تم الاستلام — جارٍ فتح نافذة الطباعة.');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'إرسال طلب التسجيل'; }
+    }
+    return;
+  }
+
+  if (a==='print-packet') { if (lastPacket) printPacket(lastPacket); return; }
+  if (a==='print-receipt-only') {
+    const app = el && el.dataset.id
+      ? (state.applications || []).find(x => String(x.id) === String(el.dataset.id)) || lastPacket
+      : lastPacket;
+    if (app) printPacket(app, 'receipt');
+    else showToast('لا توجد بيانات للطباعة.', 'error');
+    return;
+  }
+  if (a==='print-regs-only') { if (lastPacket) printPacket(lastPacket, 'regs'); return; }
+  if (a==='attach-scan') {
+    const app = (state.applications || []).find(x => String(x.id) === String(el.dataset.id));
+    if (app) attachScanModal(app);
+    return;
+  }
+  if (a==='save-scan') {
+    const file = scanFieldFor(document);
+    const noteEl = document.querySelector('#scan-note');
+    if (!file || !file.files || !file.files[0]) { showToast('اختر الملف الموقّع أولًا.', 'error'); return; }
+    const app = (state.applications || []).find(x => String(x.id) === String(el.dataset.id));
+    const btn = el;
+    if (btn) { btn.disabled = true; btn.textContent = 'جارٍ الرفع…'; }
+    try {
+      const info = await uploadSignedForm(file.files[0], (app && (app.application_no || app.id)) || '');
+      await api('/api/applications/' + encodeURIComponent(el.dataset.id), 'PATCH', {
+        scan_path: info.path, scan_name: info.name, scan_size: info.size,
+        scan_data_url: info.data_url || '', scan_note: noteEl ? noteEl.value : ''
+      });
+      logDecision('رفع نسخة موقّعة', 'application', el.dataset.id, { file: info.name });
+      showToast('تم رفع النسخة الموقّعة.');
+      document.querySelector('.modal-backdrop')?.remove();
+      await syncApi(); render();
+    } catch (e) {
+      showToast(e.message || 'تعذّر الرفع', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'رفع النسخة'; }
+    }
+    return;
+  }
+  if (a==='open-receipt') {
+    const app = (state.applications || []).find(x => String(x.id) === String(el.dataset.id));
+    if (app) receiptModal(app);
+    return;
+  }
+  if (a==='save-paid') {
+    const paid = document.querySelector('#paid-check');
+    const by = document.querySelector('#paid-by');
+    try {
+      await api('/api/applications/' + encodeURIComponent(el.dataset.id), 'PATCH', {
+        payment_status: paid && paid.checked ? 'paid' : 'unpaid',
+        cashier_name: by ? by.value : '',
+        paid_at: paid && paid.checked ? new Date().toISOString().slice(0, 10) : ''
+      });
+      logDecision(paid && paid.checked ? 'تسديد نقدي' : 'إلغاء التسديد', 'application', el.dataset.id,
+        { cashier: by ? by.value : '' });
+      showToast(paid && paid.checked ? 'تم تسجيل التسديد.' : 'تم إلغاء التسديد.');
+      document.querySelector('.modal-backdrop')?.remove();
+      await syncApi(); render();
+    } catch (e) { showToast(e.message || 'تعذّر الحفظ', 'error'); }
+    return;
+  }
+
+  return coreActionPacket(a, el);
+};
+
+/* أزراب الحزمة داخل جدول الطلبات */
+const corePageViewPacket = pageView;
+pageView = function (p) {
+  const html = corePageViewPacket(p);
+  if (p !== 'applications') return html;
+  return html.replace(
+    /(<button class="row-more" data-action="edit-app" data-id="([^"]*)">)/g,
+    (match, whole, id) => '<button class="check-btn" data-action="open-receipt" data-id="' + esc(id) + '">وصل</button>'
+      + '<button class="check-btn" data-action="attach-scan" data-id="' + esc(id) + '">نسخة موقّعة</button>'
+      + whole);
+};
+
+/* ==========================================================
+   تخزين الصور خارج localStorage + عدّاد الزوار
+   الصور كانت تُحفظ كنص داخل localStorage، وهذا يملأ الحصة
+   بسرعة ويُضعف الأداء. IndexedDB يحفظها بلا حصّة.
+   ========================================================== */
+const PHOTO_DB = 'sadara-photos';
+const PHOTO_STORE = 'img';
+
+function openPhotoDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) return reject(new Error('IndexedDB غير متاح'));
+    let request;
+    try { request = indexedDB.open(PHOTO_DB, 1); }
+    catch (e) { return reject(e); }
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(PHOTO_STORE)) db.createObjectStore(PHOTO_STORE);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('تعذّر فتح مخزن الصور'));
+  });
+}
+async function photoStorePut(key, dataUrl) {
+  const db = await openPhotoDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PHOTO_STORE, 'readwrite');
+    tx.objectStore(PHOTO_STORE).put(dataUrl, String(key));
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+async function photoStoreGet(key) {
+  const db = await openPhotoDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PHOTO_STORE, 'readonly');
+    const req = tx.objectStore(PHOTO_STORE).get(String(key));
+    req.onsuccess = () => { db.close(); resolve(req.result || ''); };
+    req.onerror = () => { db.close(); reject(req.error); };
+  });
+}
+async function photoStoreDel(key) {
+  const db = await openPhotoDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PHOTO_STORE, 'readwrite');
+    tx.objectStore(PHOTO_STORE).delete(String(key));
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+/* يفضّل IndexedDB، ويرجع إلى الحقل النصي حين لا تتوفر */
+async function persistPhoto(dataUrl) {
+  const key = (state.user && state.user.id) || 'guest';
+  try {
+    await photoStorePut(key, dataUrl);
+    return { photo: '', photo_in_store: true };
+  } catch (_) {
+    return { photo: dataUrl, photo_in_store: false };
+  }
+}
+async function restorePhoto() {
+  if (state.profile && state.profile.photo) return state.profile.photo;
+  const key = (state.user && state.user.id) || 'guest';
+  try {
+    const stored = await photoStoreGet(key);
+    if (stored) {
+      state.profile = Object.assign({}, state.profile, { photo: stored, photo_in_store: true });
+      return stored;
+    }
+  } catch (_) { /* no store available */ }
+  return '';
+}
+
+/* التصغير قبل الحفظ: صورة هاتف 4 ميغابايت تصبح أقل من 100 كيلوبايت */
+async function shrinkPhoto(file, maxSide, quality) {
+  const dataUrl = await readPhotoFile(file);
+  if (!window.Image || !document.createElement('canvas')) return dataUrl;
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const limit = maxSide || 900;
+      const scale = Math.min(1, limit / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      try { resolve(canvas.toDataURL('image/jpeg', quality || 0.82)); }
+      catch (_) { resolve(dataUrl); }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+const coreSaveMyPhoto = saveMyPhoto;
+saveMyPhoto = async function (file) {
+  if (!file) { showToast('اختر صورة أولًا.', 'error'); return; }
+  if (!/^image\//.test(file.type)) { showToast('الملف يجب أن يكون صورة.', 'error'); return; }
+  try {
+    const small = await shrinkPhoto(file, 900, 0.82);
+    const stored = await persistPhoto(small);
+    if (stored.photo) {
+      await api('/api/profile', 'PUT', { photo: stored.photo });
+      state.profile = Object.assign({}, state.profile, { photo: stored.photo });
+      save();
+    } else {
+      state.profile = Object.assign({}, state.profile, { photo: small, photo_in_store: true });
+      save();
+    }
+    render();
+    showToast('تم حفظ صورتك.');
+  } catch (e) {
+    showToast(e.message || 'تعذّر حفظ الصورة', 'error');
+  }
+};
+
+const coreRemoveMyPhoto = action;
+action = async function (a, el) {
+  if (a === 'remove-my-photo') {
+    try {
+      await photoStoreDel((state.user && state.user.id) || 'guest');
+    } catch (_) { /* nothing to clear */ }
+    return coreRemoveMyPhoto(a, el);
+  }
+  return coreRemoveMyPhoto(a, el);
+};
+
+/*restore the photo kept outside localStorage before the first paint*/
+const coreRenderPhoto = render;
+render = function () {
+  coreRenderPhoto();
+  if (state.user && state.profile && !state.profile.photo) {
+    restorePhoto().then(url => { if (url && url !== state.profile.photo) coreRenderPhoto(); });
+  }
+};
+
+/* عدّاد زيارات خفيف: رقم فقط، بلا تعريف للزائر */
+let visitCounted = false;
+async function countVisit() {
+  if (visitCounted || state.user) return;
+  if (sessionStorage.getItem('sadara-visited')) return;
+  visitCounted = true;
+  sessionStorage.setItem('sadara-visited', '1');
+  try {
+    const res = await fetch('/api/visit', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ page: location.pathname, ref: document.referrer ? 'link' : 'direct' })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      state.visits = data.visits || 0;
+    }
+  } catch (_) { /* counting is best effort */ }
+}
+
+/* ---------- عداد الزوار في لوحة الإدارة ---------- */
+let visitTotals = { visits: 0, today: 0, week: 0 };
+async function loadVisitTotals() {
+  if (visitTotals.visits) return;
+  try {
+    const res = await fetch('/api/visits', { credentials: 'same-origin' });
+    if (res.ok) visitTotals = Object.assign(visitTotals, await res.json());
+  } catch (_) { /* this backend has no counter */ }
+}
+function visitStampHtml() {
+  if (!visitTotals.visits) return '';
+  return '<p class="visit-stamp">الزيارات: <b>' + esc(visitTotals.visits) + '</b>'
+    + ' \u00b7 اليوم <b>' + esc(visitTotals.today || 0) + '</b>'
+    + ' \u00b7 \u0622\u062e\u0631 7 \u0623\u064a\u0627\u0645 <b>' + esc(visitTotals.week || 0) + '</b></p>';
+}
+const corePageViewVisits = pageView;
+pageView = function (p) {
+  const html = corePageViewVisits(p);
+  if (p !== 'home' || !state.user) return html;
+  if (!visitTotals.visits) loadVisitTotals();
+  if (html.indexOf('visit-stamp') >= 0) return html;
+  // the welcome paragraph is the one place every admin sees first
+  return html.includes('class="welcome"')
+    ? html.replace('class="welcome"', 'class="welcome visit-stamp-host"')
+    : html;
+};
+const coreRenderVisits = render;
+render = function () {
+  coreRenderVisits();
+  const host = document.querySelector('.visit-stamp-host');
+  if (!host || host.querySelector('.visit-stamp')) return;
+  const stamp = visitStampHtml();
+  if (stamp) host.insertAdjacentHTML('beforeend', stamp);
+  else loadVisitTotals().then(() => {
+    const again = document.querySelector('.visit-stamp-host');
+    const late = visitStampHtml();
+    if (again && late && !again.querySelector('.visit-stamp')) again.insertAdjacentHTML('beforeend', late);
+  });
+};
+
 /* ---------------------- ربط التصدير والتدقيق ---------------------- */
 const coreAction5=action;
 action=async function(a,el){

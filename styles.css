@@ -371,3 +371,87 @@ body.printing .print-sheet10{display:block!important}
 .pf-photo-actions label{cursor:pointer}
 .pf-photo-actions input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
 @media print{.pf-photo-actions,.pf-photo-empty{display:none}}
+
+/* ==========================================================
+   رموز التصميم + الحركات + شاشة ما بعد التسجيل
+   ========================================================== */
+:root{
+  --navy:#071a35; --navy-2:#0b2b4a; --teal:#0e8f9c; --teal-soft:#eaf6f7;
+  --gold:#c8a45c; --gold-soft:#fdf6e8; --green:#16a474; --red:#e35d6a;
+  --ink:#0d2237; --muted:#5d7386; --line:#dbe6ec; --paper:#f7fbfc;
+  --r-sm:10px; --r-md:16px; --r-lg:24px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-6:24px; --sp-8:32px;
+  --sh-1:0 2px 8px #0b2b4a0d; --sh-2:0 18px 45px #1b3a6712;
+  --ease:cubic-bezier(.2,.7,.3,1);
+}
+
+/* ---------------- الحركات ---------------- */
+@keyframes sadaraRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes sadaraPop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
+@keyframes sadaraShimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+.stat-card,.plan-card,.notice-card,.session,.sl-item{animation:sadaraRise .42s var(--ease) backwards}
+.stat-card:nth-child(2){animation-delay:.06s}
+.stat-card:nth-child(3){animation-delay:.12s}
+.stat-card:nth-child(4){animation-delay:.18s}
+.plan-card:nth-child(2){animation-delay:.07s}
+.plan-card:nth-child(3){animation-delay:.14s}
+
+.modal{animation:sadaraPop .22s var(--ease)}
+.modal-backdrop{backdrop-filter:blur(3px)}
+.btn{transition:transform .12s var(--ease),box-shadow .2s var(--ease),background .2s}
+.btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:var(--sh-1)}
+.btn:active:not(:disabled){transform:translateY(1px) scale(.99)}
+.btn:disabled{opacity:.6;cursor:progress}
+.check-btn,.icon-btn,.row-more{transition:transform .12s var(--ease),background .2s}
+.check-btn:active,.icon-btn:active{transform:scale(.94)}
+
+/* هيكل التحميل بدل الشاشة البيضاء */
+.skeleton{border-radius:var(--r-sm);
+  background:linear-gradient(90deg,#eef4f7 25%,#f7fbfc 37%,#eef4f7 63%);
+  background-size:400% 100%;animation:sadaraShimmer 1.3s linear infinite;min-height:14px}
+.skeleton-row{height:38px;margin-bottom:8px}
+.empty-cell.loading{color:transparent}
+
+/* ---------------- شاشة ما بعد الإرسال ---------------- */
+.done-modal{width:min(560px,100%);text-align:center}
+.done-mark{width:64px;height:64px;margin:0 auto var(--sp-4);border-radius:50%;
+  display:grid;place-items:center;font-size:30px;color:#fff;font-weight:800;
+  background:linear-gradient(140deg,var(--green),#0f8f63);
+  box-shadow:0 12px 28px #16a47440;animation:sadaraPop .4s var(--ease)}
+.done-modal h2{margin:0 0 var(--sp-2);font-size:20px;color:var(--navy)}
+.done-no{margin:0 0 var(--sp-2);color:var(--muted)}
+.done-no b{color:var(--teal);font-size:17px}
+.done-amount{margin:0 0 var(--sp-5);padding:var(--sp-3);border-radius:var(--r-md);
+  background:var(--teal-soft);color:var(--navy);font-weight:700}
+.done-amount small{display:block;font-weight:400;color:var(--muted);font-size:12px;margin-top:4px}
+.done-steps{text-align:right;display:grid;gap:10px;margin-bottom:var(--sp-5)}
+.done-steps>div{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--ink);
+  background:var(--paper);border-radius:var(--r-md);padding:10px 12px}
+.done-steps i{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--teal);
+  color:#fff;font-style:normal;font-weight:700;font-size:12px;display:grid;place-items:center}
+.done-actions{display:grid;gap:8px;margin-bottom:var(--sp-3)}
+.done-actions .btn{margin-top:0}
+
+/* ---------------- الوصل داخل المنصة ---------------- */
+.receipt-modal{width:min(460px,100%)}
+.receipt-table{width:100%;border-collapse:collapse;font-size:14px;margin-bottom:var(--sp-3)}
+.receipt-table th{background:var(--teal-soft);color:var(--navy);text-align:right;
+  padding:8px 10px;border:1px solid var(--line)}
+.receipt-table td{padding:9px 10px;border:1px solid var(--line)}
+.receipt-table .num{direction:ltr;text-align:left;font-weight:700;white-space:nowrap}
+.receipt-table .pk-total td{background:var(--navy);color:#fff;font-weight:800;border-color:var(--navy)}
+.receipt-modal .pk-words{font-size:13px;color:var(--muted);margin:0 0 var(--sp-4)}
+.attach-modal .scan-current{background:var(--gold-soft);border-radius:var(--r-sm);
+  padding:8px 10px;font-size:13px;margin-bottom:var(--sp-3)}
+.attach-modal input[type=file]{padding:8px;background:var(--paper);border-radius:var(--r-sm)}
+
+@media (prefers-reduced-motion:reduce){
+  .stat-card,.plan-card,.notice-card,.session,.sl-item,.modal,.done-mark{animation:none!important}
+}
+@media print{
+  .done-modal,.receipt-modal,.attach-modal{display:none}
+}
+/* ============ عدّاد الزيارات ============ */
+.visit-stamp{margin:0;font-size:12.5px;color:var(--muted);display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.visit-stamp b{color:var(--teal);font-weight:700}
+@media print{.visit-stamp{display:none}}

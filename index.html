@@ -4,12 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#071a35" />
-  <meta name="description" content="منصة النادي الرياضي الصدارة لفوج السباحة" />
+  <meta name="description"
+  <meta name="keywords" content="نادي الصدارة, سباحة, غرداية, تسجيل رياضي, حضور, بطاقة انخراط" />
+  <meta name="author" content="النادي الرياضي الصدارة" />
+  <meta name="robots" content="index, follow" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="نادي الصدارة — فوج السباحة" />
+  <meta property="og:title" content="نادي الصدارة الرياضي — منصة فوج السباحة" />
+  <meta property="og:description" content="تسجيل، حضور، بطاقات انخراط وبرنامج أسبوعي في مكان واحد." />
+  <meta property="og:image" content="assets/logo.png" />
+  <meta property="og:locale" content="ar_DZ" />
+  <meta name="twitter:card" content="summary_large_image" /> content="منصة النادي الرياضي الصدارة لفوج السباحة" />
   <title>الصدارة | منصة فوج السباحة</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="assets/logo.png" type="image/png" />
+  <link rel="apple-touch-icon" href="assets/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="الصدارة" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 </head>
 <body>
   <div id="app"></div>
@@ -22,6 +39,9 @@
   <script src="firebase-config.js"></script>
   <script src="firebase-adapter.js"></script>
   <script src="app.js"></script>
+  <script>if ('serviceWorker' in navigator && location.protocol === 'https:')
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () {}); });</script>
 </body>
 </html>
 

@@ -296,6 +296,19 @@
           patch.expected_amount = amountFor(patch, plans.length ? plans : DEFAULT_PLANS, extras);
         }
         delete patch.id;
+        // a scan lives in Cloud Storage; never write the inline copy into Firestore
+        delete patch.scan_data_url;
+        if (patch.payment_status === 'paid') {
+          await db.collection('payments').add({
+            application_no: patch.application_no || appMatch[1],
+            amount: patch.expected_amount || 0,
+            method: patch.payment_method || 'cash',
+            paid_at: patch.paid_at || new Date().toISOString().slice(0, 10),
+            cashier_name: patch.cashier_name || '',
+            recorded_by: gate.profile.id,
+            created_at: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
         await db.collection('applications').doc(appMatch[1]).set({ ...patch, reviewed_by: gate.profile.id, updated_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
         return jsonResponse({ ok: true, expected_amount: patch.expected_amount });
       }
