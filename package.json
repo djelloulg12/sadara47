@@ -9,17 +9,16 @@
     "check": "node tools/verify.js",
     "user": "python tools/create-user.py",
     "preview:form": "node tools/tests/packet-preview.js",
-    "login": "firebase login --add-project sadara-platform",
-    "whoami": "firebase login:list",
-    "deploy": "npm run check && firebase deploy --project sadara-platform",
-    "deploy:rules": "firebase deploy --only firestore:rules,storage --project sadara-platform",
-    "preview": "npm run check && firebase hosting:channel:deploy preview --project sadara-platform"
-  },
-  "dependencies": {
-    "firebase-tools": "^15.32.1"
+    "doctor": "node tools/check-network.js",
+    "login": "powershell -ExecutionPolicy Bypass -File tools/firebase.ps1 login --no-localhost --add-project",
+    "whoami": "powershell -ExecutionPolicy Bypass -File tools/firebase.ps1 login:list",
+    "projects": "powershell -ExecutionPolicy Bypass -File tools/firebase.ps1 projects:list",
+    "deploy": "npm run check && powershell -ExecutionPolicy Bypass -File tools/firebase.ps1 deploy",
+    "deploy:rules": "powershell -ExecutionPolicy Bypass -File tools/firebase.ps1 deploy --only firestore:rules,storage",
+    "preview": "npm run check && powershell -ExecutionPolicy Bypass -File tools/firebase.ps1 hosting:channel:deploy preview"
   },
   "devDependencies": {
-    "firebase-tools": "^13.0.0",
+    "firebase-tools": "^15.32.1",
     "jsdom": "^25.0.0"
   }
 }

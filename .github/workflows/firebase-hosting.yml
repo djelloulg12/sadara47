@@ -63,6 +63,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The project id lives in .firebaserc, so switching projects is one edit
+      # in the repository rather than a change in two places.
+      - name: Read the configured project
+        id: config
+        run: |
+          set -e
+          id="$(node -p "require('./.firebaserc').projects.default")"
+          test -n "$id" || { echo "::error::.firebaserc has no default project"; exit 1; }
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "deploying to $id"
+
       - name: Write the service account to disk
         run: |
           printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "${{ runner.temp }}/firebase-sa.json"
@@ -72,12 +83,12 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
         run: |
-          npx --yes firebase-tools@latest deploy --only firestore:rules,storage --project sadara-platform --non-interactive
+          npx --yes firebase-tools@latest deploy --only firestore:rules,storage --project "${{ steps.config.outputs.id }}" --non-interactive
 
       - name: Deploy Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-          projectId: sadara-platform
+          projectId: ${{ steps.config.outputs.id }}
           channelId: live
           entryPoint: .

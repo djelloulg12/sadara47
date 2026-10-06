@@ -36,3 +36,4 @@ Thumbs.db
 .idea/
 .vscode/
 tools/tests/out/
+tools/intercept-roots.pem
