@@ -17,6 +17,9 @@ The addresses below are the ones the club already uses while working locally.
 Replace them with real ones before the site goes public:
 
   SADARA_SEED_ACCOUNTS="Manager@club.example,admin;Head@club.example,president"
+
+Roles: admin, president, coach, member, parent, swimmer_adult, swimmer_minor.
+Anything else is refused: an account with an unknown role could do nothing at all.
 """
 import getpass
 import io
@@ -60,6 +63,18 @@ def read_accounts():
 
 
 ACCOUNTS = read_accounts()
+
+# The only roles the platform recognises, in firestore.rules and in the page
+# itself. A role outside this list would produce an account that can do nothing
+# at all, so it is refused rather than created.
+STAFF_ROLES = ('admin', 'president', 'coach')
+MEMBER_ROLES = ('member', 'parent', 'swimmer_adult', 'swimmer_minor')
+ROLES = STAFF_ROLES + MEMBER_ROLES
+
+for _address, _role in ACCOUNTS:
+    if _role not in ROLES:
+        raise SystemExit("Unknown role %r for %s.\n  Known roles: %s"
+                         % (_role, _address, ", ".join(ROLES)))
 
 PASSWORD = (os.environ.get("SADARA_SEED_PASSWORD")
             or (sys.argv[1] if len(sys.argv) > 1 else ""))
@@ -139,8 +154,11 @@ print()
 NAMES = {
     "admin": ("مدير", "النادي"),
     "president": ("رئيس", "الجمعية"),
-    "manager": ("مسيّر", "النادي"),
     "coach": ("مدرب", "النادي"),
+    "parent": ("ولي", "أمر"),
+    "member": ("عضو", "النادي"),
+    "swimmer_adult": ("سباح", "النادي"),
+    "swimmer_minor": ("سباح", "قاصر"),
 }
 
 NOW = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

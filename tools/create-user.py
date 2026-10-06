@@ -1,12 +1,18 @@
 """إنشاء أو تحديث حساب مستخدم في قاعدة SQLite المحلية.
 
 الاستخدام:
+    npm run user
+    python tools/create-user.py --email a@b.dz --role coach
     python tools/create-user.py --db sadara-local.db --email a@b.dz --password secret --role coach
+
+كل ما لم يُمرَّر يُسأل عنه. كلمة المرور لا تُطبع ولا تدخل سجلّ الأوامر
+إذا لم تُكتب صراحةً في سطر الأوامر.
 
 الأدوار المدعومة: admin, president, coach, member, parent,
 swimmer_adult, swimmer_minor
 """
 import argparse
+import getpass
 import hashlib
 import hmac
 import os
@@ -41,18 +47,44 @@ def normalize_role(role):
     return role if role in ROLES else None
 
 
+def ask(prompt, secret=False):
+    """Asks once, and gives up cleanly when nobody is there to answer."""
+    try:
+        return getpass.getpass(prompt) if secret else input(prompt).strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        raise SystemExit('أُلغي. أعد الأمر بخياراته في سطر واحد، مثل:'
+                         '  --email a@b.dz --role admin --password "..."')
+
+
 def main():
     parser = argparse.ArgumentParser(description='Create or update a Sadara user')
-    parser.add_argument('--db', default=os.environ.get('SADARA_DB_PATH', 'sadara.db'))
-    parser.add_argument('--email', required=True)
-    parser.add_argument('--password', required=True)
-    parser.add_argument('--role', required=True)
+    parser.add_argument('--db', default=os.environ.get('SADARA_DB_PATH', 'sadara-local.db'))
+    parser.add_argument('--email', default='')
+    parser.add_argument('--password', default='', help='omit it and you are asked, without echo')
+    parser.add_argument('--role', default='')
     parser.add_argument('--first-name', default='')
     parser.add_argument('--last-name', default='')
     parser.add_argument('--phone', default='')
     parser.add_argument('--member-no', default='', help='links a swimmer account to a membership card')
     parser.add_argument('--group-name', default='', help='the group a coach supervises')
     args = parser.parse_args()
+
+    interactive = sys.stdin is not None and sys.stdin.isatty()
+    if not args.email:
+        if not interactive:
+            raise SystemExit('البريد الإلكتروني مطلوب:  --email a@b.dz')
+        args.email = ask('البريد الإلكتروني: ')
+    if not args.role:
+        if not interactive:
+            print('الأدوار المدعومة: %s' % ', '.join(ROLES), file=sys.stderr)
+            raise SystemExit('الدور مطلوب:  --role admin')
+        args.role = ask('الدور (%s): ' % ', '.join(ROLES))
+    if not args.password:
+        if not interactive:
+            raise SystemExit('كلمة المرور مطلوبة:  --password "..." أو أجب على السؤال')
+        # asked for without echo, so it never lands in the shell history
+        args.password = ask('كلمة المرور (لن تظهر): ', secret=True)
 
     role = normalize_role(args.role)
     if not role:
@@ -98,6 +130,8 @@ def main():
         print('  مرتبط ببطاقة: %s' % args.member_no)
     if args.group_name:
         print('  الفوج: %s' % args.group_name)
+    print()
+    print('  سجّل الدخول من: %s' % ('http://127.0.0.1:' + os.environ.get('PORT', '4173')))
     return 0
 
 

@@ -39,16 +39,49 @@ python tools\seed-accounts.py
 لإنشاء حسابات بعنوان بريد حقيقي من النادي:
 
 ```powershell
-$env:SADARA_SEED_ACCOUNTS = "Manager@club.example,admin;Head@club.example,president;Coach@club.example,coach"
+$env:SADARA_SEED_ACCOUNTS = "Manager@club.example,admin;Head@club.example,president"
 python tools\seed-accounts.py
 ```
+
+الأدوار التي تعرفها المنصة، في `firestore.rules` وفي الصفحة معاً:
 
 | الدور | ما يستطيعه |
 |---|---|
 | `admin` | كل شيء، بما فيه الإعدادات |
-| `president` | القبول والرفض، الاشتراكات، البطاقات |
-| `manager` | التحصيل، رفع النسخة الموقّعة، الرواتب |
-| `coach` | تسجيل الحضور فقط |
+| `president` | القبول والرفض، الاشتراكات، البطاقات، التحصيل |
+| `coach` | الحضور والمواعيد فقط |
+| `member` · `parent` | ملف العضو، البطاقة، الجدول، الإعلانات |
+| `swimmer_adult` · `swimmer_minor` | فضاء السباح: بطاقته وحضوره |
+
+> التحصيل ورفع النسخة الموقّعة من صلاحية **المسيّر = `admin` أو `president`**.
+> دور `manager` غير موجود في المنصة، وإن أُنشئ حساب به فلن يجد أي صلاحية.
+> السكربت يرفض أي دور خارج هذه القائمة.
+
+## الدخول على الخادم المحلي
+
+`npm run serve` محلياً يستعمل قاعدة `sadara-local.db`، والحسابات لا تُنشأ فيها
+تلقائياً — بيانات الدخول تأتي من متغيّرات البيئة حصراً. لذلك يطبع الخادم عند
+الإقلاع من يستطيع الدخول:
+
+```
+Sadara platform listening on port 4173
+  قاعدة البيانات: ...\sadara-local.db
+  الحسابات التي يمكنها الدخول (3):
+    admin@sadara.local         admin
+    president@sadara.local     president
+    coach@sadara.local         coach
+  كلمة المرور: ما اخترته أنت عند إنشاء الحساب.
+  لإنشاء حساب أو تغيير كلمة مرور:  npm run user
+```
+
+ولإنشاء حساب أو تغيير كلمة مرور:
+
+```powershell
+npm run user
+```
+
+يسألك عن البريد والدور وكلمة المرور، **وكلمة المرور دون أن تظهر ولا تُكتب في
+سجلّ الأوامر**.
 
 ### ٢. رفع الملفات — Storage (اختياري)
 

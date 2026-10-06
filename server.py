@@ -393,8 +393,41 @@ class App(SimpleHTTPRequestHandler):
         finally:
             c.close()
 
+def report_accounts(db_path):
+    """Say who can sign in, and what to do if nobody can.
+
+    A fresh database gets no accounts at all, because credentials only ever come
+    from the environment. Without this line the club sees a login page and no
+    explanation of why nobody can get past it.
+    """
+    try:
+        c = sqlite3.connect(db_path)
+        c.row_factory = sqlite3.Row
+        rows = c.execute(
+            "select email, role from users where status is null or status!='disabled'"
+            " order by case role when 'admin' then 0 when 'president' then 1"
+            " when 'manager' then 2 when 'coach' then 3 else 4 end, email").fetchall()
+        c.close()
+    except sqlite3.Error as e:
+        print('  تعذّر قراءة الحسابات (%s). شغّل مرة واحدة: npm run serve' % e)
+        return
+    if not rows:
+        print('  لا يوجد أي حساب بعد — قاعدة البيانات جديدة.')
+        print('  أنشئ حسابًا الآن:  npm run user')
+        return
+    print('  الحسابات التي يمكنها الدخول (%d):' % len(rows))
+    for r in rows:
+        print('    %-30s %s' % (r['email'], r['role']))
+    print('  كلمة المرور: ما اخترته أنت عند إنشاء الحساب.')
+    print('  لإنشاء حساب أو تغيير كلمة مرور:  npm run user')
+
+
 if __name__ == '__main__':
+    db = os.environ.get('SADARA_DB_PATH', 'sadara.db')
     init_db()
     port = int(os.environ.get('PORT', '4173'))
     print(f'Sadara platform listening on port {port}')
+    print(f'  قاعدة البيانات: {os.path.abspath(db)}')
+    report_accounts(db)
+    print()
     ThreadingHTTPServer(('0.0.0.0', port), App).serve_forever()
