@@ -1,8 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
-const PUBLIC = path.resolve(__dirname, '..', '..', 'firebase-public');
-const OUT = String.raw`path.resolve(__dirname, '..', '..')\packet-preview.html`;
+const ROOT = path.resolve(__dirname, '..', '..');
+const PUBLIC = path.join(ROOT, 'firebase-public');
+const OUT_DIR = path.join(ROOT, 'tools', 'tests', 'out');
+fs.mkdirSync(OUT_DIR, { recursive: true });
+const OUT = path.join(OUT_DIR, 'packet-preview.html');
 const APP = fs.readFileSync(path.join(PUBLIC, 'app.js'), 'utf8');
 
 const html = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');

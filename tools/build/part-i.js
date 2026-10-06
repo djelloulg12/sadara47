@@ -8,51 +8,7 @@ const CARD_W = 85;
 const CARD_H = 52;
 const PER_SHEET = 10;
 
-/* ---------- 2) البطاقة الفنية: الرقم تحت الصورة ---------- */
-function luxuryCard(p, kind){
-  const coach = kind === 'coach';
-  const roleLabel = coach ? 'مدرب' : 'سباح';
-  const name = p.coach_name || p.name || '';
-  const fr = p.first_name_fr ? (p.first_name_fr + ' ' + (p.last_name_fr || '')).trim() : '';
-  const no = p.membership_no || p.id || '';
-  const group = p.group_name || '';
-  const rows = coach
-    ? [['التخصص', p.specialty || 'مدرب سباحة'], ['سنوات الخبرة', (p.experience || '—') + ' سنة'],
-       ['رقم الهاتف', p.phone || '—'], ['البريد الإلكتروني', p.email || '—']]
-    : [['الفوج', group || '—'], ['رقم الهاتف', p.phone || '—'],
-       ['فصيلة الدم', p.blood_group || '—'], ['تاريخ الالتحاق', p.joined || '—']];
-  return '' +
-  '<article class="lux-card ' + (coach ? 'is-coach' : 'is-swimmer') + '" data-no="' + esc(no) + '">' +
-    '<div class="lux-side">' +
-      '<span class="lux-stars">' + STAR + STAR + STAR + '</span>' +
-      '<img class="lux-logo" src="assets/logo.png" alt="">' +
-      '<span class="lux-vert">نادي الصدارة • فوج السباحة</span>' +
-    '</div>' +
-    '<div class="lux-main">' +
-      '<div class="lux-top">' +
-        '<div class="lux-club"><b>' + CLUB_AR + '</b><small dir="ltr">' + CLUB_FR + '</small></div>' +
-        '<span class="lux-role">' + roleLabel + '</span>' +
-      '</div>' +
-      '<div class="lux-body">' +
-        '<div class="lux-photo">' +
-          '<img src="assets/logo.png" alt="">' +
-          '<span class="lux-photo-label">الصورة الشخصية</span>' +
-          '<b class="lux-no" dir="ltr">' + esc(no) + '</b>' +
-        '</div>' +
-        '<div class="lux-info">' +
-          '<h3>' + esc(name) + '</h3>' +
-          '<p class="lux-fr" dir="ltr">' + esc(fr || '—') + '</p>' +
-          ORNAMENT +
-          '<div class="lux-rows">' + rows.map(r => '<div class="lux-row"><i>' + esc(r[0]) + '</i><b>' + esc(r[1]) + '</b></div>').join('') + '</div>' +
-        '</div>' +
-        '<div class="lux-qr"><div class="qr-code" data-qr="' + esc(no) + '"></div><small>امسح لتسجيل الحضور</small></div>' +
-      '</div>' +
-      '<div class="lux-foot"><span>' + esc(CLUB.season) + '</span><span>' + esc(CLUB.address) + '</span><span dir="ltr">' + esc(CLUB.phone) + '</span></div>' +
-    '</div>' +
-  '</article>';
-}
-
-function cardSheet(list, kind){
+/* ---------- 2) البطاقة الفنية: الرقم تحت الصورة ---------- */function cardSheet(list, kind){
   const items = (Array.isArray(list) ? list : [list]).filter(Boolean);
   if (!items.length) { showToast('لا توجد بطاقات للطباعة.', 'error'); return; }
   const box = document.createElement('div');

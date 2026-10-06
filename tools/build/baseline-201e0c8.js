@@ -97,17 +97,32 @@ async function uploadCoachPdf(file, applicationNo) {
 }
 const legacyAction = action;
 function setupRegistrationMode() {
-  const category = document.querySelector('#reg-category');
-  const sectionTitle = [...document.querySelectorAll('.form-section-title')].find(x => x.textContent.includes('معلومات الولي'));
+  /* Everything below is scoped to the modal. The landing page carries its own
+     control with the same data-action, and a document-wide query would find that
+     one instead -- which is how the modal's own print button went missing. */
+  const modal = document.querySelector('.registration-modal');
+  const category = modal && modal.querySelector('#reg-category');
+  const sectionTitle = modal && [...modal.querySelectorAll('.form-section-title')].find(x => x.textContent.includes('معلومات الولي'));
   if (!category || !sectionTitle) return;
   const guardianNodes = [];
   let node = sectionTitle;
   while (node) { if (node.querySelector?.('[data-action="send-full-request"]')) break; guardianNodes.push(node); node = node.nextElementSibling; }
-  const toggle = () => { const visible = category.value === 'minor'; guardianNodes.forEach(x => { x.hidden = !visible; }); if (!visible) guardianNodes.forEach(x => x.querySelectorAll?.('input').forEach(i => { if (i.type !== 'checkbox') i.value = ''; i.checked = false; })); };
+  const submit = modal.querySelector('[data-action="send-full-request"]');
+  const DOCS = '.attached-registration-forms';
+  if (submit && !modal.querySelector(DOCS)) submit.insertAdjacentHTML('beforebegin','<div class="official-docs attached-registration-forms"><a href="form-registration-01.jpg" target="_blank" rel="noopener">استمارة النادي</a><a href="internal-regulations.jpg" target="_blank" rel="noopener">النظام الداخلي</a><a href="form-registration-02.jpg" target="_blank" rel="noopener">استمارة النظام</a><a href="registration-card.jpg" target="_blank" rel="noopener">نموذج بطاقة الانخراط</a></div>');
+  if (submit && !modal.querySelector('[data-action="print-registration-form"]')) submit.insertAdjacentHTML('beforebegin','<button class="btn btn-outline full" data-action="print-registration-form">طباعة نموذج التسجيل A4</button>');
+  /* An adult registers alone, so nothing about a guardian may reach their form,
+     and neither do the previews of the guardian's paperwork. Both blocks are
+     collected before the toggle first runs, so switching category back and
+     forth keeps them in step. */
+  const adultNodes = [...modal.querySelectorAll(DOCS + ', [data-action="print-registration-form"]')];
+  const toggle = () => {
+    const visible = category.value === 'minor';
+    guardianNodes.forEach(x => { x.hidden = !visible; });
+    adultNodes.forEach(x => { x.hidden = !visible; });
+    if (!visible) guardianNodes.forEach(x => x.querySelectorAll?.('input').forEach(i => { if (i.type !== 'checkbox') i.value = ''; i.checked = false; }));
+  };
   category.addEventListener('change', toggle); toggle();
-  const submit = document.querySelector('[data-action="send-full-request"]');
-  if (submit && !document.querySelector('.attached-registration-forms')) submit.insertAdjacentHTML('beforebegin','<div class="official-docs attached-registration-forms"><a href="form-registration-01.jpg" target="_blank" rel="noopener">استمارة النادي</a><a href="internal-regulations.jpg" target="_blank" rel="noopener">النظام الداخلي</a><a href="form-registration-02.jpg" target="_blank" rel="noopener">استمارة النظام</a><a href="registration-card.jpg" target="_blank" rel="noopener">نموذج بطاقة الانخراط</a></div>');
-  if (submit && !document.querySelector('[data-action="print-registration-form"]')) submit.insertAdjacentHTML('beforebegin','<button class="btn btn-outline full" data-action="print-registration-form">طباعة نموذج التسجيل A4</button>');
   bind();
 }
 function printRegistrationForm() {
@@ -147,16 +162,7 @@ action = async function(a,el){
     const res=await fetch('/api/applications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await res.json();if(!res.ok){alert(data.error||'تعذر إرسال الطلب');return}alert('تم إرسال الطلب رقم '+data.application_no+' والمبلغ المتوقع '+data.expected_amount+' دج');document.querySelector('.modal-backdrop')?.remove();return
   }
   return legacyAction(a,el);
-};
-
-function roleDashboard(){
-  const role=state.user?.role||'member';
-  const labels={coach:'لوحة المدرب',swimmer_adult:'مساحة السباح',swimmer_minor:'مساحة السباح القاصر',parent:'لوحة الولي',member:'مساحة عضو النادي'};
-  const names={coach:'المدرب',swimmer_adult:'السباح',swimmer_minor:'السباح',parent:'ولي السباح',member:'عضو النادي'};
-  const coach=role==='coach', parent=role==='parent', swimmer=role.startsWith('swimmer');
-  return `<div class="role-shell"><header class="role-top"><a class="brand"><span class="logo">🏊</span><span><b>الصدارة</b><small>فوج السباحة</small></span></a><div class="role-actions"><span>${labels[role]}</span><button class="icon-btn" data-action="theme">${state.dark?'☀':'◐'}</button><button class="btn btn-outline" data-action="logout">تسجيل الخروج</button></div></header><main class="role-main"><section class="role-hero"><div><span class="eyebrow">${labels[role]}</span><h1>مرحبًا، ${names[role]} 👋</h1><p>${coach?'تابع حصصك وسجّل حضور السباحين بسهولة.':parent?'تابع حضور أبنائك واشتراكاتهم وتنبيهات النادي.':swimmer?'اطّلع على حصصك وحضورك وبطاقة الانخراط.':'آخر أخبار النادي وبرامجه بين يديك.'}</p></div><div class="role-mark">${coach?'🏊‍♂️':parent?'👨‍👩‍👧':swimmer?'🏊':'⭐'}</div></section><div class="role-cards"><article><span class="stat-icon blue">▦</span><small>الحصة القادمة</small><strong>${coach?'اليوم 16:00':swimmer?'الخميس 16:00':'الخميس 16:00'}</strong><p>${coach?'مجموعة التدريب':'مسبح الصدارة'}</p></article><article><span class="stat-icon mint">✓</span><small>${coach?'سباحون نشطون':parent?'حضور الأبناء':'نسبة الحضور'}</small><strong>${coach?'—':parent?'—':'—'}</strong><p>هذا الموسم</p></article><article><span class="stat-icon gold">▣</span><small>الاشتراك</small><strong>${role==='member'?'عضو':'الحالة'}</strong><p>الموسم الرياضي</p></article></div><div class="role-grid"><section class="panel"><div class="panel-head"><div><h3>${coach?'حصصي التدريبية':parent?'آخر حضور الأبناء':swimmer?'سجل حضوري':'آخر إعلانات النادي'}</h3><p>معلومات محدثة من إدارة النادي</p></div></div>${coach?'<div class="role-list"><div><b>الخميس · 16:00 — 18:00</b><span>مجموعة التدريب · مسبح الصدارة</span></div><div><b>السبت · 16:00 — 17:30</b><span>مجموعة التدريب · مسبح الصدارة</span></div></div>':parent?'<div class="role-list"><div><b>بيانات الأبناء</b><span>لا توجد بيانات مسجلة بعد</span></div><div><b>الاشتراك</b><span>تظهر المستحقات بعد الربط بالحساب</span></div></div>':swimmer?'<div class="role-list"><div><b>سجل الحضور</b><span>ستظهر السجلات بعد تسجيل الحصص</span></div><div><b>نسبة الحضور</b><span>لا توجد بيانات كافية بعد</span></div></div>':'<div class="role-list"><div><b>فتح التسجيل للموسم الجديد</b><span>التسجيل مفتوح لفوج السباحة</span></div><div><b>تذكير بالحصة التدريبية</b><span>يرجى الحضور قبل الموعد بـ 15 دقيقة</span></div></div>'}</section><section class="panel role-links"><h3>الوصول السريع</h3><button data-page="schedule">▦ البرنامج الأسبوعي</button><button data-page="attendance">✓ الحضور</button><button data-page="card">▣ بطاقة الانخراط</button></section></div></main></div>`;
-}
-const adminDashboard=dashboard;
+};const adminDashboard=dashboard;
 dashboard=function(){return ['coach','swimmer_adult','swimmer_minor','parent','member'].includes(state.user?.role)?roleDashboard():adminDashboard()};
 const currentAction=action;
 function authMessage(text, kind='info') {
@@ -605,31 +611,7 @@ function pageNotices(){
       +'<div class="notice-actions"><button class="check-btn" data-action="edit-notice" data-id="'+esc(n.id||'')+'">تعديل</button> <button class="check-btn no" data-action="delete-notice" data-id="'+esc(n.id||'')+'">حذف</button></div></article>').join('')
       :'<p class="empty-cell">لا توجد إعلانات.</p>')
     +'</div>';
-}
-
-function cardMarkup(s,i){
-  return '<article class="print-card" data-member="'+esc(s.id)+'">'
-    +'<div class="print-card-brand"><span class="logo"></span><b>'+esc(CLUB.name)+'</b></div>'
-    +'<div class="print-card-body"><div><strong>'+esc(s.name||'')+'</strong><small>'+esc(s.group||CLUB.unit)+'</small>'
-    +'<small dir="ltr">No: '+esc(s.id||'')+'</small></div><div class="qr-code" data-qr="'+esc(s.id)+'"></div></div>'
-    +'<footer><span>'+esc(CLUB.season)+'</span><span>'+esc(CLUB.phone)+'</span></footer></article>';
-}
-function pageCards(){
-  const list=state.swimmers||[];
-  const active=list.filter(s=>s.status==='نشط'||!s.status);
-  return '<section class="card-intro"><div><span class="eyebrow">بطاقات 8.5 × 5.5 سم</span><h2>بطاقات انخراط<br>بـ QR للحضور.</h2>'
-    +'<p>يمسح المشرف أو المدرب الرمز لتسجيل حضور السباح مباشرة.</p>'
-    +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-cards">🖨 طباعة كل البطاقات</button>'
-    +'<button class="btn btn-outline" data-action="print-registration">🖨 استمارة الانخراط</button></div></div>'
-    +'<div class="membership-card"><span>'+esc(CLUB.name)+'</span><b>🏊</b><strong>بطاقة العضو</strong><small>مقاس 8.5 × 5.5 سم</small><div><i dir="ltr">'+esc(CLUB.phone)+'</i><i>'+esc(CLUB.season)+'</i></div></div></section>'
-    +'<div class="toolbar"><span class="page-description">'+active.length+' بطاقة جاهزة للطباعة — انقر "طباعة" لبطاقة واحدة.</span>'
-    +'<div class="toolbar-group">'+printBtn('print-cards','طباعة الكل')+'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button></div></div>'
-    +'<section class="card-print-grid" id="card-print-grid">'
-    +(active.length?active.map(cardMarkup).join(''):'<div class="panel empty-cell">لا توجد بطاقات بعد اعتماد السباحين.</div>')
-    +'</section>';
-}
-
-function pageGroups(){
+}function pageGroups(){
   const list=groups();
   const row=g=>{
     const members=swimmersOf(g.name);

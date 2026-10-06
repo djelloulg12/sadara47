@@ -7,12 +7,14 @@ function assetUrl(path){
 }
 const FORM_BG_URL = assetUrl(FORM_BG);
 function overlaySheet(a){
-  const vals = formValues(a || {});
-  const spots = FORM_SPOTS.map(s => {
+  const rec = a || {};
+  const vals = formValues(rec);
+  const adult = isAdultRecord(rec);
+  const spots = FORM_SPOTS.filter(s => !(adult && GUARDIAN_SPOT.test(s.id))).map(s => {
     const text = vals[s.id] === undefined ? '' : String(vals[s.id]);
-    return '<span class="f-spot" style="top:' + s.y + 'mm;right:' + s.x1 + 'mm;width:' + (s.x1 - s.x2) + 'mm">' + esc(text) + '</span>';
+    return '<span class="f-spot" style="' + spotStyle(s) + '">' + esc(text) + '</span>';
   }).join('');
-  const photo = formPhotoData(a);
+  const photo = formPhotoData(rec);
   return '<section class="f-page">'
     + '<img class="f-bg" src="' + esc(FORM_BG_URL) + '" alt="استمارة النادي">'
     + '<div class="f-photo" style="left:' + PHOTO_BOX.x + 'mm;top:' + PHOTO_BOX.y + 'mm;width:' + PHOTO_BOX.w + 'mm;height:' + PHOTO_BOX.h + 'mm">'

@@ -53,17 +53,18 @@ const errors = [];
     ['phone','0661000001'],['guardian','\u0643\u0631\u064a\u0645'],['guardian id','1970011122334']];
   for (const [label, needle] of pairs) if (!sheet.includes(needle)) errors.push('official overlay missing [' + label + ']');
   if (/undefined|NaN/.test(sheet)) errors.push('official overlay contains undefined/NaN');
-  const firstSpot = sheet.match(/top:75\.9mm[^>]*>([^<]*)</);
-  if (!firstSpot || !firstSpot[1].trim()) errors.push('the registration serial line stays empty');
-  if (firstSpot[1].length > 12) errors.push('the registration serial is too long for the printed line: ' + firstSpot[1]);
+  // The serial goes on the printed "مسجّل:" line at y = 61.95mm.
+  const serial = sheet.match(/bottom:234\.65mm[^>]*>([^<]*)</);
+  if (!serial || !serial[1].trim()) errors.push('the registration serial line stays empty');
+  else if (serial[1].length > 12) errors.push('the registration serial is too long for the printed line: ' + serial[1]);
   let blank = '';
   try { blank = w.__t.overlaySheet(null); } catch (e) { errors.push('blank overlay threw: ' + e.message); }
   const spots = t => (t.match(/class="f-spot"/g) || []).length;
-  if (spots(sheet) !== 18 || spots(blank) !== 18) errors.push('overlay slot count changed');
+  if (spots(sheet) !== 15 || spots(blank) !== 15) errors.push('overlay slot count changed');
   if (!/class="f-photo"/.test(blank)) errors.push('blank overlay must keep the photo frame');
-  const order = [75.9, 85.8, 95.6, 105.7, 115.8, 125.5, 137.6];
-  const ys = [...sheet.matchAll(/top:([\d.]+)mm/g)].map(m => Number(m[1]));
-  for (const y of order) if (!ys.some(v => Math.abs(v - y) < 0.2)) errors.push('no overlay on the rule at ' + y + 'mm');
+  const order = [61.95, 75.25, 85.05, 94.85, 104.65, 114.45, 124.25];
+  const bottoms = [...sheet.matchAll(/bottom:([\d.]+)mm/g)].map(m => 297 - Number(m[1]) - 0.4);
+  for (const y of order) if (!bottoms.some(v => Math.abs(v - y) < 0.02)) errors.push('no overlay on the rule at ' + y + 'mm');
 }
 
 // 3. luxury cards

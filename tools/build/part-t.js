@@ -114,21 +114,14 @@ function receiptSheet(a) {
 }
 
 /* ---------------- صفحة النظام الداخلي ---------------- */
+/* The regulations go out exactly as the club issued them: one A4 page with the
+   scan filling it edge to edge. No heading, no season line, no "وقّع هنا" stamp,
+   no signature row and no padding -- every one of those would print on top of
+   the document and make it no longer the original. */
 function regulationsSheet() {
-  return '<section class="pk-page pk-regs">' +
-    '<div class="pk-inner">' +
-      '<header class="pk-head">' +
-        '<div><h1>النظام الداخلي</h1><p>نادي الصدارة الرياضي — فوج السباحة · ' + esc(CLUB.season) + '</p></div>' +
-        '<div class="pk-stamp"><b>وثيقة</b><span>وقّع هنا</span></div>' +
-      '</header>' +
-      '<div class="pk-regs-body"><img src="' + esc(assetUrl('assets/internal-regulations.jpg')) + '" alt="النظام الداخلي"></div>' +
-      '<div class="pk-sign">' +
-        '<div><b>المنخرط / الولي</b><span class="pk-line"></span><small>التاريخ والتوقيع</small></div>' +
-        '<div><b>المدرب المسؤول</b><span class="pk-line"></span><small>التوقيع</small></div>' +
-        '<div class="pk-seal"><b>ختم النادي</b><span class="pk-ring"></span></div>' +
-      '</div>' +
-    '</div>' +
-  '</section>';
+  return '<section class="pk-page pk-regs">'
+    + '<img class="pk-regs-full" src="' + esc(assetUrl('assets/internal-regulations.jpg')) + '" alt="النظام الداخلي">'
+    + '</section>';
 }
 
 /* ---------------- تنسيق الحزمة ---------------- */
@@ -141,8 +134,9 @@ function packetCSS() {
 '.pk-page:last-of-type{page-break-after:auto;break-after:auto}' +
 '.pk-inner{position:absolute;inset:0;padding:16mm 15mm 12mm;display:flex;flex-direction:column}' +
 '.pk-receipt{background:#ffffff}' +
-'.pk-regs{background:#fdfefe}' +
-'.pk-regs .pk-inner{padding:14mm 15mm 12mm}' +
+'.pk-regs{background:#fff}' +
+'.pk-regs-full{position:absolute;top:0;left:0;width:210mm;height:297mm;' +
+  'object-fit:fill;display:block;border:0;margin:0;padding:0}' +
 '.pk-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10mm;' +
   'border-bottom:2.5px solid #0e8f9c;padding-bottom:5mm}' +
 '.pk-head h1{margin:0;font-size:20pt;letter-spacing:.2px;color:#071a35}' +
@@ -170,8 +164,6 @@ function packetCSS() {
 '.pk-seal{align-items:center;text-align:center;justify-content:center}' +
 '.pk-ring{display:block;border:1.5px dashed #c8a45c;border-radius:50%;height:26mm;width:26mm;margin-top:2mm}' +
 '.pk-foot{margin-top:6mm;border-top:1px solid #dbe6ec;padding-top:3mm;display:flex;flex-direction:column;gap:1.2mm;font-size:8pt;color:#5d7386}' +
-'.pk-regs-body{flex:1;margin:5mm 0;display:grid;place-items:start center;overflow:hidden}' +
-'.pk-regs-body img{max-width:100%;max-height:225mm;object-fit:contain;border:1px solid #dbe6ec;border-radius:2mm}' +
 '@media print{.pk-hint{display:none}}' +
 '.pk-hint{margin:0 0 4mm;background:#eaf6f7;border-right:4px solid #0e8f9c;padding:3mm 4mm;font-size:9pt;border-radius:1mm}' +
 '.pk-hint b{color:#071a35}';

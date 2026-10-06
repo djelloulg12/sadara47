@@ -1,4 +1,4 @@
-﻿import io, re, sys
+﻿import io, os, re, shutil, sys
 tmp = r"G:\التطبيقات والبرام\الصدارة\02\tools\build"
 g = io.open(tmp + r"\part-g.js", encoding="utf-8").read()
 gconst = "\n".join(l for l in g.split("\n")
@@ -62,5 +62,21 @@ out = out.rstrip() + "\n\n/* ---------- final layer ---------- */\n\n" + io.open
 assert out.count("{") == out.count("}"), (out.count("{"), out.count("}"))
 decl = re.findall(r"^(?:const|let|var)\s+([A-Za-z_$][\w$]*)", out, re.M)
 assert not sorted({d for d in decl if decl.count(d) > 1})
+# Two function declarations of the same name silently resolve to the later one,
+# which is how a whole layer of edits ended up being dead code. Catch it here.
+fn = re.findall(r"^function\s+([A-Za-z_$][\w$]*)", out, re.M)
+dupes = sorted({f for f in fn if fn.count(f) > 1})
+if dupes:
+    msg = "declared twice, the later copy wins: " + ", ".join(dupes)
+    if os.environ.get("SADARA_BUILD_WARN_DUPES"):
+        print("WARNING: " + msg)
+    else:
+        raise AssertionError(msg)
 io.open(tmp + r"\..\..\app.js", "w", encoding="utf-8", newline="").write(out)
+
+# The deployable copy is what Firebase serves and what every test loads, so a
+# build that leaves it behind would publish and test yesterday's code.
+shutil.copyfile(tmp + r"\..\..\app.js", tmp + r"\..\..\firebase-public\app.js")
+
 print("rebuilt:", out.count("\n") + 1, "lines | no duplicate declarations | braces balanced")
+print("synced:  app.js -> firebase-public/app.js")

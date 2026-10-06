@@ -96,17 +96,32 @@ async function uploadCoachPdf(file, applicationNo) {
 }
 const legacyAction = action;
 function setupRegistrationMode() {
-  const category = document.querySelector('#reg-category');
-  const sectionTitle = [...document.querySelectorAll('.form-section-title')].find(x => x.textContent.includes('معلومات الولي'));
+  /* Everything below is scoped to the modal. The landing page carries its own
+     control with the same data-action, and a document-wide query would find that
+     one instead -- which is how the modal's own print button went missing. */
+  const modal = document.querySelector('.registration-modal');
+  const category = modal && modal.querySelector('#reg-category');
+  const sectionTitle = modal && [...modal.querySelectorAll('.form-section-title')].find(x => x.textContent.includes('معلومات الولي'));
   if (!category || !sectionTitle) return;
   const guardianNodes = [];
   let node = sectionTitle;
   while (node) { if (node.querySelector?.('[data-action="send-full-request"]')) break; guardianNodes.push(node); node = node.nextElementSibling; }
-  const toggle = () => { const visible = category.value === 'minor'; guardianNodes.forEach(x => { x.hidden = !visible; }); if (!visible) guardianNodes.forEach(x => x.querySelectorAll?.('input').forEach(i => { if (i.type !== 'checkbox') i.value = ''; i.checked = false; })); };
+  const submit = modal.querySelector('[data-action="send-full-request"]');
+  const DOCS = '.attached-registration-forms';
+  if (submit && !modal.querySelector(DOCS)) submit.insertAdjacentHTML('beforebegin','<div class="official-docs attached-registration-forms"><a href="form-registration-01.jpg" target="_blank" rel="noopener">استمارة النادي</a><a href="internal-regulations.jpg" target="_blank" rel="noopener">النظام الداخلي</a><a href="form-registration-02.jpg" target="_blank" rel="noopener">استمارة النظام</a><a href="registration-card.jpg" target="_blank" rel="noopener">نموذج بطاقة الانخراط</a></div>');
+  if (submit && !modal.querySelector('[data-action="print-registration-form"]')) submit.insertAdjacentHTML('beforebegin','<button class="btn btn-outline full" data-action="print-registration-form">طباعة نموذج التسجيل A4</button>');
+  /* An adult registers alone, so nothing about a guardian may reach their form,
+     and neither do the previews of the guardian's paperwork. Both blocks are
+     collected before the toggle first runs, so switching category back and
+     forth keeps them in step. */
+  const adultNodes = [...modal.querySelectorAll(DOCS + ', [data-action="print-registration-form"]')];
+  const toggle = () => {
+    const visible = category.value === 'minor';
+    guardianNodes.forEach(x => { x.hidden = !visible; });
+    adultNodes.forEach(x => { x.hidden = !visible; });
+    if (!visible) guardianNodes.forEach(x => x.querySelectorAll?.('input').forEach(i => { if (i.type !== 'checkbox') i.value = ''; i.checked = false; }));
+  };
   category.addEventListener('change', toggle); toggle();
-  const submit = document.querySelector('[data-action="send-full-request"]');
-  if (submit && !document.querySelector('.attached-registration-forms')) submit.insertAdjacentHTML('beforebegin','<div class="official-docs attached-registration-forms"><a href="form-registration-01.jpg" target="_blank" rel="noopener">استمارة النادي</a><a href="internal-regulations.jpg" target="_blank" rel="noopener">النظام الداخلي</a><a href="form-registration-02.jpg" target="_blank" rel="noopener">استمارة النظام</a><a href="registration-card.jpg" target="_blank" rel="noopener">نموذج بطاقة الانخراط</a></div>');
-  if (submit && !document.querySelector('[data-action="print-registration-form"]')) submit.insertAdjacentHTML('beforebegin','<button class="btn btn-outline full" data-action="print-registration-form">طباعة نموذج التسجيل A4</button>');
   bind();
 }
 
@@ -142,16 +157,7 @@ action = async function(a,el){
     const res=await fetch('/api/applications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await res.json();if(!res.ok){alert(data.error||'تعذر إرسال الطلب');return}alert('تم إرسال الطلب رقم '+data.application_no+' والمبلغ المتوقع '+data.expected_amount+' دج');document.querySelector('.modal-backdrop')?.remove();return
   }
   return legacyAction(a,el);
-};
-
-function roleDashboard(){
-  const role=state.user?.role||'member';
-  const labels={coach:'لوحة المدرب',swimmer_adult:'مساحة السباح',swimmer_minor:'مساحة السباح القاصر',parent:'لوحة الولي',member:'مساحة عضو النادي'};
-  const names={coach:'المدرب',swimmer_adult:'السباح',swimmer_minor:'السباح',parent:'ولي السباح',member:'عضو النادي'};
-  const coach=role==='coach', parent=role==='parent', swimmer=role.startsWith('swimmer');
-  return `<div class="role-shell"><header class="role-top"><a class="brand"><span class="logo">🏊</span><span><b>الصدارة</b><small>فوج السباحة</small></span></a><div class="role-actions"><span>${labels[role]}</span><button class="icon-btn" data-action="theme" aria-label="تبديل الوضع الليلي" title="تبديل الوضع">${state.dark?'☀':'◐'}</button><button class="btn btn-outline" data-action="logout">تسجيل الخروج</button></div></header><main class="role-main"><section class="role-hero"><div><span class="eyebrow">${labels[role]}</span><h1>مرحبًا، ${names[role]} 👋</h1><p>${coach?'تابع حصصك وسجّل حضور السباحين بسهولة.':parent?'تابع حضور أبنائك واشتراكاتهم وتنبيهات النادي.':swimmer?'اطّلع على حصصك وحضورك وبطاقة الانخراط.':'آخر أخبار النادي وبرامجه بين يديك.'}</p></div><div class="role-mark">${coach?'🏊‍♂️':parent?'👨‍👩‍👧':swimmer?'🏊':'⭐'}</div></section><div class="role-cards"><article><span class="stat-icon blue">▦</span><small>الحصة القادمة</small><strong>${coach?'اليوم 16:00':swimmer?'الخميس 16:00':'الخميس 16:00'}</strong><p>${coach?'مجموعة التدريب':'مسبح الصدارة'}</p></article><article><span class="stat-icon mint">✓</span><small>${coach?'سباحون نشطون':parent?'حضور الأبناء':'نسبة الحضور'}</small><strong>${coach?'—':parent?'—':'—'}</strong><p>هذا الموسم</p></article><article><span class="stat-icon gold">▣</span><small>الاشتراك</small><strong>${role==='member'?'عضو':'الحالة'}</strong><p>الموسم الرياضي</p></article></div><div class="role-grid"><section class="panel"><div class="panel-head"><div><h3>${coach?'حصصي التدريبية':parent?'آخر حضور الأبناء':swimmer?'سجل حضوري':'آخر إعلانات النادي'}</h3><p>معلومات محدثة من إدارة النادي</p></div></div>${coach?'<div class="role-list"><div><b>الخميس · 16:00 — 18:00</b><span>مجموعة التدريب · مسبح الصدارة</span></div><div><b>السبت · 16:00 — 17:30</b><span>مجموعة التدريب · مسبح الصدارة</span></div></div>':parent?'<div class="role-list"><div><b>بيانات الأبناء</b><span>لا توجد بيانات مسجلة بعد</span></div><div><b>الاشتراك</b><span>تظهر المستحقات بعد الربط بالحساب</span></div></div>':swimmer?'<div class="role-list"><div><b>سجل الحضور</b><span>ستظهر السجلات بعد تسجيل الحصص</span></div><div><b>نسبة الحضور</b><span>لا توجد بيانات كافية بعد</span></div></div>':'<div class="role-list"><div><b>فتح التسجيل للموسم الجديد</b><span>التسجيل مفتوح لفوج السباحة</span></div><div><b>تذكير بالحصة التدريبية</b><span>يرجى الحضور قبل الموعد بـ 15 دقيقة</span></div></div>'}</section><section class="panel role-links"><h3>الوصول السريع</h3><button data-page="schedule">▦ البرنامج الأسبوعي</button><button data-page="attendance">✓ الحضور</button><button data-page="card">▣ بطاقة الانخراط</button></section></div></main></div>`;
-}
-const adminDashboard=dashboard;
+};const adminDashboard=dashboard;
 dashboard=function(){return ['coach','swimmer_adult','swimmer_minor','parent','member'].includes(state.user?.role)?roleDashboard():adminDashboard()};
 const currentAction=action;
 function authMessage(text, kind='info') {
@@ -599,31 +605,7 @@ function pageNotices(){
       +'<div class="notice-actions"><button class="check-btn" data-action="edit-notice" data-id="'+esc(n.id||'')+'">تعديل</button> <button class="check-btn no" data-action="delete-notice" data-id="'+esc(n.id||'')+'">حذف</button></div></article>').join('')
       :'<p class="empty-cell">لا توجد إعلانات.</p>')
     +'</div>';
-}
-
-function cardMarkup(s,i){
-  return '<article class="print-card" data-member="'+esc(s.id)+'">'
-    +'<div class="print-card-brand"><span class="logo"></span><b>'+esc(CLUB.name)+'</b></div>'
-    +'<div class="print-card-body"><div><strong>'+esc(s.name||'')+'</strong><small>'+esc(s.group||CLUB.unit)+'</small>'
-    +'<small dir="ltr">No: '+esc(s.id||'')+'</small></div><div class="qr-code" data-qr="'+esc(s.id)+'"></div></div>'
-    +'<footer><span>'+esc(CLUB.season)+'</span><span>'+esc(CLUB.phone)+'</span></footer></article>';
-}
-function pageCards(){
-  const list=state.swimmers||[];
-  const active=list.filter(s=>s.status==='نشط'||!s.status);
-  return '<section class="card-intro"><div><span class="eyebrow">بطاقات 8.5 × 5.5 سم</span><h2>بطاقات انخراط<br>بـ QR للحضور.</h2>'
-    +'<p>يمسح المشرف أو المدرب الرمز لتسجيل حضور السباح مباشرة.</p>'
-    +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-cards">🖨 طباعة كل البطاقات</button>'
-    +'<button class="btn btn-outline" data-action="print-registration">🖨 استمارة الانخراط</button></div></div>'
-    +'<div class="membership-card"><span>'+esc(CLUB.name)+'</span><b>🏊</b><strong>بطاقة العضو</strong><small>مقاس 8.5 × 5.5 سم</small><div><i dir="ltr">'+esc(CLUB.phone)+'</i><i>'+esc(CLUB.season)+'</i></div></div></section>'
-    +'<div class="toolbar"><span class="page-description">'+active.length+' بطاقة جاهزة للطباعة — انقر "طباعة" لبطاقة واحدة.</span>'
-    +'<div class="toolbar-group">'+printBtn('print-cards','طباعة الكل')+'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button></div></div>'
-    +'<section class="card-print-grid" id="card-print-grid">'
-    +(active.length?active.map(cardMarkup).join(''):'<div class="panel empty-cell">لا توجد بطاقات بعد اعتماد السباحين.</div>')
-    +'</section>';
-}
-
-function pageGroups(){
+}function pageGroups(){
   const list=groups();
   const row=g=>{
     const members=swimmersOf(g.name);
@@ -1180,11 +1162,7 @@ const CLUB_MOTTO = 'أخلاق، احترام، وانضباط';
 const STAR = '<svg viewBox="0 0 24 24" class="star"><path d="M12 2l2.6 6.3 6.8.4-5.2 4.3 1.7 6.6L12 16l-5.9 3.6 1.7-6.6L2.6 8.7l6.8-.4z"/></svg>';
 const ORNAMENT = '<svg class="orn" viewBox="0 0 200 60" preserveAspectRatio="none"><path d="M0 30 Q25 6 50 30 T100 30 T150 30 T200 30" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M0 34 Q25 10 50 34 T100 34 T150 34 T200 34" fill="none" stroke="currentColor" stroke-width=".7" opacity=".6"/></svg>';
 
-/* ---------------------- ربط وثائق النادي ---------------------- */
-function coaches(){return (state.applications||[]).filter(a=>a.application_type==='coach');}
-function coachAccounts(){return (state.cards||[]).filter(c=>c.role==='coach'||c.kind==='coach');}
-function swimmersActive(){return (state.swimmers||[]).filter(s=>s.status==='نشط'||!s.status);}
-function luxPreviewBox(items,kind){
+/* ---------------------- ربط وثائق النادي ---------------------- */function coachAccounts(){return (state.cards||[]).filter(c=>c.role==='coach'||c.kind==='coach');}function luxPreviewBox(items,kind){
   if(!items.length) return '<div class="panel empty-cell">لا توجد بيانات.</div>';
   return '<div class="lux-preview">'+items.slice(0,4).map(p=>luxuryCard(p,kind)).join('')+'</div>';
 }
@@ -1239,35 +1217,7 @@ function cardMarkup(s,i){
     +'<div class="qr-code" data-qr="'+esc(s.id)+'"></div></div>'
     +'<footer><span>'+esc(CLUB.address)+'</span><span dir="ltr">'+esc(CLUB.phone)+'</span></footer>'
     +'</div></div></article>';
-}
-function pageCards(){
-  const list=state.swimmers||[];
-  const active=list.filter(s=>s.status==='نشط'||!s.status);
-  const coachApps=coaches();
-  return '<section class="card-intro"><div><span class="eyebrow">بطاقات 8.5 × 5.5 سم</span><h2>بطاقات انخراط<br>بـ QR للحضور.</h2>'
-    +'<p>يمسح المشرف أو المدرب الرمز لتسجيل حضور السباح مباشرة.</p>'
-    +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-cards">🖨 طباعة كل البطاقات</button>'
-    +'<button class="btn btn-outline" data-action="print-registration">🖨 استمارة الانخراط</button></div></div>'
-    +'<div class="membership-card"><span>'+esc(CLUB.name)+'</span><b>🏊</b><strong>بطاقة العضو</strong><small>مقاس 8.5 × 5.5 سم</small><div><i dir="ltr">'+esc(CLUB.phone)+'</i><i>'+esc(CLUB.season)+'</i></div></div></section>'
-
-    +'<div class="toolbar"><span class="page-description">'+active.length+' بطاقة انخراط جاهزة للطباعة — بطاقة واحدة بنقرة.</span>'
-    +'<div class="toolbar-group">'+printBtn('print-cards','طباعة الكل')+'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button></div></div>'
-    +'<section class="card-print-grid" id="card-print-grid">'
-    +(active.length?active.map(cardMarkup).join(''):'<div class="panel empty-cell">لا توجد بطاقات بعد اعتماد السباحين.</div>')
-    +'</section>'
-
-    +'<div class="toolbar" style="margin-top:26px"><span class="page-description">البطاقات الفنية — تصميم فاخر بالهوية البصرية للنادي، للسباحين والمدربين.</span>'
-    +'<div class="toolbar-group">'
-    +'<button class="btn btn-primary" data-action="print-lux-swimmers">🎨 بطاقات فنية للسباحين</button>'
-    +'<button class="btn btn-outline" data-action="print-lux-coaches">🎨 بطاقات فنية للمدربين</button>'
-    +'</div></div>'
-    +luxPreviewBox(active,'swimmer')
-    +(coachApps.length?'<div class="toolbar" style="margin-top:20px"><span class="page-description">معاينة البطاقات الفنية للمدربين ('+coachApps.length+')</span>'
-      +'<div class="official-forms-list">'+coachApps.map(c=>'<button data-action="print-coach-luxtour" data-id="'+esc(c.id)+'"><b>'+esc(c.coach_name||'مدرب')+'</b><span>'+esc(c.coach_phone||c.coach_email||'')+' · بطاقة فنية واحدة</span></button>').join('')+'</div></div>'
-      +luxPreviewBox(coachApps,'coach'):'');
-}
-
-/* applications page: official form printing */
+}/* applications page: official form printing */
 const corePageView2=pageView;
 pageView=function(p){
   if(p==='applications'){
@@ -1292,51 +1242,7 @@ const CARD_W = 85;
 const CARD_H = 52;
 const PER_SHEET = 10;
 
-/* ---------- 2) البطاقة الفنية: الرقم تحت الصورة ---------- */
-function luxuryCard(p, kind){
-  const coach = kind === 'coach';
-  const roleLabel = coach ? 'مدرب' : 'سباح';
-  const name = p.coach_name || p.name || '';
-  const fr = p.first_name_fr ? (p.first_name_fr + ' ' + (p.last_name_fr || '')).trim() : '';
-  const no = p.membership_no || p.id || '';
-  const group = p.group_name || '';
-  const rows = coach
-    ? [['التخصص', p.specialty || 'مدرب سباحة'], ['سنوات الخبرة', (p.experience || '—') + ' سنة'],
-       ['رقم الهاتف', p.phone || '—'], ['البريد الإلكتروني', p.email || '—']]
-    : [['الفوج', group || '—'], ['رقم الهاتف', p.phone || '—'],
-       ['فصيلة الدم', p.blood_group || '—'], ['تاريخ الالتحاق', p.joined || '—']];
-  return '' +
-  '<article class="lux-card ' + (coach ? 'is-coach' : 'is-swimmer') + '" data-no="' + esc(no) + '">' +
-    '<div class="lux-side">' +
-      '<span class="lux-stars">' + STAR + STAR + STAR + '</span>' +
-      '<img class="lux-logo" src="assets/logo.png" alt="">' +
-      '<span class="lux-vert">نادي الصدارة • فوج السباحة</span>' +
-    '</div>' +
-    '<div class="lux-main">' +
-      '<div class="lux-top">' +
-        '<div class="lux-club"><b>' + CLUB_AR + '</b><small dir="ltr">' + CLUB_FR + '</small></div>' +
-        '<span class="lux-role">' + roleLabel + '</span>' +
-      '</div>' +
-      '<div class="lux-body">' +
-        '<div class="lux-photo">' +
-          '<img src="assets/logo.png" alt="">' +
-          '<span class="lux-photo-label">الصورة الشخصية</span>' +
-          '<b class="lux-no" dir="ltr">' + esc(no) + '</b>' +
-        '</div>' +
-        '<div class="lux-info">' +
-          '<h3>' + esc(name) + '</h3>' +
-          '<p class="lux-fr" dir="ltr">' + esc(fr || '—') + '</p>' +
-          ORNAMENT +
-          '<div class="lux-rows">' + rows.map(r => '<div class="lux-row"><i>' + esc(r[0]) + '</i><b>' + esc(r[1]) + '</b></div>').join('') + '</div>' +
-        '</div>' +
-        '<div class="lux-qr"><div class="qr-code" data-qr="' + esc(no) + '"></div><small>امسح لتسجيل الحضور</small></div>' +
-      '</div>' +
-      '<div class="lux-foot"><span>' + esc(CLUB.season) + '</span><span>' + esc(CLUB.address) + '</span><span dir="ltr">' + esc(CLUB.phone) + '</span></div>' +
-    '</div>' +
-  '</article>';
-}
-
-function cardSheet(list, kind){
+/* ---------- 2) البطاقة الفنية: الرقم تحت الصورة ---------- */function cardSheet(list, kind){
   const items = (Array.isArray(list) ? list : [list]).filter(Boolean);
   if (!items.length) { showToast('لا توجد بطاقات للطباعة.', 'error'); return; }
   const box = document.createElement('div');
@@ -1715,49 +1621,84 @@ syncApi=async function(){
    ========================================================== */
 const FORM_BG = 'assets/form-registration-01.jpg';
 const PHOTO_BOX = { x: 22.1, y: 67.6, w: 36.4, h: 42.5 };
+
+const PAGE_W = 210, PAGE_H = 297;   // A4 in millimetres
+
+/* Where a value may go, measured off assets/form-registration-01.jpg itself.
+   Every field on the scanned form is printed as "label:" followed by a blank
+   writing line, and the club reads right to left: the label sits on the right,
+   its colon is the last thing printed, and the line runs leftwards from there.
+
+   So each spot stores the line it belongs on and the colon that ends its label:
+     y      the printed rule, in mm from the top of the page
+     x0     where that rule starts, in mm from the left edge of the page
+     colon  the left edge of the printed colon, in mm from the left of the page
+
+   A value is drawn between x0 and the colon, right-aligned, so it always begins
+   immediately after the colon and never runs over the printed label. Two
+   constants do the rest, so every field obeys the same rule:
+     SPOT_GAP     clear space left between the colon and the first character
+     SPOT_CLEAR   clear space left between the text and the rule it sits on
+
+   The spots whose id starts with "parent_", "card_" or is "authorised_for"
+   belong to the guardian declaration, which exists only for a minor;
+   overlaySheet leaves them out for an adult. The doctor, the signature and the
+   place of issue have no line on the scan wide enough to hold them, so nothing
+   is written over printed wording. */
 const FORM_SPOTS = [
-  { id: 'membership', y: 75.9, x1: 170, x2: 60 },
-  { id: 'first_name', y: 85.8, x1: 170, x2: 60 },
-  { id: 'last_name', y: 95.6, x1: 170, x2: 60 },
-  { id: 'birth_date', y: 105.7, x1: 170, x2: 60 },
-  { id: 'address', y: 115.8, x1: 172, x2: 62 },
-  { id: 'blood_group', y: 125.5, x1: 170, x2: 60 },
-  { id: 'phone', y: 137.6, x1: 170, x2: 60 },
-  { id: 'medical_person', y: 149.8, x1: 150, x2: 60 },
-  { id: 'doctor', y: 181.4, x1: 168, x2: 90 },
-  { id: 'parent_name', y: 210.2, x1: 200, x2: 140 },
-  { id: 'parent_birth', y: 210.2, x1: 100, x2: 55 },
-  { id: 'parent_nationality', y: 210.2, x1: 44, x2: 14 },
-  { id: 'parent_id', y: 219.4, x1: 200, x2: 120 },
-  { id: 'card_issued_at', y: 219.4, x1: 108, x2: 55 },
-  { id: 'card_place', y: 219.4, x1: 44, x2: 14 },
-  { id: 'authorised_for', y: 229.1, x1: 200, x2: 120 },
-  { id: 'child_place', y: 229.1, x1: 112, x2: 55 },
-  { id: 'signature', y: 238.8, x1: 150, x2: 60 }
+  { id: 'membership',         y: 61.95, x0: 90.8,  colon: 193.5 },
+  { id: 'first_name',         y: 75.25, x0: 62.3,  colon: 178.3 },
+  { id: 'last_name',          y: 85.05, x0: 62.3,  colon: 178.3 },
+  { id: 'birth_date',         y: 94.85, x0: 62.3,  colon: 178.3 },
+  { id: 'address',            y: 104.65, x0: 62.3, colon: 178.3 },
+  { id: 'blood_group',        y: 114.45, x0: 62.1,  colon: 178.3 },
+  { id: 'phone',              y: 124.25, x0: 62.3,  colon: 178.3 },
+  { id: 'medical_person',     y: 148.57, x0: 60.2,  colon: 151.7 },
+  { id: 'parent_name',        y: 208.78, x0: 105.7, colon: 152.9 },
+  { id: 'parent_birth',       y: 208.78, x0: 32.9,  colon: 71.9 },
+  { id: 'parent_nationality', y: 208.78, x0: 4.2,   colon: 31.5 },
+  { id: 'parent_id',          y: 217.70, x0: 106.0, colon: 149.4 },
+  { id: 'card_issued_at',     y: 217.70, x0: 40.0,  colon: 73.3 },
+  { id: 'card_place',         y: 217.70, x0: 4.2,   colon: 31.5 },
+  { id: 'authorised_for',     y: 226.80, x0: 106.0, colon: 186.4 }
 ];
+const SPOT_GAP = 1.6;    // mm of clear paper between the colon and the value
+const SPOT_CLEAR = 0.4;  // mm of clear paper between the value and the rule
+
+const GUARDIAN_SPOT = /^(parent_|card_|authorised_for$)/;
+
+/* An adult is not a minor: the guardian block belongs to another person and has
+   to stay empty on their form. */
+const isAdultRecord = a => String((a && a.category) || '').toLowerCase() === 'adult';
+
+/* Turns a spot into inline CSS. Anchoring on the bottom edge keeps the value
+   sitting on its rule whatever the webfont's own metrics turn out to be. */
+function spotStyle(s) {
+  const right = s.colon - SPOT_GAP;
+  return 'bottom:' + (PAGE_H - s.y - SPOT_CLEAR).toFixed(2) + 'mm;'
+    + 'right:' + (PAGE_W - right).toFixed(2) + 'mm;'
+    + 'width:' + (right - s.x0).toFixed(2) + 'mm';
+}
 function formValues(a){
   const v = (k, fb) => (a && a[k] ? a[k] : (fb || ''));
-  const bd = a && a.birth_date ? String(a.birth_date) : '';
-  const dateAr = /^\d{4}-\d{2}-\d{2}$/.test(bd) ? bd.split('-').reverse().join('/') : bd;
+  const dayFirst = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))
+    ? String(d).split('-').reverse().join('/') : String(d || '');
   return {
     membership: v('membership_no', a && a.application_no ? String(a.application_no).slice(-8) : ''),
     first_name: v('first_name_ar'),
     last_name: v('last_name_ar'),
-    birth_date: dateAr,
+    birth_date: dayFirst(a && a.birth_date),
     address: v('address'),
     blood_group: v('blood_group'),
     phone: v('phone'),
     medical_person: (v('first_name_ar') + ' ' + v('last_name_ar')).trim(),
-    doctor: v('doctor'),
     parent_name: (v('guardian_first_name') + ' ' + v('guardian_last_name')).trim(),
-    parent_birth: v('guardian_birth_date'),
-    parent_nationality: v('guardian_nationality', 'جزائري'),
-    parent_id: v('guardian_national_id') || v('national_id'),
-    card_issued_at: v('card_issue_date'),
-    card_place: v('card_issue_place', 'غرداية'),
-    authorised_for: v('guardian_child', v('first_name_ar')),
-    child_place: v('child_place', 'غرداية'),
-    signature: ''
+    parent_birth: dayFirst(v('guardian_birth_date')),
+    parent_nationality: v('guardian_nationality'),
+    parent_id: v('guardian_national_id'),
+    card_issued_at: dayFirst(v('card_issue_date')),
+    card_place: v('card_issue_place'),
+    authorised_for: v('guardian_child')
   };
 }
 function formPhotoData(p){
@@ -1765,63 +1706,10 @@ function formPhotoData(p){
   if (src && /^(data:|https?:)/.test(src)) return src;
   return '';
 }
-function overlaySheet(a){
-  const vals = formValues(a || {});
-  const spots = FORM_SPOTS.map(s => {
-    const text = vals[s.id] === undefined ? '' : String(vals[s.id]);
-    return '<span class="f-spot" style="top:' + s.y + 'mm;right:' + s.x1 + 'mm;width:' + (s.x1 - s.x2) + 'mm">' + esc(text) + '</span>';
-  }).join('');
-  const photo = formPhotoData(a);
-  return '<section class="f-page">'
-    + '<img class="f-bg" src="' + FORM_BG + '" alt="">'
-    + '<div class="f-photo" style="left:' + PHOTO_BOX.x + 'mm;top:' + PHOTO_BOX.y + 'mm;width:' + PHOTO_BOX.w + 'mm;height:' + PHOTO_BOX.h + 'mm">'
-    + (photo ? '<img src="' + esc(photo) + '" alt="">' : '<span>الصورة</span>')
-    + '</div>'
-    + spots
-    + '</section>';
-}
-function officialFormCSS(){
-  return '' +
-'@page{size:A4 portrait;margin:0}' +
-'@font-face{font-family:"CairoFallback";src:local("Cairo"),local("Tajawal"),local("Segoe UI")}' +
-'*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-'html,body{margin:0;padding:0;background:#fff}' +
-'body{font-family:Cairo,"CairoFallback","Segoe UI",Tahoma,Arial,sans-serif;color:#12333f}' +
-'.f-page{position:relative;width:210mm;height:297mm;overflow:hidden;background:#fff;page-break-after:always;break-after:page;margin:0 auto}' +
-'.f-page:last-child{page-break-after:auto;break-after:auto}' +
-'.f-bg{position:absolute;inset:0;width:210mm;height:297mm;object-fit:fill;display:block;user-select:none}' +
-'.f-spot{position:absolute;display:flex;align-items:flex-end;justify-content:flex-start;' +
-  'font-size:12.5pt;line-height:1.05;font-weight:700;color:#0b3b46;letter-spacing:-.1px;' +
-  'padding-bottom:.3mm;white-space:nowrap;overflow:hidden;text-overflow:clip;' +
-  'direction:rtl;text-align:right;background:transparent}' +
-'.f-photo{position:absolute;overflow:hidden;border-radius:2mm;background:#fff}' +
-'.f-photo img{width:100%;height:100%;object-fit:cover;display:block}' +
-'.f-photo span{position:absolute;inset:0;display:grid;place-items:center;font-size:9pt;color:#9db4bb;letter-spacing:1px}';
-}
-function printOfficialForms(list){
-  const items = (Array.isArray(list) ? list : [list]).filter(x => x !== undefined);
-  if (!items.length) { showToast('لا توجد بيانات لطباعة الاستمارة.', 'error'); return; }
-  const pages = items.map(a => overlaySheet(a && Object.keys(a).length ? a : null)).join('');
-  const doc = '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">'
-    + '<title>استمارة الإلحاق — ' + CLUB_AR + '</title>'
-    + '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-    + '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=block" rel="stylesheet">'
-    + '<style>' + officialFormCSS() + '</style></head><body>' + pages
-    + '</body></html>';
-  const w = window.open('', '_blank', 'noopener,noreferrer');
-  if (!w) { showToast('اسمح بالنوافذ المنبثقة لطباعة الاستمارة.', 'error'); return; }
-  w.document.open();
-  w.document.write(doc);
-  w.document.close();
-  try {
-    const go = () => {
-      if (w.document.fonts && w.document.fonts.ready) { w.document.fonts.ready.then(() => setTimeout(() => w.print(), 120)); }
-      else setTimeout(() => w.print(), 600);
-    };
-    if (w.document.readyState === 'complete') setTimeout(go, 900);
-    else w.addEventListener('load', () => setTimeout(go, 200));
-  } catch (_) { /* printing is still available from the popup menu */ }
-}
+
+/* overlaySheet, officialFormCSS and printOfficialForms live in part-m.js, which
+   is concatenated after this layer. Keeping a second copy here only meant the
+   later one silently won, so this file now stops at the shared geometry. */
 
 /* ==========================================================
    صورة المنخرط + قصر طباعة كل البطاقات على الإدارة
@@ -1927,12 +1815,14 @@ function assetUrl(path){
 }
 const FORM_BG_URL = assetUrl(FORM_BG);
 function overlaySheet(a){
-  const vals = formValues(a || {});
-  const spots = FORM_SPOTS.map(s => {
+  const rec = a || {};
+  const vals = formValues(rec);
+  const adult = isAdultRecord(rec);
+  const spots = FORM_SPOTS.filter(s => !(adult && GUARDIAN_SPOT.test(s.id))).map(s => {
     const text = vals[s.id] === undefined ? '' : String(vals[s.id]);
-    return '<span class="f-spot" style="top:' + s.y + 'mm;right:' + s.x1 + 'mm;width:' + (s.x1 - s.x2) + 'mm">' + esc(text) + '</span>';
+    return '<span class="f-spot" style="' + spotStyle(s) + '">' + esc(text) + '</span>';
   }).join('');
-  const photo = formPhotoData(a);
+  const photo = formPhotoData(rec);
   return '<section class="f-page">'
     + '<img class="f-bg" src="' + esc(FORM_BG_URL) + '" alt="استمارة النادي">'
     + '<div class="f-photo" style="left:' + PHOTO_BOX.x + 'mm;top:' + PHOTO_BOX.y + 'mm;width:' + PHOTO_BOX.w + 'mm;height:' + PHOTO_BOX.h + 'mm">'
@@ -2383,21 +2273,14 @@ function receiptSheet(a) {
 }
 
 /* ---------------- صفحة النظام الداخلي ---------------- */
+/* The regulations go out exactly as the club issued them: one A4 page with the
+   scan filling it edge to edge. No heading, no season line, no "وقّع هنا" stamp,
+   no signature row and no padding -- every one of those would print on top of
+   the document and make it no longer the original. */
 function regulationsSheet() {
-  return '<section class="pk-page pk-regs">' +
-    '<div class="pk-inner">' +
-      '<header class="pk-head">' +
-        '<div><h1>النظام الداخلي</h1><p>نادي الصدارة الرياضي — فوج السباحة · ' + esc(CLUB.season) + '</p></div>' +
-        '<div class="pk-stamp"><b>وثيقة</b><span>وقّع هنا</span></div>' +
-      '</header>' +
-      '<div class="pk-regs-body"><img src="' + esc(assetUrl('assets/internal-regulations.jpg')) + '" alt="النظام الداخلي"></div>' +
-      '<div class="pk-sign">' +
-        '<div><b>المنخرط / الولي</b><span class="pk-line"></span><small>التاريخ والتوقيع</small></div>' +
-        '<div><b>المدرب المسؤول</b><span class="pk-line"></span><small>التوقيع</small></div>' +
-        '<div class="pk-seal"><b>ختم النادي</b><span class="pk-ring"></span></div>' +
-      '</div>' +
-    '</div>' +
-  '</section>';
+  return '<section class="pk-page pk-regs">'
+    + '<img class="pk-regs-full" src="' + esc(assetUrl('assets/internal-regulations.jpg')) + '" alt="النظام الداخلي">'
+    + '</section>';
 }
 
 /* ---------------- تنسيق الحزمة ---------------- */
@@ -2410,8 +2293,9 @@ function packetCSS() {
 '.pk-page:last-of-type{page-break-after:auto;break-after:auto}' +
 '.pk-inner{position:absolute;inset:0;padding:16mm 15mm 12mm;display:flex;flex-direction:column}' +
 '.pk-receipt{background:#ffffff}' +
-'.pk-regs{background:#fdfefe}' +
-'.pk-regs .pk-inner{padding:14mm 15mm 12mm}' +
+'.pk-regs{background:#fff}' +
+'.pk-regs-full{position:absolute;top:0;left:0;width:210mm;height:297mm;' +
+  'object-fit:fill;display:block;border:0;margin:0;padding:0}' +
 '.pk-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10mm;' +
   'border-bottom:2.5px solid #0e8f9c;padding-bottom:5mm}' +
 '.pk-head h1{margin:0;font-size:20pt;letter-spacing:.2px;color:#071a35}' +
@@ -2439,8 +2323,6 @@ function packetCSS() {
 '.pk-seal{align-items:center;text-align:center;justify-content:center}' +
 '.pk-ring{display:block;border:1.5px dashed #c8a45c;border-radius:50%;height:26mm;width:26mm;margin-top:2mm}' +
 '.pk-foot{margin-top:6mm;border-top:1px solid #dbe6ec;padding-top:3mm;display:flex;flex-direction:column;gap:1.2mm;font-size:8pt;color:#5d7386}' +
-'.pk-regs-body{flex:1;margin:5mm 0;display:grid;place-items:start center;overflow:hidden}' +
-'.pk-regs-body img{max-width:100%;max-height:225mm;object-fit:contain;border:1px solid #dbe6ec;border-radius:2mm}' +
 '@media print{.pk-hint{display:none}}' +
 '.pk-hint{margin:0 0 4mm;background:#eaf6f7;border-right:4px solid #0e8f9c;padding:3mm 4mm;font-size:9pt;border-radius:1mm}' +
 '.pk-hint b{color:#071a35}';
