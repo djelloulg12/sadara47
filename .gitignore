@@ -37,3 +37,4 @@ Thumbs.db
 .vscode/
 tools/tests/out/
 tools/intercept-roots.pem
+.firebase/

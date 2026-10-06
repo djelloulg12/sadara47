@@ -41,6 +41,23 @@
     return { profile };
   };
   const ROW_LIMIT = 1000;
+  // Reads are unordered on purpose: a query with an orderBy fails outright when
+  // any older document is missing the field, so the display order is applied here.
+  const byOrder = (list) => list.slice().sort((a, b) => {
+    const x = Number(a.order), y = Number(b.order);
+    const ax = Number.isFinite(x), by = Number.isFinite(y);
+    if (ax && by) return x - y;
+    if (ax) return -1;
+    if (by) return 1;
+    return 0;
+  });
+  const DAY_ORDER = { 'الأحد': 1, 'الإثنين': 2, 'الثلاثاء': 3, 'الأربعاء': 4, 'الخميس': 5, 'السبت': 6 };
+  const byDay = (list) => list.slice().sort((a, b) => {
+    const x = DAY_ORDER[a.day_name] || 99, y = DAY_ORDER[b.day_name] || 99;
+    if (x !== y) return x - y;
+    return String(a.time_range || '').localeCompare(String(b.time_range || ''));
+  });
+
   const rows = async name => (await db.collection(name).limit(ROW_LIMIT).get())
     .docs.map(d => ({ id: d.id, ...d.data() }));
   const extrasDoc = () => db.collection('fee_settings').doc('extras');
@@ -106,13 +123,13 @@
       }
 
       if (path === '/api/subscriptions' && method === 'GET') {
-        const plans = (await rows('subscription_plans')).filter(p => p.active !== false);
+        const plans = byOrder((await rows('subscription_plans')).filter(p => p.active !== false));
         return jsonResponse(plans.length ? plans : DEFAULT_PLANS);
       }
       if (path === '/api/subscription-plans' && method === 'GET') {
         const [plans, extras] = await Promise.all([rows('subscription_plans'), readExtras()]);
         return jsonResponse({
-          plans: plans.length ? plans : DEFAULT_PLANS.map((p, i) => ({ id: p.code, active: true, ...p, order: i + 1 })),
+          plans: plans.length ? byOrder(plans) : DEFAULT_PLANS.map((p, i) => ({ id: p.code, active: true, ...p, order: i + 1 })),
           extras: { transport: Number(extras.transport) || 900, uniform: Number(extras.uniform) || 2500 }
         });
       }
@@ -229,7 +246,7 @@
       }
 
       /* ---------------- schedule ---------------- */
-      if (path === '/api/schedule' && method === 'GET') return jsonResponse(await rows('schedules'));
+      if (path === '/api/schedule' && method === 'GET') return jsonResponse(byDay(await rows('schedules')));
       if (path === '/api/schedule' && (method === 'POST' || method === 'PUT')) {
         const gate = await managerView('هذه العملية لرئيس النادي فقط');
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
