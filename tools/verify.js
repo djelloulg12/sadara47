@@ -17,6 +17,7 @@ const SUITES = [
   ['review', 'review.test.js', 'first paint, public page, quota, CSV, audit, privacy, a11y'],
   ['packet', 'packet.test.js', 'instant print, receipt, regulations, signed copy, settlement'],
   ['photo-form', 'photo-form.test.js', 'member photo, print gate, official form overlay'],
+  ['signin', 'signin.test.js', 'sign-in always answers in Arabic'],
   ['modifications', 'modifications.test.js', 'roster, cards, timetable, roles'],
   ['documents', 'documents.test.js', 'every generated document'],
   ['smoke', 'smoke.js', 'every page, every control, every role'],

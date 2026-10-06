@@ -332,8 +332,14 @@
       return jsonResponse({ error: 'المسار غير موجود' }, 404);
     } catch (error) {
       console.error('Firebase API error', error);
-      const denied = String(error && error.code || '').includes('permission-denied');
-      return jsonResponse({ error: denied ? 'ليست لديك صلاحية لهذه العملية' : (error.message || 'تعذر تنفيذ الطلب') }, error.code && String(error.code).startsWith('auth/') ? 401 : (denied ? 403 : 400));
+      const code = String((error && error.code) || '');
+      const denied = code.includes('permission-denied');
+      /* The code travels with the message: the page turns it into something a
+         member can act on, which a raw Firebase string is not. */
+      return jsonResponse({
+        error: denied ? 'ليست لديك صلاحية لهذه العملية' : (error.message || 'تعذر تنفيذ الطلب'),
+        code
+      }, code.startsWith('auth/') ? 401 : (denied ? 403 : 400));
     }
   };
 })();

@@ -169,6 +169,31 @@ function authMessage(text, kind='info') {
   const box = document.querySelector('#auth-message');
   if (box) { box.textContent = text; box.className = 'form-message ' + kind; }
 }
+/* Turns a sign-in failure into something a member can act on. A Firebase error
+   code on its own means nothing to the person standing at the club desk. */
+const LOGIN_MESSAGES = {
+  'auth/configuration-not-found': 'تسجيل الدخول غير مُهيّأ على هذه المنصة بعد. أبلغ مسيّر النادي ليجهّز الحسابات.',
+  'auth/operation-not-allowed': 'الدخول بالبريد وكلمة المرور غير مفعّل. أبلغ مسيّر النادي.',
+  'auth/invalid-credential': 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+  'auth/wrong-password': 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+  'auth/user-not-found': 'لا يوجد حساب بهذا البريد الإلكتروني.',
+  'auth/invalid-email': 'صيغة البريد الإلكتروني غير صحيحة.',
+  'auth/user-disabled': 'هذا الحساب موقوف. أبلغ مسيّر النادي.',
+  'auth/too-many-requests': 'محاولات كثيرة متتالية. انتظر دقيقة ثم أعد المحاولة.',
+  'auth/network-request-failed': 'تعذّر الاتصال بالخادم. تحقّق من الإنترنت ثم أعد المحاولة.'
+};
+function loginFailure(data){
+  const code = data && data.code ? String(data.code) : '';
+  if (LOGIN_MESSAGES[code]) return LOGIN_MESSAGES[code];
+  const raw = data && data.error ? String(data.error) : '';
+  /* A string straight from the identity service or the SDK is not an
+     explanation, so it never reaches a member. Anything the platform wrote
+     itself is Arabic and is passed through. */
+  const fromLibrary = /^Firebase:|^Error:|^API\b|api[- ]key|auth\/|identitytoolkit|permission[-_]denied|Missing or invalid/i.test(raw);
+  if (!raw.trim() || fromLibrary || !/[؀-ۿ]/.test(raw)) return 'تعذّر تسجيل الدخول. حاول مرة أخرى، وإن استمر الأمر أبلغ مسيّر النادي.';
+  return raw;
+}
+
 function showToast(text, kind='success') {
   document.querySelector('.toast-message')?.remove();
   const node = document.createElement('div'); node.className = 'toast-message ' + kind; node.textContent = text;
@@ -186,9 +211,14 @@ action=async function(a,el){
   if(a==='do-login'){
     const email=$('#email')?.value.trim(), password=$('#password')?.value;
     if(!email||!password){authMessage('أدخل البريد الإلكتروني وكلمة المرور.','error');return}
-    const res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({email,password})});
-    const data=await res.json();
-    if(!res.ok){authMessage(data.error||'تعذر تسجيل الدخول. تحقق من البيانات.','error');return}
+    let data=null;
+    try{
+      const res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({email,password})});
+      data=await res.json().catch(()=>({}));
+      if(!res.ok){authMessage(loginFailure(data),'error');return}
+    }catch(_){
+      authMessage('تعذّر الاتصال بالخادم. تحقّق من الإنترنت ثم أعد المحاولة.','error');return;
+    }
 state.user=data.user;state.page='home';save();document.querySelector('.modal-backdrop')?.remove();await syncApi();await recordPendingAttendance();render();showToast('تم تسجيل الدخول بنجاح.');return;
   }
   if(a==='forgot-password'){
