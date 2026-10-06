@@ -120,7 +120,9 @@
         </div>
 
         <div class="row two">
-          <label class="f">
+          <!-- An adult holds a national number; a child does not, so the field
+               leaves the form with the minors and the guardian's stays. -->
+          <label class="f" data-adult-only>
             <span class="lbl">رقم التعريف الوطني</span>
             <input id="national_id" name="national_id" type="text" inputmode="numeric" dir="ltr" maxlength="20" />
           </label>
@@ -211,7 +213,7 @@
             <input id="guardian_phone" name="guardian_phone" type="tel" inputmode="tel" dir="ltr" maxlength="20" />
           </label>
           <label class="f">
-            <span class="lbl">رقم تعريف الولي</span>
+            <span class="lbl">رقم تعريف الولي <i class="req">*</i></span>
             <input id="guardian_national_id" name="guardian_national_id" type="text" inputmode="numeric" dir="ltr" maxlength="20" />
           </label>
         </div>
@@ -222,33 +224,14 @@
         </label>
       </fieldset>
 
-      <!-- ---------- 3. medical ---------- -->
+      <!-- ---------- 3. medical: filled in by hand on paper ---------- -->
       <fieldset class="card">
         <legend><span class="step-no">٣</span> الفحص الطبي</legend>
         <p class="card-note">
-          النموذج الرسمي للنادي لا يتّسع لاسم الطبيب، لذلك يُطبع في الملخّص المرفق
-          بالاستمارة وتُوقّعه إدارة النادي.
+          استمارة النادي الرسمية لا تتّسع لاسم الطبيب، والنادي يملأ هذا الجزء
+          بيده على النسخة الورقية بعد الفحص. لذلك لا يُكتب هنا شيء، ويبقى في
+          الاستمارة المطبوعة سطر فارغ مخصّص لذلك.
         </p>
-        <div class="row two">
-          <label class="f">
-            <span class="lbl">اسم الطبيب</span>
-            <input id="doctor_name" name="doctor_name" type="text" maxlength="60" />
-          </label>
-          <label class="f">
-            <span class="lbl">التخصص</span>
-            <input id="doctor_specialty" name="doctor_specialty" type="text" maxlength="60" />
-          </label>
-        </div>
-        <div class="row two">
-          <label class="f">
-            <span class="lbl">تاريخ الفحص</span>
-            <input id="medical_date" name="medical_date" type="date" />
-          </label>
-          <label class="f">
-            <span class="lbl">المستوصف</span>
-            <input id="medical_place" name="medical_place" type="text" maxlength="80" />
-          </label>
-        </div>
       </fieldset>
 
       <!-- ---------- 4. photo ---------- -->
@@ -280,13 +263,17 @@
         </div>
 
         <div class="row">
-          <span class="lbl">المسبح أو المنشأة</span>
-          <select id="facility" name="facility">
-            <option>المسبح الأولمبي</option>
-            <option>المسبح النصف أولمبي</option>
-            <option>الملعب البلدي</option>
-            <option>غابة غرداية</option>
-          </select>
+          <label class="f">
+            <span class="lbl">المسبح أو المنشأة</span>
+            <!-- Filled from /api/facilities, which the club edits in Settings.
+                 The four below are only what shows before that list arrives. -->
+            <select id="facility" name="facility">
+              <option>المسبح الأولمبي</option>
+              <option>المسبح النصف أولمبي</option>
+              <option>الملعب البلدي</option>
+              <option>غابة غرداية</option>
+            </select>
+          </label>
         </div>
 
         <div class="row two">
@@ -373,6 +360,8 @@
         احتفظ برقم الطلب &mdash; هو ما يربطك بالطلب عند مراجعة الإدارة أو عند
         متابعته على الهاتف.
       </p>
+
+      <p class="done-note" id="done-warning" hidden></p>
 
       <div class="done-actions">
         <button type="button" class="btn btn-primary" id="print-form">🖨 طباعة الاستمارة</button>

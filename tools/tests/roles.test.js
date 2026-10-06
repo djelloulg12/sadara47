@@ -79,7 +79,11 @@ const adapter = read('firebase-adapter.js');
 if (!/function ownerEmail\(\)/.test(rules)) {
   errors.push('firestore.rules has no ownerEmail()');
 } else {
-  const ownerFn = rules.match(/function ownerEmail\(\)[\s\S]*?;/)[0];
+  /* Read the whole owner block, not just the first function: the address list
+     may live in a helper beside ownerEmail() rather than inside it, and a
+     helper is the honest way to keep the comment out of the expression. */
+  const ownerFn = (rules.match(/function ownerEmail\(\)[\s\S]*?;/) || [''])[0]
+    + '\n' + (rules.match(/function ownerList\(\)[\s\S]*?;/) || [''])[0];
   // an owner is identified by a verified address, so no users/{uid} is needed
   if (!/request\.auth\.token\.email/.test(ownerFn)) {
     errors.push('ownerEmail() does not read the address from the token');
@@ -101,11 +105,19 @@ if (!/function ownerEmail\(\)/.test(rules)) {
     errors.push('config/owners has no rule of its own');
   } else {
     const body = ownersMatch[0];
-    const writes = body.split('\n').filter(l => /allow\s+(write|read)/.test(l));
-    if (!writes.length) errors.push('config/owners grants nothing');
-    for (const line of writes) {
+    const rules2 = body.split('\n').map(l => l.trim()).filter(l => /allow\s+(write|read)/.test(l));
+    if (!rules2.length) errors.push('config/owners grants nothing');
+    /* ownerEmail() reads this document, so gating its read on ownerEmail() is
+       circular and Firestore denies the whole read. The owner's address has to
+       be readable by every signed-in account for the check to resolve at all;
+       what matters is that only the owner may rewrite the list. */
+    const reads = rules2.filter(l => /allow\s+read/.test(l));
+    if (!reads.some(l => /signedIn\(\)/.test(l))) {
+      errors.push('config/owners is not readable by a signed-in account, so ownerEmail() cannot resolve');
+    }
+    for (const line of rules2.filter(l => /allow\s+write/.test(l))) {
       if (!/ownerEmail\(\)/.test(line)) {
-        errors.push('config/owners is not gated on the owner: ' + line.trim());
+        errors.push('config/owners may be rewritten by someone who is not the owner: ' + line);
       }
     }
   }

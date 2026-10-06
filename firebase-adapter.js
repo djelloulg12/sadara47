@@ -98,6 +98,13 @@
     { id: 'medical', label: 'شهادة طبية تثبت القدرة على التدريب', required: true, order: 3 },
     { id: 'criminal-record', label: 'صحيفة السوابق العدلية', required: false, order: 4 }
   ];
+  /* Shown until the club renames a pool, so the form is never empty. */
+  const DEFAULT_FACILITIES = [
+    { id: 'olympic', name: 'المسبح الأولمبي', order: 1 },
+    { id: 'half', name: 'المسبح النصف أولمبي', order: 2 },
+    { id: 'stadium', name: 'الملعب البلدي', order: 3 },
+    { id: 'forest', name: 'غابة غرداية', order: 4 }
+  ];
   const amountFor = (d, plans, extras) => {
     const plan = plans.find(x => x.code === (d.subscription_code || 'quarter'));
     return (Number(plan && plan.amount) || 0)
@@ -170,6 +177,31 @@
         batch.set(extrasDoc(), { transport: Number(extras.transport) || 0, uniform: Number(extras.uniform) || 0, updated_by: gate.profile.id });
         await batch.commit();
         return jsonResponse({ ok: true });
+      }
+
+      /* ---------------- facilities ---------------- */
+      if (path === '/api/facilities' && method === 'GET') {
+        /* Public on purpose: a visitor filling the registration form needs the
+           list before signing in, and a pool name is not a secret. An empty
+           collection falls back to the built-in list so the form is never bare. */
+        const snap = await db.collection('facilities').get();
+        const list = byOrder(snap.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(f => f.active !== false));
+        return jsonResponse(list.length ? list.map((f, i) => ({ id: f.id, name: f.name, order: i + 1 })) : DEFAULT_FACILITIES);
+      }
+      if (path === '/api/facilities' && method === 'PUT') {
+        const gate = await managerView('تعديل أسماء المسابح للرئيس أو المدير فقط');
+        if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
+        const items = Array.isArray(body.facilities) ? body.facilities.filter(f => f && String(f.name || '').trim()) : [];
+        if (!items.length) return jsonResponse({ error: 'أبقِ مسبحًا واحدًا على الأقل في القائمة.' }, 400);
+        const batch = db.batch();
+        const existing = await db.collection('facilities').get();
+        existing.docs.forEach(doc => batch.delete(doc.ref));
+        items.forEach((item, index) => batch.set(db.collection('facilities').doc(
+          String(item.id || 'fac-' + index).replace(/[^\w-]/g, '_')),
+          { name: String(item.name).trim().slice(0, 120), order: index + 1, active: true }
+        ));
+        await batch.commit();
+        return jsonResponse({ ok: true, count: items.length });
       }
 
       /* ---------------- decision trail ---------------- */

@@ -52,6 +52,24 @@
         ]
       },
       {
+        "source": "/istimara/",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "/istimara/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
         "source": "**/*.@(jpg|jpeg|png|svg|webp)",
         "headers": [
           {

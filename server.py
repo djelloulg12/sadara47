@@ -181,7 +181,7 @@ class App(SimpleHTTPRequestHandler):
         user=self.current_user()
         # a visitor may read prices, the weekly timetable and the announcements
         public = ('/api/subscriptions', '/api/subscription-plans', '/api/coach-requirements',
-                  '/api/notices', '/api/schedule')
+                  '/api/notices', '/api/schedule', '/api/facilities')
         if path not in public and not user:
             self.send_json({'error':'يرجى تسجيل الدخول'},401); return
         # other people's records stay inside the staff, exactly like firestore.rules
@@ -221,6 +221,10 @@ class App(SimpleHTTPRequestHandler):
         if path == '/api/coach-requirements':
             rows=[{'id':r['id'],'label':r['label'],'required':bool(r['required']),'order':r['position']} for r in c.execute('SELECT * FROM coach_requirements ORDER BY position')]
             if not rows: rows=[{'id':'identity','label':'نسخة بطاقة التعريف الوطنية','required':True,'order':1},{'id':'cv','label':'السيرة الذاتية والشهادات التدريبية','required':True,'order':2},{'id':'medical','label':'شهادة طبية تثبت القدرة على التدريب','required':True,'order':3},{'id':'criminal-record','label':'صحيفة السوابق العدلية','required':False,'order':4}]
+            self.send_json(rows); c.close(); return
+        if path == '/api/facilities':
+            rows=[{'id':r['id'],'name':r['name'],'order':r['position']} for r in c.execute('SELECT * FROM facilities WHERE active=1 ORDER BY position')]
+            if not rows: rows=[{'id':'olympic','name':'المسبح الأولمبي','order':1},{'id':'half','name':'المسبح النصف أولمبي','order':2},{'id':'stadium','name':'الملعب البلدي','order':3},{'id':'forest','name':'غابة غرداية','order':4}]
             self.send_json(rows); c.close(); return
         if path in queries: self.send_json([dict(x) for x in c.execute(queries[path]).fetchall()]); c.close(); return
         c.close(); self.send_json({'error':'المسار غير موجود'},404)
@@ -368,6 +372,12 @@ class App(SimpleHTTPRequestHandler):
                 items=[x for x in (data.get('requirements') or []) if x and x.get('label')]
                 c.execute('DELETE FROM coach_requirements')
                 c.executemany('INSERT INTO coach_requirements(id,label,required,position) VALUES(?,?,?,?)',[(x.get('id') or 'req-'+str(i),x['label'],1 if x.get('required',True) else 0,i+1) for i,x in enumerate(items)])
+            elif path == '/api/facilities':
+                items=[x for x in (data.get('facilities') or []) if x and str(x.get('name','')).strip()]
+                if not items: c.close(); self.send_json({'error':'أبقِ مسبحًا واحدًا على الأقل في القائمة.'},400); return
+                c.execute('DELETE FROM facilities')
+                c.executemany('INSERT INTO facilities(id,name,position,active) VALUES(?,?,?,1)',
+                              [(re.sub(r'[^\w-]','_',str(x.get('id') or 'fac-'+str(i))), str(x['name']).strip()[:120], i+1) for i,x in enumerate(items)])
             else: c.close(); self.send_json({'error':'المسار غير موجود'},404); return
             c.commit(); self.send_json({'ok':True})
         except (sqlite3.IntegrityError, ValueError) as e: self.send_json({'error':str(e)},400)

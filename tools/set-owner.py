@@ -115,24 +115,29 @@ def main():
         return 1
 
     fields = {FIELD: {"arrayValue": {"values": [{"stringValue": e} for e in current]}}}
-    url = "%s/%s?documentId=%s" % (base, COLLECTION, DOCUMENT)
-    ok = False
-    for method in ("POST", "PATCH"):
-        st, _ = call(url, token, method, {"fields": fields})
-        if st in (200, 201):
-            ok = True
-            break
-        if method == "POST" and st == 409:
-            continue
-    if not ok:
+
+    # Rewriting a list that already exists is PATCH against the document's own
+    # path, with the update mask as a query parameter. Passing documentId as a
+    # query parameter to PATCH is rejected outright, and naming the document in the
+    # path without a mask replaces the whole document instead. This is the only
+    # combination the API accepts, and it is what makes `add` work on an existing
+    # list -- without it the tool could only ever create the list once.
+    if st == 200:
+        url = "%s/%s/%s?updateMask.fieldPaths=%s" % (base, COLLECTION, DOCUMENT, FIELD)
+        st, _ = call(url, token, "PATCH", {"fields": fields})
+    else:
+        url = "%s/%s?documentId=%s" % (base, COLLECTION, DOCUMENT)
+        st, _ = call(url, token, "POST", {"fields": fields})
+    if st not in (200, 201):
         print("could not write the owner list (status %s)" % st)
+        print("the request went to: " + url)
         return 1
 
     print("%s %s" % ("owner added:" if action == "add" else "owner removed:", address))
     print("owners now: " + ", ".join(current))
     print()
-    print("The address must be verified on the account, and it needs Firebase")
-    print("Authentication switched on before it can sign in at all.")
+    print("The address must be verified on the account, or the rules will not")
+    print("recognise it, and Authentication must be on for it to sign in.")
     return 0
 
 

@@ -16,6 +16,19 @@
   var F = window.SADARA_FORM;
   var DRAFT_KEY = 'sadara-istimara-draft';
   var PHOTO_MAX_BYTES = 3 * 1024 * 1024;
+  /* Firestore's hard ceiling on one document is 1 MiB. The margin covers the
+     keys the adapter adds, so a record that passes this is accepted. */
+  var DOC_MAX_BYTES = 900 * 1024;
+
+  /* Measured on the bytes that go over the wire, not on string length: an
+     Arabic name is two bytes per character, and the photo is base64. */
+  function payloadBytes(body) {
+    try {
+      return new Blob([JSON.stringify(body)]).size;
+    } catch (_) {
+      return JSON.stringify(body).length * 2;
+    }
+  }
 
   /* Same numbers firebase-adapter.js falls back to, so the total shown before
      sending matches the amount the club will confirm. */
@@ -28,6 +41,12 @@
 
   var plans = FALLBACK_PLANS.slice();
   var extras = { transport: FALLBACK_EXTRAS.transport, uniform: FALLBACK_EXTRAS.uniform };
+  var facilities = [];
+
+  /* Shown until the club renames a pool, so the choices are never empty. */
+  var FALLBACK_FACILITIES = [
+    'المسبح الأولمبي', 'المسبح النصف أولمبي', 'الملعب البلدي', 'غابة غرداية'
+  ];
 
   var el = function (id) { return document.getElementById(id); };
   var form = el('reg-form');
@@ -59,13 +78,24 @@
 
   /* The minor's fields are not required of an adult, so they must leave the
      required list when the category changes -- otherwise an adult is stopped by
-     a field they never see. */
-  var GUARDIAN_FIELDS = ['guardian_first_name', 'guardian_last_name'];
+     a field they never see. The swimmer's national number goes the other way:
+     a child does not hold one, so it leaves the form with the minors. */
+  var GUARDIAN_FIELDS = ['guardian_first_name', 'guardian_last_name', 'guardian_national_id'];
   function syncCategory() {
     var minor = category() === 'minor';
     var card = el('guardian-card');
     card.hidden = !minor;
     GUARDIAN_FIELDS.forEach(function (id) { el(id).required = minor; });
+    /* A child has no national number: asking for one would stop every minor.
+       The value is cleared too, so switching back and forth cannot leave a
+       number on a child's record. */
+    document.querySelectorAll('[data-adult-only]').forEach(function (node) {
+      node.hidden = minor;
+      if (minor) {
+        var input = node.querySelector('input');
+        if (input) { input.value = ''; input.classList.remove('bad'); }
+      }
+    });
     if (!minor) clearBad(GUARDIAN_FIELDS);
     updateTotal();
   }
@@ -95,6 +125,30 @@
         updateTotal();
       })
       .catch(function () { /* the fallback list stays in place */ });
+  }
+
+  /* The pool names come from the club, so a rename in Settings reaches this form
+     without a code change. An empty or failed list keeps the built-in four. */
+  function paintFacilities() {
+    var names = facilities.length ? facilities : FALLBACK_FACILITIES;
+    var select = el('facility');
+    var keep = select.value;
+    select.innerHTML = names.map(function (n) {
+      return '<option value="' + F.esc(n) + '">' + F.esc(n) + '</option>';
+    }).join('');
+    if (keep && names.indexOf(keep) !== -1) select.value = keep;
+  }
+
+  function loadFacilities() {
+    return fetch('/api/facilities')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!Array.isArray(data)) return;
+        var names = data.map(function (f) { return String((f && f.name) || '').trim(); })
+          .filter(Boolean);
+        if (names.length) { facilities = names; paintFacilities(); }
+      })
+      .catch(function () { /* the built-in list stays in place */ });
   }
 
   function paintPlans() {
@@ -204,6 +258,7 @@
     address: 'اكتب العنوان.',
     guardian_first_name: 'اكتب اسم الولي.',
     guardian_last_name: 'اكتب لقب الولي.',
+    guardian_national_id: 'اكتب رقم تعريف الولي.',
     guardian_consent: 'التصريح بإذن التدريب ضروري للأصاغر.',
     terms: 'يجب الموافقة على النظام الداخلي قبل الإرسال.'
   };
@@ -283,10 +338,6 @@
       whatsapp: val('whatsapp'),
       address: val('address'),
       membership_no: val('membership_no'),
-      doctor_name: val('doctor_name'),
-      doctor_specialty: val('doctor_specialty'),
-      medical_date: val('medical_date'),
-      medical_place: val('medical_place'),
       guardian_first_name: val('guardian_first_name'),
       guardian_last_name: val('guardian_last_name'),
       guardian_birth_date: val('guardian_birth_date'),
@@ -315,23 +366,39 @@
     button.disabled = true;
     button.textContent = 'جارٍ الإرسال…';
 
+    var body = payload();
+    /* Firestore refuses a document over 1 MiB, and the photo travels inside it.
+       A photo heavy enough to tip the record over would cost the whole
+       registration, not just the picture, so the size is checked here and the
+       photo is left out rather than losing the names with it. */
+    var dropped = false;
+    if (state.photo && payloadBytes(body) > DOC_MAX_BYTES) {
+      dropped = true;
+      body.photo = '';
+      body.photo_omitted = true;
+    }
+
     return fetch('/api/applications', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload())
+      body: JSON.stringify(body)
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (data) {
         if (!r.ok) throw new Error(data.error || 'تعذّر إرسال الطلب. تحقّق من الاتصال وحاول مجدداً.');
         return data;
       });
     }).then(function (data) {
-      state.sent = Object.assign(payload(), {
+      /* The printed form shows what was actually stored, not what was typed,
+         so the two can never disagree on paper. */
+      state.sent = Object.assign(body, {
         application_no: data.application_no,
         expected_amount: data.expected_amount
       });
       clearDraft();
       showDone();
     }).catch(function (e) {
+      /* The draft is deliberately kept: nothing the person typed is lost when
+         a send fails, so they can try again on the same phone. */
       say(e.message || 'تعذّر إرسال الطلب.', 'error');
       button.disabled = false;
       button.textContent = 'إرسال الاستمارة';
@@ -349,8 +416,7 @@
     swimming_strokes: 'نمط السباحة', facility: 'المنشأة',
     guardian_first_name: 'اسم الولي', guardian_last_name: 'لقب الولي',
     guardian_relation: 'القرابة', guardian_phone: 'هاتف الولي',
-    guardian_national_id: 'تعريف الولي', doctor_name: 'الطبيب',
-    medical_date: 'تاريخ الفحص', notes: 'ملاحظة'
+    guardian_national_id: 'تعريف الولي', notes: 'ملاحظة'
   };
 
   var PAYMENTS = { cash: 'نقدًا', postal_check: 'صك بريدي', postal_transfer: 'حوالة بريدية' };
@@ -364,6 +430,15 @@
     el('done-no').textContent = rec.application_no || '—';
     el('done-amount').textContent = (Number(rec.expected_amount) || 0).toLocaleString('fr-DZ') + ' دج';
     el('done-date').textContent = longDate();
+
+    /* Say so plainly rather than let the person believe the picture is on the
+       paperwork: it can be added at the club, and everything else is stored. */
+    var warn = el('done-warning');
+    if (rec.photo_omitted) {
+      warn.textContent = 'وصل طلبك كاملًا، لكن الصورة لم تُرفق لحجمها. أضِفها عند النادي، '
+        + 'واعرض الرقم أعلاه على الموظف.';
+      warn.hidden = false;
+    }
 
     var rows = Object.keys(SUMMARY_LABELS).map(function (key) {
       var value = rec[key];
@@ -471,6 +546,7 @@
   /* ---------------- start ---------------- */
 
   paintPlans();
+  paintFacilities();
   syncCategory();
   updateTotal();
   paintPhoto();
@@ -479,4 +555,5 @@
     say('استعدنا مسودة حفظتها على هذا الجهاز. راجعها ثم أرسل.', 'ok');
   }
   loadPlans();
+  loadFacilities();
 })();

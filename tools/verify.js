@@ -18,6 +18,7 @@ const SUITES = [
   ['packet', 'packet.test.js', 'instant print, receipt, regulations, signed copy, settlement'],
   ['photo-form', 'photo-form.test.js', 'member photo, print gate, official form overlay'],
   ['istimara', 'istimara.test.js', 'public registration page, no login, print both sheets'],
+  ['facilities', 'facilities.test.js', 'editable pool names, complete Excel export'],
   ['signin', 'signin.test.js', 'sign-in always answers in Arabic'],
   ['roles', 'roles.test.js', 'roles agree across tools, page and rules'],
   ['modifications', 'modifications.test.js', 'roster, cards, timetable, roles'],

@@ -116,8 +116,16 @@ function boot(seedDraft) {
   w.__calls = [];
   w.__frames = [];
   w.__p = 0;
+  /* Overridable so a test can rename the pools and watch the form follow. */
+  w.__facilities = [
+    { id: 'olympic', name: 'المسبح الاختيارمبي' }, { id: 'half', name: 'المسبح النصف أولمبي' },
+    { id: 'stadium', name: 'الملعب البلدي' }, { id: 'forest', name: 'غابة غرداية' }
+  ];
   w.fetch = function (url, init) {
     w.__calls.push({ url: String(url), method: (init && init.method || 'GET').toUpperCase(), body: init && init.body });
+    if (/facilities/.test(String(url))) {
+      return Promise.resolve({ ok: true, json: async () => w.__facilities });
+    }
     if (/subscription-plans/.test(String(url))) {
       return Promise.resolve({ ok: true, json: async () => ({
         plans: [{ code: 'quarter', name: 'اشتراك فصلي', amount: 1000, duration: '3 أشهر' },
@@ -158,9 +166,51 @@ function boot(seedDraft) {
 
   w.localStorage.clear();
   if (seedDraft) w.localStorage.setItem('sadara-istimara-draft', seedDraft);
+
+  /* jsdom has no canvas and does not decode images, so the photo path is given
+     the three browser APIs it needs. toDataURL honours __photoSize, which is how
+     a test asks for a picture light enough to keep or heavy enough to drop. */
+  w.__photoSize = 40 * 1024;
+  const realCreate = w.document.createElement.bind(w.document);
+  w.document.createElement = function (tag) {
+    if (String(tag).toLowerCase() === 'canvas') {
+      return {
+        width: 0, height: 0,
+        getContext: function () { return { fillStyle: '', fillRect() {}, drawImage() {} }; },
+        toDataURL: function () {
+          return 'data:image/jpeg;base64,' + 'A'.repeat(Math.max(16, Math.floor(w.__photoSize)));
+        }
+      };
+    }
+    return realCreate(tag);
+  };
+  w.FileReader = function () {
+    const self = this;
+    this.readAsDataURL = function () {
+      setTimeout(function () { self.result = 'data:image/jpeg;base64,AAAA'; if (self.onload) self.onload(); }, 0);
+    };
+  };
+  w.Image = function () {
+    const self = this;
+    Object.defineProperty(this, 'src', {
+      set: function () { setTimeout(function () { self.width = 900; self.height = 1200; if (self.onload) self.onload(); }, 0); },
+      get: function () { return ''; }
+    });
+  };
+
   w.eval(PRINT);
   w.eval(PAGE);
   return w;
+}
+
+/* Picks a photo the way the person would, through the real file input. */
+function choosePhoto(w, bytes) {
+  w.__photoSize = bytes;
+  const input = w.document.getElementById('photo');
+  Object.defineProperty(input, 'files', { configurable: true, value: [{ name: 'photo.jpg', type: 'image/jpeg' }] });
+  input.dispatchEvent(new w.Event('change', { bubbles: true }));
+  return waitFor(w, () => !!w.document.querySelector('#photo-preview img')
+    || !!w.document.getElementById('form-msg').textContent);
 }
 
 /* Waits for something to become true instead of guessing how long it takes. A
@@ -257,7 +307,7 @@ function fill(w, category) {
     guardian_first_name: 'لخضر', guardian_last_name: 'قندوز', guardian_relation: 'أب',
     guardian_phone: '0661000003', guardian_national_id: '1970011122334', guardian_consent: true,
     doctor_name: 'د. بن عمر', doctor_specialty: 'طباعة رياضية', medical_date: '2025-09-01',
-    facility: 'المسبح الأولمبي', subscription_code: 'season', plan_name: 'اشتراك موسمي',
+    facility: 'المسبح الاختيارمبي', subscription_code: 'season', plan_name: 'اشتراك موسمي',
     transport: true, uniform: true, transport_amount: 900, uniform_amount: 2500,
     payment_method: 'cash',
     notes: 'يفضّل التدريب صباحاً', expected_amount: 6400
@@ -268,14 +318,24 @@ function fill(w, category) {
     ['APP-20260101-AB12', 'رقم الطلب'], ['جلول', 'الاسم'], ['قندوز', 'اللقب'],
     ['17/04/2012', 'تاريخ الميلاد'], ['حي الثنية', 'العنوان'], ['O+', 'فصيلة الدم'],
     ['0661000001', 'الهاتف'], ['0661000002', 'الواتساب'], ['ذكر', 'الجنس'],
-    ['حرة، ظهر', 'نمط السباحة'], ['20120417887', 'رقم التعريف'],
-    ['د. بن عمر', 'الطبيب'], ['طباعة رياضية', 'تخصص الطبيب'],
+    ['حرة، ظهر', 'نمط السباحة'], ['20120417887', 'رقم التعريف'], ['المسبح الاختيارمبي', 'المسبح'],
     ['لخضر', 'الولي'], ['أب', 'القرابة'], ['0661000003', 'هاتف الولي'],
-    ['1970011122334', 'تعريف الولي'], ['المسبح الأولمبي', 'المنشأة'],
+    ['1970011122334', 'تعريف الولي'], ['المسبح الاختيارمبي', 'المنشأة'],
     ['اشتراك موسمي', 'الاشتراك'], ['نقدًا', 'طريقة الدفع'],
     ['يفضّل التدريب صباحاً', 'الملاحظة']
   ]) {
     if (!summary.includes(key)) errors.push('[summary] ' + what + ' is not on the summary (' + key + ')');
+  }
+  /* The doctor is written in by hand, so nothing about him may be printed --
+     and the line has to be there for the pen to land on. */
+  for (const gone of ['د. بن عمر', 'طباعة رياضية', '2025-09-01', 'المصحة الجامعية']) {
+    if (summary.includes(gone)) errors.push('[summary] the doctor is printed, but the club writes him by hand: ' + gone);
+  }
+  if ((summary.match(/class="blank"/g) || []).length < 3) {
+    errors.push('[summary] no ruled line for the doctor to be written in by hand');
+  }
+  if (/doctor_|medical_date|medical_place/.test(PRINT.replace(/\/\*[\s\S]*?\*\//g, ''))) {
+    errors.push('[summary] the print still reads a doctor field off the record');
   }
   if (!isAmount(summary, '6400')) errors.push('[summary] the expected amount is not printed');
   /* An added option with no known price must not claim to be free. */
@@ -414,6 +474,25 @@ tasks.push(() => {
   adult.dispatchEvent(new w.Event('change', { bubbles: true }));
   if (!w.document.getElementById('guardian-card').hidden) errors.push('[adults] the guardian section is still showing');
   if (w.document.getElementById('guardian_first_name').required) errors.push('[adults] an adult must fill a hidden field');
+  /* A child holds no national number, so the swimmer's field belongs to the
+     adults only -- and the guardian's own number stays for the minors. */
+  const adultOnly = w.document.querySelector('[data-adult-only]');
+  if (!adultOnly) errors.push('[ids] the swimmer national number is not marked adult-only');
+  else if (adultOnly.hidden) errors.push('[adults] the swimmer national number is hidden from an adult');
+  if (!w.document.getElementById('guardian_national_id')) errors.push('[ids] the guardian national number is gone');
+  else if (w.document.getElementById('guardian_national_id').required) errors.push('[adults] an adult must fill a hidden guardian number');
+  if (w.document.getElementById('national_id').required) errors.push('[adults] the adult number should not be compulsory');
+
+  minor.checked = true;
+  minor.dispatchEvent(new w.Event('change', { bubbles: true }));
+  if (adultOnly && !adultOnly.hidden) errors.push('[minor] a child was asked for a national number');
+  if (!w.document.getElementById('guardian_national_id').required) {
+    errors.push('[minor] the guardian national number must stay compulsory');
+  }
+  /* the child's birth certificate number is the identifier a minor does have */
+  if (w.document.getElementById('birth_certificate_no').closest('[hidden]')) {
+    errors.push('[minor] the birth certificate number was hidden from a child');
+  }
   /* hidden means hidden, not merely marked */
   if (!/\[hidden\]\s*\{\s*display:\s*none\s*!important/.test(CSS)) {
     errors.push('[adults] no [hidden] rule, so a hidden section could stay on screen');
@@ -489,6 +568,108 @@ tasks.push(() => {
     errors.push('[draft] the draft did not come back');
   }
   return Promise.resolve();
+});
+
+/* ---- 11) a heavy photo costs the picture, never the registration ---- */
+tasks.push(() => {
+  const w = boot();
+  fill(w, 'adult');
+  /* Firestore refuses a document over 1 MiB. The photo rides inside the record,
+     so one heavy enough to tip it over must be left out rather than costing the
+     whole request -- and the person has to be told, not left guessing. */
+  return choosePhoto(w, 1100 * 1024).then(() => {
+    w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+    return waitFor(w, () => !w.document.getElementById('done').hidden
+      || !!w.document.getElementById('form-msg').textContent);
+  })
+    .catch(() => errors.push('[size] nothing came back from an oversized record'))
+    .then(() => {
+      const post = w.__calls.filter(c => c.method === 'POST');
+      if (post.length !== 1) { errors.push('[size] the oversized record was never sent'); return; }
+      const body = JSON.parse(post[0].body);
+      if (body.photo) errors.push('[size] an oversized photo was still sent, so the whole request would be refused');
+      if (!body.photo_omitted) errors.push('[size] the record does not say the picture is missing');
+      /* the names are the whole point: they must survive */
+      for (const key of ['first_name_ar', 'last_name_ar', 'birth_date', 'phone', 'address']) {
+        if (!body[key]) errors.push('[size] the oversized photo cost the field ' + key);
+      }
+      const warn = w.document.getElementById('done-warning');
+      if (warn.hidden) errors.push('[size] the person was never told the picture is missing');
+      if (!/الصورة/.test(warn.textContent)) errors.push('[size] the warning does not mention the picture');
+    });
+});
+
+/* ---- 12) a normal photo is kept ---- */
+tasks.push(() => {
+  const w = boot();
+  fill(w, 'adult');
+  return choosePhoto(w, 40 * 1024).then(() => {
+    w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+    return waitFor(w, () => !w.document.getElementById('done').hidden);
+  })
+    .catch(() => errors.push('[size] a normal record did not go through'))
+    .then(() => {
+      const post = w.__calls.filter(c => c.method === 'POST');
+      if (!post.length) { errors.push('[size] a normal record was never sent'); return; }
+      const body = JSON.parse(post[0].body);
+      if (!body.photo) errors.push('[size] a normal photo was dropped for no reason');
+      if (body.photo_omitted) errors.push('[size] a normal record claims the picture is missing');
+      if (!w.document.getElementById('done-warning').hidden) {
+        errors.push('[size] the warning shows even though nothing was left out');
+      }
+    });
+});
+
+/* ---- 12b) a pool renamed in Settings reaches this form ---- */
+tasks.push(() => {
+  const w = boot();
+  /* Management saved a different list: the form must offer exactly those names,
+     because a swimmer cannot pick a pool the club no longer runs. */
+  w.__facilities = [{ id: 'a', name: 'مسبح الاخيار' }, { id: 'b', name: 'مسبح الجديدة' }];
+  return waitFor(w, () => {
+    const opts = [...w.document.querySelectorAll('#facility option')].map(o => o.textContent);
+    return opts.length === 2 && opts[0] === 'مسبح الاخيار';
+  }, 2000)
+    .catch(() => {
+      const opts = [...w.document.querySelectorAll('#facility option')].map(o => o.textContent);
+      errors.push('[pools] the form ignored the club list; it offers: ' + opts.join(' | '));
+    });
+});
+
+/* ---- 12c) an empty list must not leave the form with no choice ---- */
+tasks.push(() => {
+  const w = boot();
+  w.__facilities = [];
+  return waitFor(w, () => w.__calls.some(c => /facilities/.test(c.url)), 2000)
+    .then(() => new Promise(r => setTimeout(r, 40)))
+    .then(() => {
+      const opts = [...w.document.querySelectorAll('#facility option')].map(o => o.textContent);
+      if (!opts.length) errors.push('[pools] an empty club list left the form with no pool at all');
+      if (opts.length === 2) errors.push('[pools] the form adopted the empty list instead of the built-in names');
+    });
+});
+
+/* ---- 13) a failed send keeps what was typed ---- */
+tasks.push(() => {
+  const w = boot();
+  fill(w, 'adult');
+  w.fetch = function (u, i) {
+    w.__calls.push({ url: String(u), method: (i && i.method || 'GET').toUpperCase(), body: i && i.body });
+    return Promise.resolve({ ok: false, json: async () => ({ error: 'تعذّر إرسال الطلب.' }) });
+  };
+  w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  return waitFor(w, () => !w.document.getElementById('form-msg').hidden)
+    .catch(() => errors.push('[draft] a failed send said nothing'))
+    .then(() => {
+      if (w.document.getElementById('done').hidden === false) errors.push('[draft] a failed send claimed success');
+      const draft = w.localStorage.getItem('sadara-istimara-draft');
+      if (!draft || JSON.parse(draft).first_name_ar !== 'أمين') {
+        errors.push('[draft] a failed send threw the typed data away');
+      }
+      if (w.document.getElementById('submit').disabled) {
+        errors.push('[draft] the submit button stayed dead after a failure, so there is no retry');
+      }
+    });
 });
 
 /* ---- run the settling checks in order ---- */

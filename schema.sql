@@ -70,6 +70,12 @@ CREATE TABLE IF NOT EXISTS coach_requirements (
   id TEXT PRIMARY KEY, label TEXT NOT NULL, required INTEGER NOT NULL DEFAULT 1,
   position INTEGER NOT NULL DEFAULT 0
 );
+-- Pool and venue names. Management edits the list; the public registration form
+-- reads it, so a renamed pool shows up in the choices without a code change.
+CREATE TABLE IF NOT EXISTS facilities (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1
+);
 CREATE TABLE IF NOT EXISTS member_profiles (
   user_id INTEGER PRIMARY KEY, data TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE

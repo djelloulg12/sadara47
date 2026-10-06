@@ -251,7 +251,14 @@ state.user=data.user;state.page='home';save();document.querySelector('.modal-bac
   }
   if(a==='verify-phone-code'){
     const code=$('#phone-code')?.value.trim(); const box=$('#phone-message');
-    try{const credential=await window.sadaraPhoneConfirmation.confirm(code);const data={user:{id:credential.user.uid,name:credential.user.phoneNumber||'عضو النادي',role:'member',email:''}};state.user=data.user;state.page='home';save();document.querySelector('.modal-backdrop')?.remove();await syncApi();render();showToast('تم التحقق من رقم الهاتف وتسجيل الدخول.');}
+    /* The role must come from the account, never be assumed. Signing in by SMS
+       used to hardcode 'member', so the club owner arriving on a phone number was
+       quietly made a member. Ask the same session endpoint the email path uses. */
+    try{const credential=await window.sadaraPhoneConfirmation.confirm(code);
+      let user={id:credential.user.uid,name:credential.user.phoneNumber||'عضو النادي',role:'member',email:''};
+      try{const res=await fetch('/api/session',{credentials:'same-origin'});
+        if(res.ok){const data=await res.json();if(data&&data.user)user=data.user;}}catch(_){}
+      state.user=user;state.page='home';save();document.querySelector('.modal-backdrop')?.remove();await syncApi();render();showToast('تم التحقق من رقم الهاتف وتسجيل الدخول.');}
     catch(e){if(box){box.textContent='الرمز غير صحيح أو منتهي الصلاحية.';box.className='form-message error'}}
     return;
   }

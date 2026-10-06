@@ -231,6 +231,12 @@ input.bad, select.bad, textarea.bad { border-color: var(--danger); background: #
 .ticket-row:last-child { border-bottom: 0; }
 .ticket-row b { font-size: 16px; color: var(--teal-dark); text-align: left; }
 .done-note { font-size: 13.5px; color: var(--muted); text-align: center; margin: 0 0 16px; }
+/* the one warning on the page: something was left out of the record */
+.done-note[hidden] { display: none; }
+#done-warning {
+  background: #fff6e5; border: 1px solid #f0d9a8; color: #7a5410;
+  border-radius: 12px; padding: 11px 14px; font-size: 14px; line-height: 1.65;
+}
 .done-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 .summary { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }

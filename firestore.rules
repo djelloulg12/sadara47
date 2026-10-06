@@ -6,23 +6,32 @@ service cloud.firestore {
     function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
     function role() { return profile().role; }
 
-    /* The club owner. Listed by address in config/owners so the right follows the
-       person rather than a user id that only exists once the account has been
+    /* The club owner. Named by address in config/owners, so the right follows the
+       person rather than a user id that only exists once an account has been
        created -- otherwise the owner would have to wait for an account to exist
        before being able to create one. No user document is needed: the token
-       already carries the verified address. */
+       already carries the address.
+
+       config/owners must be readable by every signed-in account. Gating its read
+       on ownerEmail() looks tighter but is circular: ownerEmail() reads this
+       document, so asking "may I read it?" re-enters the same question and
+       Firestore denies the whole thing. The owner would then hold no rights at
+       all, silently. The addresses are already known to anyone who can read the
+       club's public page, so signed-in is the honest boundary; the write stays
+       with the owner, which is the side that matters. */
+    function ownerList() {
+      return get(/databases/$(database)/documents/config/owners).data.emails;
+    }
     function ownerEmail() { return signedIn() && request.auth.token.email != null
         && request.auth.token.email_verified == true
-        && request.auth.token.email in
-             get(/databases/$(database)/documents/config/owners).data.emails; }
+        && request.auth.token.email in ownerList(); }
 
     function manager() { return ownerEmail() || (signedIn() && role() in ['admin', 'president']); }
     function coach() { return signedIn() && role() == 'coach'; }
     function staff() { return manager() || coach(); }
 
-    /* The owner list itself: readable by the owner, writable by the owner alone. */
     match /config/owners {
-      allow read: if ownerEmail();
+      allow read: if signedIn();
       allow write: if ownerEmail();
     }
 
@@ -44,6 +53,12 @@ service cloud.firestore {
       allow write: if manager();
     }
     match /coach_requirements/{id} {
+      allow read: if true;
+      allow write: if manager();
+    }
+    // Pool and venue names: public so the registration form can offer them,
+    // management-only so only the club decides what a swimmer may pick.
+    match /facilities/{id} {
       allow read: if true;
       allow write: if manager();
     }

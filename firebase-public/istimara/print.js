@@ -214,11 +214,13 @@
       + (rec.guardian_consent ? '<tr class="span2"><th>إذن التدريب</th><td>مصرّح به</td></tr>' : '')
       + '</table>';
 
+    /* The club writes the doctor in by hand: the official form has no room for
+       it, so nothing is typed and nothing is printed. An empty ruled block says
+       exactly that -- the line is there, waiting for the pen. */
     var medical = ''
-      + row('الطبيب', rec.doctor_name)
-      + row('التخصص', rec.doctor_specialty)
-      + row('تاريخ الفحص', dayFirst(rec.medical_date))
-      + row('المستوصف', rec.medical_place);
+      + '<tr><th>الطبيب</th><td class="blank"></td></tr>'
+      + '<tr><th>التخصص</th><td class="blank"></td></tr>'
+      + '<tr><th>تاريخ الفحص</th><td class="blank"></td></tr>';
 
     var money_rows = ''
       + row('الاشتراك', plan)
@@ -246,7 +248,8 @@
       +   '<div class="s-tables">'
       +     '<h2>' + headSwimmer + ' &mdash; بيانات الرياضي</h2><table>' + identity + '</table>'
       +     (adult ? '' : guardian)
-      +     '<h2>' + headMedical + ' &mdash; الفحص الطبي</h2><table>' + medical + '</table>'
+      +     '<h2>' + headMedical + ' &mdash; الفحص الطبي</h2>'
+      +     '<table>' + medical + '</table>'
       +     '<h2>' + headMoney + ' &mdash; الاشتراك والدفع</h2><table>' + money_rows + '</table>'
       +     (rec.notes ? '<h2>ملاحظة الرياضي</h2><p class="s-notes">' + esc(rec.notes) + '</p>' : '')
       +   '</div>'
@@ -323,6 +326,8 @@
       + '.s-page td.mono{direction:ltr;text-align:left;font-variant-numeric:tabular-nums}'
       + '.s-page tr.total th,.s-page tr.total td{background:#e6f4f5;border-bottom:none;padding:2mm 1.5mm}'
       + '.s-page tr.total td b{font-size:12pt;color:#075a61}'
+      /* a line to write the doctor in by hand */
+      + '.s-page td.blank{height:9mm;border-bottom:1px solid #12333f}'
       + '.s-notes{margin:0;font-size:9.5pt;line-height:1.6;background:#f7fbfd;border:1px solid #cfe2e6;'
       +   'border-radius:2mm;padding:2mm 3mm}'
       + '.s-sign{display:flex;gap:10mm;margin-top:8mm}'
