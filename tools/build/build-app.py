@@ -74,9 +74,28 @@ if dupes:
         raise AssertionError(msg)
 io.open(tmp + r"\..\..\app.js", "w", encoding="utf-8", newline="").write(out)
 
-# The deployable copy is what Firebase serves and what every test loads, so a
-# build that leaves it behind would publish and test yesterday's code.
-shutil.copyfile(tmp + r"\..\..\app.js", tmp + r"\..\..\firebase-public\app.js")
+# ---------------------------------------------------------------------------
+#   The deployable copy is what Firebase serves and what every test loads, so a
+#   build that leaves it behind would publish and test yesterday's code.
+#   app.js is generated above; sw.js is plain source; istimara/ is a folder of
+#   hand-written files. All three are copied, never maintained twice.
+# ---------------------------------------------------------------------------
+ROOT = tmp + r"\..\.."
+PUBLIC = os.path.join(ROOT, "firebase-public")
+
+shutil.copyfile(os.path.join(ROOT, "app.js"), os.path.join(PUBLIC, "app.js"))
+shutil.copyfile(os.path.join(ROOT, "sw.js"), os.path.join(PUBLIC, "sw.js"))
+
+SRC_ISTIMARA = os.path.join(ROOT, "istimara")
+DST_ISTIMARA = os.path.join(PUBLIC, "istimara")
+if os.path.isdir(SRC_ISTIMARA):
+    # replaced rather than merged, so a deleted file cannot linger in the deploy
+    if os.path.isdir(DST_ISTIMARA):
+        shutil.rmtree(DST_ISTIMARA)
+    shutil.copytree(SRC_ISTIMARA, DST_ISTIMARA)
+    pages = sorted(f for f in os.listdir(DST_ISTIMARA)
+                   if os.path.isfile(os.path.join(DST_ISTIMARA, f)))
+    print("synced:  istimara/ -> firebase-public/istimara/ (%s)" % ", ".join(pages))
 
 print("rebuilt:", out.count("\n") + 1, "lines | no duplicate declarations | braces balanced")
-print("synced:  app.js -> firebase-public/app.js")
+print("synced:  app.js, sw.js -> firebase-public/")

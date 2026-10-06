@@ -27,7 +27,29 @@ Firebase Authentication غير مُهيّأ، ولا توجد طريقة برم�
 2. اضغط **Get started**
 3. فعّل **Email/Password**
 
-بعدها شغّل السكربت مرة واحدة:
+### ٢. مالك النادي — كل الصلاحيات
+
+هذا مطبَّق **الآن** ولا ينتظر التفعيل أعلاه:
+
+```powershell
+python tools\set-owner.py                                  # عرض المالك الحالي
+python tools\set-owner.py add kabrag12@gmail.com           # إضافة
+python tools\set-owner.py remove kabrag12@gmail.com        # إزالة
+```
+
+المالك يُسجَّل **ببريده** في `config/owners`، لا بمستند `users/{uid}`، لسببين:
+
+- مستند `users` يحتاج `uid`، و`uid` لا يوجد قبل إنشاء الحساب — فالمالك كان
+  سينتظر حساباً كي يستطيع إنشاء حساب
+- الحق يتبع الشخص، فلا يحتاج جهازاً جديداً ولا قاعدة مبنيّة من جديد
+
+`firestore.rules` تمنح صاحب هذا البريد **كل** الصلاحيات — بما فيه قراءة وكتابة
+`users`، والحذف، والمال، وسجل التدقيق — ولا يحتاج أي مستند دور. العنوان يجب أن
+يكون **مُتحقَّقاً منه** (`emailVerified`)، والسكربت يرفض إزالة آخر مالك.
+
+### ٣. حسابات الطاقم
+
+بعد تفعيل Authentication مباشرة، أنشئ حسابات المدير والرئيس والمدرب:
 
 ```powershell
 python tools\seed-accounts.py
@@ -39,7 +61,7 @@ python tools\seed-accounts.py
 لإنشاء حسابات بعنوان بريد حقيقي من النادي:
 
 ```powershell
-$env:SADARA_SEED_ACCOUNTS = "Manager@club.example,admin;Head@club.example,president"
+$env:SADARA_SEED_ACCOUNTS = "Head@club.example,president;Coach@club.example,coach"
 python tools\seed-accounts.py
 ```
 
@@ -109,6 +131,42 @@ Cloud Storage يحتاج **حساب فوترة**. بدونه تعمل المنص
 | `npm run preview` | معاينة برابط مؤقت |
 | `npm run preview:form` | معاينة الحزمة في `tools/tests/out/packet-preview.html` |
 | `npm run preview:placement` | معاينة الاستمارة بالإطارات الحمراء في `tools/tests/out/form-placement.html` |
+| `npm run preview:print` | يكتب صفحتَي الطباعة في `tools/tests/out/istimara-print-*.html` |
+
+## استمارة التسجيل العامة — `/istimara/`
+
+صفحة مستقلة في مجلدها على المنصة المنشورة:
+
+```
+https://sadara-platform-774c8.web.app/istimara/
+```
+
+**بلا حساب وبلا تسجيل دخول.** ترسل إلى `POST /api/applications` نفسه الذي
+تستخدمه استمارة المنصة، فتصل بحالة `pending` وتظهر في شاشة الطلبات التي يراها
+رئيس النادي، بلا تعديل على لوحة الإدارة ولا على `firestore.rules`.
+
+| | |
+|---|---|
+| الملفات | `istimara/` ← تُنسخ إلى `firebase-public/istimara/` عند `npm run build` |
+| تُنشر مع | `firebase.json` — لا حاجة إلى قاعدة Hosting جديدة |
+| تعمل بلا إنترنت | `sw.js` يخزّن صدفة الاستمارة؛ الإرسال يذهب للشبكة دائماً |
+| المسودة | `localStorage` على جهاز الزائر، تُمسح بعد الإرسال |
+
+### ما يُطبع
+
+صفحتان في نداء واحد: **استمارة النادي الرسمية** على الصورة الأصلية، ثم **ملخّص
+A4** للطبيب والاشتراك والدفع والتوقيع. تُطبعان بمقاس A4 كامل بهوامش «بدون»،
+لأن مواضع الاستمارة مقيسة بالمليمتر.
+
+### إحداثيات واحدة لا نسختان
+
+`FORM_SPOTS` في `istimara/print.js` هي نفسها في `app.js`. مجموعة `istimara` في
+`npm run check` تقارن المواضع وصندوق الصورة وثوابت `SPOT_GAP` و`SPOT_CLEAR`
+بين النسختين وتقبل فرقًا أقل من 0.001 مم، فتكتب استمارة المنصة واستمارة الصفحة
+العامة بنفس القاعدة التي يقرأ بها النادي الاستمارة.
+
+> إن غيّرت إحداثيًا في `app.js`، انسخه إلى `istimara/print.js` (أو العكس)،
+> وإلا فشلت `npm run check` قبل النشر.
 
 ## طباعة الاستمارة الرسمية
 
@@ -167,9 +225,11 @@ Firebase Console ← Project Settings ← Service Accounts ← Generate new priv
 
 ```
 app.js                   يُبنى من tools/build — لا تُعدّله يدويًا
+istimara/                استمارة التسجيل العامة (مجلد مستقل يُنشر في /istimara/)
 firebase-public/         النسخة القابلة للنشر، مطابقة للمصدر
 tools/build/             الأساس المُختبَر + ١٦ طبقة + سكربت التجميع
-tools/tests/             مجموعات الاختبار التسع + أدوات المعاينة
+tools/tests/             مجموعات الاختبار + أدوات المعاينة
+tools/tests/form-print-preview.js  يكتب صفحتَي الطباعة للمعاينة
 tools/firebase.ps1       غلاف الـ CLI مع معالجة اعتراض TLS
 tools/check-network.js   npm run doctor
 tools/check-form-placement.py  قياس مواضع الطباعة على صورة الاستمارة

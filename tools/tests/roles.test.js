@@ -73,5 +73,58 @@ if (!/raise SystemExit\(["']Unknown role/.test(seed)) {
   errors.push('tools/seed-accounts.py does not refuse an unknown role');
 }
 
+/* ---- the owner, named by address ---- */
+const adapter = read('firebase-adapter.js');
+
+if (!/function ownerEmail\(\)/.test(rules)) {
+  errors.push('firestore.rules has no ownerEmail()');
+} else {
+  const ownerFn = rules.match(/function ownerEmail\(\)[\s\S]*?;/)[0];
+  // an owner is identified by a verified address, so no users/{uid} is needed
+  if (!/request\.auth\.token\.email/.test(ownerFn)) {
+    errors.push('ownerEmail() does not read the address from the token');
+  }
+  if (!/email_verified\s*==\s*true/.test(ownerFn)) {
+    errors.push('ownerEmail() accepts an unverified address');
+  }
+  if (!/documents\/config\/owners/.test(ownerFn)) {
+    errors.push('ownerEmail() does not read config/owners');
+  }
+  // and it must actually grant management
+  const managerFn2 = rules.match(/function manager\(\)\s*\{[^}]*\}/)[0];
+  if (!/ownerEmail\(\)/.test(managerFn2)) {
+    errors.push('an owner does not hold management rights');
+  }
+  // nobody else may rewrite the owner list
+  const ownersMatch = rules.match(/match \/config\/owners \{[\s\S]*?\n    \}/);
+  if (!ownersMatch) {
+    errors.push('config/owners has no rule of its own');
+  } else {
+    const body = ownersMatch[0];
+    const writes = body.split('\n').filter(l => /allow\s+(write|read)/.test(l));
+    if (!writes.length) errors.push('config/owners grants nothing');
+    for (const line of writes) {
+      if (!/ownerEmail\(\)/.test(line)) {
+        errors.push('config/owners is not gated on the owner: ' + line.trim());
+      }
+    }
+  }
+}
+
+/* the page has to agree with the rules, or the owner sees a member's view */
+if (!/const isOwner = async user/.test(adapter)) {
+  errors.push('the adapter has no isOwner()');
+}
+if (!/role: owns \? 'admin' : \(profile\.role \|\| 'member'\)/.test(adapter)) {
+  errors.push('the adapter does not give an owner the admin view');
+}
+if (!/user\.emailVerified !== true/.test(adapter)) {
+  errors.push('the adapter accepts an unverified address as owner');
+}
+if (!/ownerAddresses\(\)\.catch/.test(adapter) && !/\.catch\(/.test(adapter)) {
+  errors.push('the owner list read is not guarded, a failure would hang sign-in');
+}
+
 if (errors.length) { console.log('PROBLEMS:\n  - ' + [...new Set(errors)].join('\n  - ')); process.exit(1); }
-console.log('Roles agree across the tools, the page and the rules: ' + localRoles.join(', '));
+console.log('Roles and ownership agree across the tools, the page and the rules: '
+  + localRoles.join(', ') + '; owner = config/owners');

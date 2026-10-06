@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a6f78" />
+  <meta name="description" content="استمارة التسجيل في النادي الرياضي الصدارة — فرع السباحة. سجّل بياناتك مباشرة واطبع الاستمارة مكتملة." />
+  <meta name="robots" content="index, follow" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="النادي الرياضي الصدارة — فرع السباحة" />
+  <meta property="og:title" content="استمارة التسجيل — النادي الرياضي الصدارة" />
+  <meta property="og:description" content="سجّل بياناتك في فرع السباحة واطبع الاستمارة مكتملة في دقيقة." />
+  <meta property="og:image" content="/assets/logo.png" />
+  <meta property="og:locale" content="ar_DZ" />
+  <title>استمارة التسجيل | النادي الرياضي الصدارة — فرع السباحة</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="istimara.css" />
+  <link rel="canonical" href="/istimara/" />
+  <link rel="icon" href="/assets/logo.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/assets/icon-192.png" />
+</head>
+<body>
+  <a class="skip" href="#reg-form">تخطَّ إلى الاستمارة</a>
+
+  <header class="page-head">
+    <div class="wrap head-inner">
+      <img class="head-logo" src="/assets/logo.png" alt="شعار النادي الرياضي الصدارة" width="56" height="56" />
+      <div class="head-text">
+        <h1>استمارة التسجيل</h1>
+        <p class="head-sub">النادي الرياضي الصدارة &mdash; فرع السباحة &middot; موسم <span data-season>2026 / 2027</span></p>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap" id="main">
+
+    <!-- ---------- how it works ---------- -->
+    <section class="steps" aria-label="كيف تعمل الاستمارة">
+      <ol>
+        <li><b>١</b><span>املأ البيانات</span></li>
+        <li><b>٢</b><span>راجعها</span></li>
+        <li><b>٣</b><span>اطبع الاستمارة ووقّعها</span></li>
+      </ol>
+      <p class="steps-note">
+        لا تحتاج إلى حساب. تُحفظ طلباتك مباشرة لدى إدارة النادي، وتظهر الاستمارة
+        للطباعة فور انتهاء الإرسال.
+      </p>
+    </section>
+
+    <!-- ================= the form ================= -->
+    <form id="reg-form" novalidate autocomplete="on">
+
+      <!-- ---------- 1. the swimmer ---------- -->
+      <fieldset class="card">
+        <legend><span class="step-no">١</span> بيانات الرياضي</legend>
+
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">الاسم بالعربية <i class="req">*</i></span>
+            <input id="first_name_ar" name="first_name_ar" type="text" required maxlength="40" placeholder="مثال: أمين" />
+          </label>
+          <label class="f">
+            <span class="lbl">اللقب بالعربية <i class="req">*</i></span>
+            <input id="last_name_ar" name="last_name_ar" type="text" required maxlength="40" placeholder="مثال: بلعيد" />
+          </label>
+        </div>
+
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">الاسم بالفرنسية</span>
+            <input id="first_name_fr" name="first_name_fr" type="text" dir="ltr" maxlength="40" />
+          </label>
+          <label class="f">
+            <span class="lbl">اللقب بالفرنسية</span>
+            <input id="last_name_fr" name="last_name_fr" type="text" dir="ltr" maxlength="40" />
+          </label>
+        </div>
+
+        <!-- category drives the rest of the form -->
+        <div class="row">
+          <span class="lbl">الفئة <i class="req">*</i></span>
+          <div class="choices" role="radiogroup" aria-label="الفئة">
+            <label class="choice">
+              <input type="radio" name="category" value="minor" checked />
+              <span><b>أصاغر</b><small>تحت 14 سنة &mdash; بيانات الولي مطلوبة</small></span>
+            </label>
+            <label class="choice">
+              <input type="radio" name="category" value="adult" />
+              <span><b>أكابر</b><small>14 سنة فأكثر &mdash; تسجيل مباشر</small></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">تاريخ الميلاد <i class="req">*</i></span>
+            <input id="birth_date" name="birth_date" type="date" required />
+          </label>
+          <label class="f">
+            <span class="lbl">الجنس</span>
+            <select id="gender" name="gender">
+              <option value="">--</option>
+              <option value="male">ذكر</option>
+              <option value="female">أنثى</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">مكان الميلاد</span>
+            <input id="birth_place" name="birth_place" type="text" maxlength="60" />
+          </label>
+          <label class="f">
+            <span class="lbl">الولاية</span>
+            <input id="wilaya" name="wilaya" type="text" maxlength="40" value="غرداية" />
+          </label>
+        </div>
+
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">رقم التعريف الوطني</span>
+            <input id="national_id" name="national_id" type="text" inputmode="numeric" dir="ltr" maxlength="20" />
+          </label>
+          <label class="f">
+            <span class="lbl">رقم شهادة الميلاد</span>
+            <input id="birth_certificate_no" name="birth_certificate_no" type="text" dir="ltr" maxlength="30" />
+          </label>
+        </div>
+
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">فصيلة الدم</span>
+            <select id="blood_group" name="blood_group">
+              <option value="">--</option>
+              <option>A+</option><option>A-</option>
+              <option>B+</option><option>B-</option>
+              <option>AB+</option><option>AB-</option>
+              <option>O+</option><option>O-</option>
+            </select>
+          </label>
+          <label class="f">
+            <span class="lbl">المستوى</span>
+            <select id="level" name="level">
+              <option value="">--</option>
+              <option value="مبتدئ">مبتدئ</option>
+              <option value="متوسط">متوسط</option>
+              <option value="متقدم">متقدم</option>
+              <option value="محترف">محترف</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="row">
+          <label class="f">
+            <span class="lbl">نمط السباحة</span>
+            <input id="swimming_strokes" name="swimming_strokes" type="text" maxlength="80" placeholder="حرة، ظهر، صدر، فراشة، متناوبة" />
+          </label>
+        </div>
+
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">رقم الهاتف <i class="req">*</i></span>
+            <input id="phone" name="phone" type="tel" required inputmode="tel" dir="ltr" maxlength="20" placeholder="06 xx xx xx xx" />
+          </label>
+          <label class="f">
+            <span class="lbl">رقم الواتساب</span>
+            <input id="whatsapp" name="whatsapp" type="tel" inputmode="tel" dir="ltr" maxlength="20" />
+          </label>
+        </div>
+
+        <div class="row">
+          <label class="f">
+            <span class="lbl">العنوان <i class="req">*</i></span>
+            <input id="address" name="address" type="text" required maxlength="160" placeholder="الحي، الشارع، البلدية" />
+          </label>
+        </div>
+      </fieldset>
+
+      <!-- ---------- 2. guardian (minors only) ---------- -->
+      <fieldset class="card" id="guardian-card" data-minor-only>
+        <legend><span class="step-no">٢</span> ولي الأمر &mdash; للأصاغر فقط</legend>
+
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">اسم الولي <i class="req">*</i></span>
+            <input id="guardian_first_name" name="guardian_first_name" type="text" maxlength="40" />
+          </label>
+          <label class="f">
+            <span class="lbl">لقب الولي <i class="req">*</i></span>
+            <input id="guardian_last_name" name="guardian_last_name" type="text" maxlength="40" />
+          </label>
+        </div>
+
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">تاريخ ميلاد الولي</span>
+            <input id="guardian_birth_date" name="guardian_birth_date" type="date" />
+          </label>
+          <label class="f">
+            <span class="lbl">صفة القرابة</span>
+            <input id="guardian_relation" name="guardian_relation" type="text" maxlength="40" placeholder="أب، أم، أخ..." />
+          </label>
+        </div>
+
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">هاتف الولي</span>
+            <input id="guardian_phone" name="guardian_phone" type="tel" inputmode="tel" dir="ltr" maxlength="20" />
+          </label>
+          <label class="f">
+            <span class="lbl">رقم تعريف الولي</span>
+            <input id="guardian_national_id" name="guardian_national_id" type="text" inputmode="numeric" dir="ltr" maxlength="20" />
+          </label>
+        </div>
+
+        <label class="check f-wide">
+          <input id="guardian_consent" name="guardian_consent" type="checkbox" />
+          <span>أصرح بأنّي وليّ الطفل الشرعي، وأفوّض النادي بالتدريب داخل فروعه ومنشآته.</span>
+        </label>
+      </fieldset>
+
+      <!-- ---------- 3. medical ---------- -->
+      <fieldset class="card">
+        <legend><span class="step-no">٣</span> الفحص الطبي</legend>
+        <p class="card-note">
+          النموذج الرسمي للنادي لا يتّسع لاسم الطبيب، لذلك يُطبع في الملخّص المرفق
+          بالاستمارة وتُوقّعه إدارة النادي.
+        </p>
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">اسم الطبيب</span>
+            <input id="doctor_name" name="doctor_name" type="text" maxlength="60" />
+          </label>
+          <label class="f">
+            <span class="lbl">التخصص</span>
+            <input id="doctor_specialty" name="doctor_specialty" type="text" maxlength="60" />
+          </label>
+        </div>
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">تاريخ الفحص</span>
+            <input id="medical_date" name="medical_date" type="date" />
+          </label>
+          <label class="f">
+            <span class="lbl">المستوصف</span>
+            <input id="medical_place" name="medical_place" type="text" maxlength="80" />
+          </label>
+        </div>
+      </fieldset>
+
+      <!-- ---------- 4. photo ---------- -->
+      <fieldset class="card">
+        <legend><span class="step-no">٤</span> الصورة الشخصية</legend>
+        <p class="card-note">تظهر في إطار «الصورة» على الاستمارة الرسمية وبطاقة الانخراط.</p>
+        <div class="photo-row">
+          <div class="photo-preview" id="photo-preview"><span>لا توجد صورة</span></div>
+          <div class="photo-actions">
+            <label class="btn btn-outline">
+              📷 اختيار صورة
+              <input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+            </label>
+            <button type="button" class="btn btn-ghost" id="photo-clear" hidden>حذف الصورة</button>
+            <p class="hint">JPG أو PNG أو WebP &mdash; بحد أقصى 3 ميغابايت.</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- ---------- 5. subscription ---------- -->
+      <fieldset class="card">
+        <legend><span class="step-no">٥</span> الاشتراك والدفع</legend>
+
+        <div class="row">
+          <label class="f">
+            <span class="lbl">الاشتراك <i class="req">*</i></span>
+            <select id="subscription_code" name="subscription_code" required></select>
+          </label>
+        </div>
+
+        <div class="row">
+          <span class="lbl">المسبح أو المنشأة</span>
+          <select id="facility" name="facility">
+            <option>المسبح الأولمبي</option>
+            <option>المسبح النصف أولمبي</option>
+            <option>الملعب البلدي</option>
+            <option>غابة غرداية</option>
+          </select>
+        </div>
+
+        <div class="row two">
+          <label class="check f-wide">
+            <input id="transport" name="transport" type="checkbox" />
+            <span>النقل</span>
+          </label>
+          <label class="check f-wide">
+            <input id="uniform" name="uniform" type="checkbox" />
+            <span>البدلة الرياضية</span>
+          </label>
+        </div>
+
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">طريقة الدفع</span>
+            <select id="payment_method" name="payment_method">
+              <option value="cash">نقدًا</option>
+              <option value="postal_check">صك بريدي</option>
+              <option value="postal_transfer">حوالة بريدية</option>
+            </select>
+          </label>
+          <label class="f">
+            <span class="lbl">رقم تسجيل سابق (إن كان تجديدًا)</span>
+            <input id="membership_no" name="membership_no" type="text" dir="ltr" maxlength="20" />
+          </label>
+        </div>
+
+        <!-- live total, from the same numbers the club charges -->
+        <div class="total" id="total" aria-live="polite">
+          <span>المبلغ المتوقع</span>
+          <b id="total-amount">—</b>
+        </div>
+      </fieldset>
+
+      <!-- ---------- 6. notes + send ---------- -->
+      <fieldset class="card">
+        <legend><span class="step-no">٦</span> ملاحظات</legend>
+        <div class="row">
+          <label class="f">
+            <span class="lbl">ملاحظة للنادي</span>
+            <textarea id="notes" name="notes" rows="3" maxlength="400" placeholder="أي معلومة تودّ إخبار إدارة النادي بها"></textarea>
+          </label>
+        </div>
+        <label class="check f-wide terms">
+          <input id="terms" name="terms" type="checkbox" />
+          <span>أقرّ بصحة البيانات، وأوافق على <b>النظام الداخلي</b> للنادي، وأعلم أنّ التسجيل لا يكتمل إلا بعد المصادقة على الطلب ودفع الاشتراك.</span>
+        </label>
+      </fieldset>
+
+      <div class="form-msg" id="form-msg" role="alert" hidden></div>
+
+      <div class="action-bar">
+        <button type="submit" class="btn btn-primary" id="submit">إرسال الاستمارة</button>
+        <button type="button" class="btn btn-ghost" id="save-draft">حفظ كمسودة</button>
+        <button type="button" class="btn btn-ghost" id="reset">مسح الاستمارة</button>
+      </div>
+    </form>
+
+    <!-- ================= after sending ================= -->
+    <section id="done" hidden>
+      <div class="done-head">
+        <div class="done-tick" aria-hidden="true">✓</div>
+        <h2>تم استلام طلبك</h2>
+        <p>اطبع الاستمارة، وقّعها، ثم أحضرها إلى النادي.</p>
+      </div>
+
+      <div class="ticket">
+        <div class="ticket-row">
+          <span>رقم الطلب</span>
+          <b id="done-no" dir="ltr">—</b>
+        </div>
+        <div class="ticket-row">
+          <span>المبلغ المتوقع</span>
+          <b id="done-amount">—</b>
+        </div>
+        <div class="ticket-row">
+          <span>التاريخ</span>
+          <b id="done-date">—</b>
+        </div>
+      </div>
+
+      <p class="done-note">
+        احتفظ برقم الطلب &mdash; هو ما يربطك بالطلب عند مراجعة الإدارة أو عند
+        متابعته على الهاتف.
+      </p>
+
+      <div class="done-actions">
+        <button type="button" class="btn btn-primary" id="print-form">🖨 طباعة الاستمارة</button>
+        <button type="button" class="btn btn-outline" id="print-again">طباعة نسخة أخرى</button>
+        <button type="button" class="btn btn-ghost" id="edit-form">تعديل البيانات</button>
+        <button type="button" class="btn btn-ghost" id="new-form">تسجيل شخص آخر</button>
+      </div>
+
+      <details class="summary">
+        <summary>مراجعة البيانات المُرسلة</summary>
+        <div id="done-summary" class="summary-body"></div>
+      </details>
+    </section>
+  </main>
+
+  <footer class="page-foot">
+    <div class="wrap foot-inner">
+      <div class="foot-contact">
+        <b>النادي الرياضي الصدارة &mdash; فرع السباحة</b>
+        <span>حي الثنية &mdash; غرداية</span>
+        <span dir="ltr">0660 60 64 67 &nbsp;|&nbsp; nadisadara@gmail.com</span>
+      </div>
+      <nav class="foot-links">
+        <a href="/">المنصة الرئيسية</a>
+        <a href="/assets/internal-regulations.jpg" target="_blank" rel="noopener">النظام الداخلي</a>
+        <a href="https://www.facebook.com/nadiSadara47/" target="_blank" rel="noopener">الفيسبوك</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="/firebase-config.js"></script>
+  <script src="/firebase-adapter.js"></script>
+  <script src="print.js"></script>
+  <script src="istimara.js"></script>
+  <script>if ('serviceWorker' in navigator && location.protocol === 'https:')
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () {}); });</script>
+</body>
+</html>

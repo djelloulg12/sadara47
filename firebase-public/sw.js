@@ -6,12 +6,23 @@ const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/firebase-config.j
   '/manifest.webmanifest', '/assets/logo.png', '/assets/form-registration-01.jpg',
   '/assets/internal-regulations.jpg', '/assets/registration-card.jpg'];
 
+/* The public registration page is a second entry point in its own folder. Its
+   shell is cached on its own so the form still opens on a weak connection at the
+   club; the POST always goes to the network, like every other /api call. */
+const FORM_SHELL = ['/istimara/', '/istimara/index.html', '/istimara/istimara.css',
+  '/istimara/istimara.js', '/istimara/print.js'];
+
 /* The scans are the only files big enough to be worth serving from the cache on
    sight; they are also the ones the printed form is measured against. */
 const BIG_SCAN = /\.(?:jpe?g|png)$/i;
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      // one bad entry must not fail the whole install, so each is added alone
+      .then(cache => Promise.all(SHELL.concat(FORM_SHELL).map(url => cache.add(url).catch(() => {}))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', e => {
@@ -29,8 +40,15 @@ function networkFirst(req) {
     return fetch(req).then(res => {
       if (res && res.ok) cache.put(req, res.clone());
       return res;
-    }).catch(() => cached || caches.match('/index.html'));
+    }).catch(() => cached || caches.match(shellFor(req)));
   }));
+}
+
+/* Offline, a missing page falls back to the shell of its own folder: answering
+   a failed /istimara/ request with the platform's index would drop someone who
+   opened the form on a weak connection into the sign-in screen. */
+function shellFor(req) {
+  return new URL(req.url).pathname.startsWith('/istimara/') ? '/istimara/index.html' : '/index.html';
 }
 
 /* Hands back the stored copy straight away and replaces it in the background. */

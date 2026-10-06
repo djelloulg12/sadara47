@@ -141,6 +141,12 @@ def seed_local_accounts(path):
 class App(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=ROOT, **kwargs)
+    def end_headers(self):
+        # This is the development server. A browser that keeps its own copy of
+        # app.js goes on running the build it started with, which is how you end
+        # up staring at a fix that "did not take". Never let it cache.
+        self.send_header('Cache-Control', 'no-store, must-revalidate')
+        super().end_headers()
     def send_json(self, value, code=200, extra=None):
         raw = json.dumps(value, ensure_ascii=False).encode()
         self.send_response(code); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(raw)))

@@ -18,15 +18,37 @@
     let stop = () => {};
     stop = auth.onAuthStateChanged(user => { stop(); resolve(user); });
   });
+  /* The club owner is named by address in config/owners. The rules grant that
+     address full rights, so the page has to agree, or the owner would be shown a
+     member's view of a database they are allowed to change. Read once per load:
+     the list changes only when the owner changes it. */
+  let ownersPromise = null;
+  const ownerAddresses = () => {
+    if (!ownersPromise) {
+      ownersPromise = db.collection('config').doc('owners').get()
+        .then(snap => (snap.exists && Array.isArray(snap.data().emails)) ? snap.data().emails : [])
+        .catch(error => { console.warn('owner list unavailable', error); return []; });
+    }
+    return ownersPromise;
+  };
+  const isOwner = async user => {
+    if (!user || !user.email || user.emailVerified !== true) return false;
+    const list = await ownerAddresses();
+    return list.indexOf(user.email) !== -1;
+  };
+
   const userView = async user => {
     if (!user) return null;
     let profile = {};
     try { const snap = await db.collection('users').doc(user.uid).get(); profile = snap.exists ? snap.data() : {}; }
     catch (error) { console.warn('Firestore profile unavailable; using Auth account', error); }
+    // an owner holds management rights without needing a users/{uid} document
+    const owns = await isOwner(user);
     return {
       id: user.uid,
       name: profile.name || user.displayName || user.email || 'عضو النادي',
-      role: profile.role || 'member',
+      role: owns ? 'admin' : (profile.role || 'member'),
+      owner: owns,
       email: user.email || '',
       phone: profile.phone || user.phoneNumber || '',
       member_no: profile.member_no || '',

@@ -104,18 +104,27 @@ function setupRegistrationMode() {
   const category = modal && modal.querySelector('#reg-category');
   const sectionTitle = modal && [...modal.querySelectorAll('.form-section-title')].find(x => x.textContent.includes('معلومات الولي'));
   if (!category || !sectionTitle) return;
+  const SUBMIT = '[data-action="send-full-request"]';
+  /* Everything from the guardian heading up to, but not including, the submit
+     button belongs to a minor. querySelector alone is not enough: it never
+     matches the element itself, so the walk went straight past the submit button
+     and hid it together with the guardian fields -- which left an adult with no
+     way to send a registration at all. */
   const guardianNodes = [];
   let node = sectionTitle;
-  while (node) { if (node.querySelector?.('[data-action="send-full-request"]')) break; guardianNodes.push(node); node = node.nextElementSibling; }
-  const submit = modal.querySelector('[data-action="send-full-request"]');
+  while (node) {
+    if (node.matches?.(SUBMIT) || node.querySelector?.(SUBMIT)) break;
+    guardianNodes.push(node);
+    node = node.nextElementSibling;
+  }
+  const submit = modal.querySelector(SUBMIT);
   const DOCS = '.attached-registration-forms';
   if (submit && !modal.querySelector(DOCS)) submit.insertAdjacentHTML('beforebegin','<div class="official-docs attached-registration-forms"><a href="form-registration-01.jpg" target="_blank" rel="noopener">استمارة النادي</a><a href="internal-regulations.jpg" target="_blank" rel="noopener">النظام الداخلي</a><a href="form-registration-02.jpg" target="_blank" rel="noopener">استمارة النظام</a><a href="registration-card.jpg" target="_blank" rel="noopener">نموذج بطاقة الانخراط</a></div>');
   if (submit && !modal.querySelector('[data-action="print-registration-form"]')) submit.insertAdjacentHTML('beforebegin','<button class="btn btn-outline full" data-action="print-registration-form">طباعة نموذج التسجيل A4</button>');
-  /* An adult registers alone, so nothing about a guardian may reach their form,
-     and neither do the previews of the guardian's paperwork. Both blocks are
-     collected before the toggle first runs, so switching category back and
-     forth keeps them in step. */
-  const adultNodes = [...modal.querySelectorAll(DOCS + ', [data-action="print-registration-form"]')];
+  /* Only the previews of the guardian's paperwork go away for an adult. An adult
+     fills in the same official form and prints the same official form, so the
+     print button stays, and so does the submit button. */
+  const adultNodes = [...modal.querySelectorAll(DOCS)];
   const toggle = () => {
     const visible = category.value === 'minor';
     guardianNodes.forEach(x => { x.hidden = !visible; });

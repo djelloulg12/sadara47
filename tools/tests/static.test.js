@@ -13,6 +13,19 @@ for (const f of SYNC_FILES) {
   if (!a.equals(b)) problems.push(`OUT OF SYNC: ${f} differs from firebase-public/${f}`);
 }
 
+// The public registration page is hand-written in istimara/ and copied into the
+// deployable tree by the build, so the same rule applies folder-wide.
+const ISTIMARA = ['index.html', 'istimara.css', 'istimara.js', 'print.js'];
+for (const f of ISTIMARA) {
+  const src = path.join(ROOT, 'istimara', f);
+  const dst = path.join(PUBLIC, 'istimara', f);
+  if (!fs.existsSync(src)) { problems.push(`MISSING: istimara/${f} is the source of the public sign-up page`); continue; }
+  if (!fs.existsSync(dst)) { problems.push(`MISSING: firebase-public/istimara/${f} is what Firebase serves`); continue; }
+  if (!fs.readFileSync(src).equals(fs.readFileSync(dst))) {
+    problems.push(`OUT OF SYNC: istimara/${f} differs from firebase-public/istimara/${f}`);
+  }
+}
+
 // 2. assets referenced by markup must exist in the deployable copy
 const css = fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8');
 const js = fs.readFileSync(path.join(PUBLIC, 'app.js'), 'utf8');

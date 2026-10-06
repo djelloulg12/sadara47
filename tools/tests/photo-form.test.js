@@ -166,12 +166,20 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
     const nin = w.document.querySelector('#reg-nin');
     if (!nin || nin.closest('[hidden]')) errors.push('[adults] the swimmer national number was hidden');
     if (!adultShown.some(t => t.indexOf('رقم التعريف الوطني') === 0)) errors.push('[adults] the national number label is gone');
-    // the modal needs its own print button; the landing page carries a control
-    // with the same action, which used to satisfy the guard and leave the modal
-    // without one at all
-    const printBtn = () => modal.querySelector('[data-action="print-registration-form"]');
-    if (!printBtn()) errors.push('[adults] the modal has no A4 print button');
-    else if (!printBtn().hidden) errors.push('[adults] the print button is showing for an adult');
+    /* An adult fills in and prints the same official form, so both the print
+       button and the submit button must stay. Only the guardian's own fields
+       and the previews of the guardian's paperwork go away. */
+    const btn = action => Array.from(modal.querySelectorAll('[data-action="' + action + '"]'))
+      .find(n => !n.hidden && !n.closest('[hidden]'));
+    if (!btn('print-registration-form')) errors.push('[adults] an adult has no A4 print button');
+    if (!btn('send-full-request')) errors.push('[adults] an adult cannot send the registration');
+    if (!shown().some(t => t.indexOf('إرسال طلب التسجيل') === 0)) errors.push('[adults] the submit button is not shown');
+    /* The walk that hides the guardian block used to stop on querySelector, which
+       never matches the element itself -- so it carried on and hid the submit
+       button too, leaving an adult with no way to register at all. */
+    if (modal.querySelector('[data-action="send-full-request"]').hidden) {
+      errors.push('[adults] the submit button carries the hidden attribute');
+    }
     // the landing page's own quick action must survive the modal's toggle
     const landing = w.document.querySelector('.qs-item[data-action="print-registration-form"]');
     if (landing && landing.hidden) errors.push('[adults] the modal toggle hid the landing page link');
@@ -180,8 +188,8 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
     for (const link of ['استمارة النادي', 'النظام الداخلي']) {
       if (!shown().includes(link)) errors.push('[adults] a minor lost the link: ' + link);
     }
-    if (!shown().some(t => t.indexOf('طباعة نموذج التسجيل') === 0)) errors.push('[adults] a minor lost the print button');
-    if (printBtn() && printBtn().hidden) errors.push('[adults] the print button stayed hidden for a minor');
+    if (!btn('print-registration-form')) errors.push('[adults] a minor lost the print button');
+    if (!btn('send-full-request')) errors.push('[adults] a minor lost the submit button');
     // and an adult's entered data must never reach a guardian box
     const guardian = w.document.querySelector('#reg-guardian-first');
     if (guardian) guardian.value = 'يجب ألا يطبع';

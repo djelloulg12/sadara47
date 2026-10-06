@@ -5,14 +5,31 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
     function role() { return profile().role; }
-    function manager() { return signedIn() && role() in ['admin', 'president']; }
+
+    /* The club owner. Listed by address in config/owners so the right follows the
+       person rather than a user id that only exists once the account has been
+       created -- otherwise the owner would have to wait for an account to exist
+       before being able to create one. No user document is needed: the token
+       already carries the verified address. */
+    function ownerEmail() { return signedIn() && request.auth.token.email != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in
+             get(/databases/$(database)/documents/config/owners).data.emails; }
+
+    function manager() { return ownerEmail() || (signedIn() && role() in ['admin', 'president']); }
     function coach() { return signedIn() && role() == 'coach'; }
     function staff() { return manager() || coach(); }
+
+    /* The owner list itself: readable by the owner, writable by the owner alone. */
+    match /config/owners {
+      allow read: if ownerEmail();
+      allow write: if ownerEmail();
+    }
 
     // Accounts: a member reads only their own document; management reads all.
     match /users/{id} {
       allow read: if signedIn() && (request.auth.uid == id || manager());
-      allow create: if signedIn() && request.auth.uid == id;
+      allow create: if signedIn() && (request.auth.uid == id || ownerEmail());
       allow update: if signedIn() && (request.auth.uid == id || manager());
       allow delete: if manager();
     }

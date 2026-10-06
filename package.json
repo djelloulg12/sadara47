@@ -12,6 +12,7 @@
     "user": "python tools/create-user.py",
     "preview:form": "node tools/tests/packet-preview.js",
     "preview:placement": "node tools/tests/form-placement.js",
+    "preview:print": "node tools/tests/form-print-preview.js",
     "doctor": "node tools/check-network.js",
     "login": "powershell -ExecutionPolicy Bypass -File tools/firebase.ps1 login --no-localhost --add-project",
     "whoami": "powershell -ExecutionPolicy Bypass -File tools/firebase.ps1 login:list",
