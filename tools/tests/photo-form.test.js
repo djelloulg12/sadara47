@@ -18,7 +18,7 @@ function boot(seed) {
   w.scrollTo = () => {}; w.HTMLElement.prototype.scrollIntoView = function () {};
   w.__calls = [];
   w.fetch = function (u, i) { w.__calls.push({ url: String(u), method: (i && i.method || 'GET').toUpperCase() }); return Promise.resolve({ ok: true, json: async () => ({ ok: true, profile: {} }) }); };
-  try { w.eval(APP + '\n;window.__t={get state(){return state},render:render,action:action,PHOTO_BOX:PHOTO_BOX,officialFormCSS:officialFormCSS,overlaySheet:overlaySheet,FORM_SPOTS:FORM_SPOTS,FORM_BG:FORM_BG};'); }
+  try { w.eval(APP + '\n;window.__t={get state(){return state},render:render,action:action,PHOTO_BOX:PHOTO_BOX,officialFormCSS:officialFormCSS,overlaySheet:overlaySheet,formValues:formValues,FORM_SPOTS:FORM_SPOTS,FORM_BG:FORM_BG};'); }
   catch (e) { errors.push('load: ' + e.message); }
   if (seed && seed.user) w.__t.state.user = seed.user;
   return w;
@@ -212,6 +212,18 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
   if ((minorSheet.match(/class="f-spot"/g) || []).length !== w.__t.FORM_SPOTS.length) {
     errors.push('[adults] a minor form is missing boxes');
   }
+
+  /* "بن ___" is the surname, not the nationality: the declaration reads
+     "... السيد(ة) ___ المولود(ة) بتاريخ ___ بن ___", so the given name and the
+     surname are two separate blanks. Nationality has no blank on the form. */
+  const vals = w.__t.formValues(Object.assign({}, adult, {
+    category: 'minor', guardian_first_name: 'كريم', guardian_last_name: 'بلعيد'
+  }));
+  if (vals.parent_name !== 'كريم') errors.push('[form] the declaration name is not the given name: ' + vals.parent_name);
+  if (vals.parent_last_name !== 'بلعيد') errors.push('[form] the بن line is not the surname: ' + vals.parent_last_name);
+  if ('parent_nationality' in vals) errors.push('[form] the declaration still carries a nationality field');
+  const bnSpot = w.__t.FORM_SPOTS.find(s => s.id === 'parent_last_name');
+  if (!bnSpot) errors.push('[form] the بن line lost its spot');
   cleanup(w);
 }
 

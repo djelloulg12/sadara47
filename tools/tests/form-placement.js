@@ -37,7 +37,7 @@ const minor = Object.assign({}, adult, {
   guardian_first_name: 'كريم', guardian_last_name: 'بلعيد',
   guardian_relation: 'الأب', guardian_phone: '0662000002',
   guardian_national_id: '1234567890', guardian_birth_date: '1990-01-02',
-  guardian_nationality: 'جزائري', guardian_child: 'أمين', child_place: 'غرداية'
+  guardian_child: 'أمين', card_issue_date: '2026-10-01', card_issue_place: 'غرداية'
 });
 
 fs.mkdirSync(path.dirname(OUT), { recursive: true });

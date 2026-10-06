@@ -1656,7 +1656,7 @@ const FORM_SPOTS = [
   { id: 'medical_person',     y: 148.57, x0: 60.2,  colon: 151.7 },
   { id: 'parent_name',        y: 208.78, x0: 105.7, colon: 152.9 },
   { id: 'parent_birth',       y: 208.78, x0: 32.9,  colon: 71.9 },
-  { id: 'parent_nationality', y: 208.78, x0: 4.2,   colon: 31.5 },
+  { id: 'parent_last_name',   y: 208.78, x0: 4.2,   colon: 31.5 },
   { id: 'parent_id',          y: 217.70, x0: 106.0, colon: 149.4 },
   { id: 'card_issued_at',     y: 217.70, x0: 40.0,  colon: 73.3 },
   { id: 'card_place',         y: 217.70, x0: 4.2,   colon: 31.5 },
@@ -1692,9 +1692,13 @@ function formValues(a){
     blood_group: v('blood_group'),
     phone: v('phone'),
     medical_person: (v('first_name_ar') + ' ' + v('last_name_ar')).trim(),
-    parent_name: (v('guardian_first_name') + ' ' + v('guardian_last_name')).trim(),
+    /* The declaration reads "أنا الولي ... السيد(ة) ___ المولود(ة) بتاريخ ___ بن ___",
+       so the given name and the surname are separate blanks, exactly as the
+       identity block at the top separates الإسم from اللقب. Nationality has no
+       blank of its own on this form, so nothing is written for it. */
+    parent_name: v('guardian_first_name'),
     parent_birth: dayFirst(v('guardian_birth_date')),
-    parent_nationality: v('guardian_nationality'),
+    parent_last_name: v('guardian_last_name'),
     parent_id: v('guardian_national_id'),
     card_issued_at: dayFirst(v('card_issue_date')),
     card_place: v('card_issue_place'),
