@@ -20,19 +20,35 @@
 
 ### ١. تفعيل تسجيل الدخول — Authentication
 
-Firebase Authentication غير مُهيّأ، ولا توجد طريقة برمجية لإنشائه (الـ API يرجّع `CONFIGURATION_NOT_FOUND`).
+Firebase Authentication غير مُهيّأ، ولا توجد طريقة برمجية لإنشائه: كل مسارات الـ API
+ترجّع `CONFIGURATION_NOT_FOUND` لأن إعداد الهوية نفسه غير موجود.
 
 1. افتح <https://console.firebase.google.com/project/sadara-platform-774c8/authentication/providers>
 2. اضغط **Get started**
 3. فعّل **Email/Password**
 
-بعدها استعمل السكربت الجاهز لإنشاء حسابات الطاقم:
+بعدها شغّل السكربت مرة واحدة:
 
 ```powershell
-python tools/seed-accounts.py
+python tools\seed-accounts.py
 ```
 
-> ⚠️ **غيّر كلمة المرور فوراً.** الحسابات تُنشأ بكلمة `Sadara@2026` المستعملة محلياً. هي كلمة معروفة — لا تُبقِها على موقع عام.
+يسألك عن كلمة مرورك **دون أن يطبعها أو يخزّنها**. لا توجد كلمة افتراضية في
+السكربت، ويرفض أي كلمة أقصر من ١٠ محارف.
+
+لإنشاء حسابات بعنوان بريد حقيقي من النادي:
+
+```powershell
+$env:SADARA_SEED_ACCOUNTS = "Manager@club.example,admin;Head@club.example,president;Coach@club.example,coach"
+python tools\seed-accounts.py
+```
+
+| الدور | ما يستطيعه |
+|---|---|
+| `admin` | كل شيء، بما فيه الإعدادات |
+| `president` | القبول والرفض، الاشتراكات، البطاقات |
+| `manager` | التحصيل، رفع النسخة الموقّعة، الرواتب |
+| `coach` | تسجيل الحضور فقط |
 
 ### ٢. رفع الملفات — Storage (اختياري)
 

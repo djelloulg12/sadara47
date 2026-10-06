@@ -5,10 +5,20 @@ users/{uid} document carrying the role, the security rules refuse everything.
 
 Needs Firebase Authentication enabled in the console once:
   console.firebase.google.com/project/<id>/authentication/providers  ->  Get started
+  then enable the Email/Password provider
 
-Change the password before the site is used for real: the default below is the
-one already used during local development.
+The password is never taken from this file. Give it as an argument, through
+SADARA_SEED_PASSWORD, or let the script ask for it without echoing:
+
+  python tools/seed-accounts.py
+  python tools/seed-accounts.py "a password of your own"
+
+The addresses below are the ones the club already uses while working locally.
+Replace them with real ones before the site goes public:
+
+  SADARA_SEED_ACCOUNTS="Manager@club.example,admin;Head@club.example,president"
 """
+import getpass
 import io
 import json
 import os
@@ -25,15 +35,43 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 with io.open(os.path.join(ROOT, ".firebaserc"), encoding="utf-8") as fh:
     PROJECT = json.load(fh)["projects"]["default"]
 
-PASSWORD = (os.environ.get("SADARA_SEED_PASSWORD")
-            or (sys.argv[1] if len(sys.argv) > 1 else "")
-            or "Sadara@2026")
 
-ACCOUNTS = [
-    ("admin@sadara.local", "مدير", "النادي", "admin"),
-    ("president@sadara.local", "رئيس", "الجمعية", "president"),
-    ("coach@sadara.local", "مدرب", "النادي", "coach"),
-]
+def read_accounts():
+    """address;role,address;role -- or the club's existing local addresses."""
+    raw = os.environ.get("SADARA_SEED_ACCOUNTS", "").strip()
+    if not raw:
+        return [
+            ("admin@sadara.local", "admin"),
+            ("president@sadara.local", "president"),
+            ("coach@sadara.local", "coach"),
+        ]
+    out = []
+    for item in raw.split(";"):
+        item = item.strip()
+        if not item:
+            continue
+        if "," not in item:
+            raise SystemExit("Each account needs an address and a role: " + item)
+        address, role = item.split(",", 1)
+        out.append((address.strip(), role.strip()))
+    if not out:
+        raise SystemExit("SADARA_SEED_ACCOUNTS is empty")
+    return out
+
+
+ACCOUNTS = read_accounts()
+
+PASSWORD = (os.environ.get("SADARA_SEED_PASSWORD")
+            or (sys.argv[1] if len(sys.argv) > 1 else ""))
+if not PASSWORD:
+    if not sys.stdin.isatty():
+        raise SystemExit(
+            "No password given.\n"
+            "  Pass one as an argument, or set SADARA_SEED_PASSWORD.\n"
+            "  This script never invents one and never stores it.")
+    PASSWORD = getpass.getpass("Password for the staff accounts: ")
+if len(PASSWORD) < 10:
+    raise SystemExit("That password is too short for a public site. Use at least 10 characters.")
 
 if not os.path.exists(STORE):
     raise SystemExit("Not signed in to Firebase. Run:  npm run login")
@@ -94,13 +132,22 @@ if st != 200:
     raise SystemExit(1)
 
 print("project:", PROJECT)
-print("password:", "(from SADARA_SEED_PASSWORD or the argument)" if (os.environ.get("SADARA_SEED_PASSWORD") or len(sys.argv) > 1) else "Sadara@2026")
+print("accounts:", ", ".join(a for a, _ in ACCOUNTS))
+print("password: supplied by you, not shown here")
 print()
+
+NAMES = {
+    "admin": ("مدير", "النادي"),
+    "president": ("رئيس", "الجمعية"),
+    "manager": ("مسيّر", "النادي"),
+    "coach": ("مدرب", "النادي"),
+}
 
 NOW = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 failed = 0
 
-for email, first, last, role in ACCOUNTS:
+for email, role in ACCOUNTS:
+    first, last = NAMES.get(role, ("عضو", "النادي"))
     # sign in first: an existing account comes back with its uid
     st, res = call(V1 + "/accounts:signInWithPassword", "POST",
                    {"email": email, "password": PASSWORD, "returnSecureToken": True})
@@ -150,4 +197,6 @@ if failed:
     print("%d account(s) failed" % failed)
 else:
     print("all staff accounts exist with their roles")
-    print("Change the password before the site takes real use.")
+    print()
+    print("Sign in on the site's login page with the address and the password you gave.")
+    print("Run this script again with the same password to change one.")
