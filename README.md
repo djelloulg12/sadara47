@@ -13,7 +13,7 @@
 | `firestore.rules` / `storage.rules` | صلاحيات الوصول للبيانات وملفات المدربين |
 | `firebase-public/` | **نسخة النشر الفعلية** على Firebase Hosting |
 | `server.py` + `schema.sql` | خادم API مكافئ بـ SQLite للتشغيل المحلي والاختبار |
-| `sadara.db` | قاعدة محلية (not tracked by Git) |
+| `sadara-local.db` | قاعدة التطوير المحلية (not tracked by Git) |
 
 > **مهم:** المجلد `firebase-public/` هو ما يُنشر. أي تعديل على `app.js` أو `styles.css` أو `index.html` أو `firebase-adapter.js` يجب تكراره في `firebase-public/`.There is a GitHub Actions step تتحقق من ذلك وتمنع النشر عند اختلاف النسختين.
 
@@ -23,15 +23,34 @@
 python server.py
 ```
 
-أو `npm start`. الخادم ينشئ `sadara.db` تلقائيًا، ويضيف الأعمدة الجديدة لقواعد البيانات القديمة دون فقدان البيانات.
+أو `npm run serve`. الخادم ينشئ `sadara-local.db` تلقائيًا، ويضيف الأعمدة الجديدة
+للقواعد القديمة دون فقدان البيانات. وللقاعدة مسار آخر عبر `SADARA_DB_PATH`.
 
-### حسابات الإدارة
+### تسجيل الدخول محليًا
 
-تُنشأ من متغيرات البيئة فقط ولا تُخزَّن في المستودع:
+إن كانت `sadara-local.db` جديدة، ينشئ الخادم ثلاثة حسابات تطوير حتى لا تبقى صفحة
+الدخول بلا من يستطيع تجاوزها:
 
-- `SADARA_ADMIN_EMAIL` / `SADARA_ADMIN_PASSWORD`
-- `SADARA_PRESIDENT_EMAIL` / `SADARA_PRESIDENT_PASSWORD`
-- `SADARA_COACH_EMAIL` / `SADARA_COACH_PASSWORD`
+| البريد | الدور | كلمة المرور |
+| --- | --- | --- |
+| `admin@sadara.local` | مدير | `Sadara@2026` |
+| `president@sadara.local` | رئيس النادي | `Sadara@2026` |
+| `coach@sadara.local` | مدرب | `Sadara@2026` |
+
+> كلمة مرور **للتطوير المحلي فقط**، ومعروفة للجميع. لا تستعملها على المنصة
+> المنشورة، وغيّرها قبل أي استعمال حقيقي: `npm run user`
+
+ولإنشاء حساب أو تغيير كلمة مرور — تُسأل كلمة المرور دون أن تظهر ولا تدخل سجلّ
+الأوامر:
+
+```bash
+npm run user
+```
+
+### حسابات الإنتاج
+
+على المنصة المنشورة تُنشأ من `tools/seed-accounts.py` بعد تفعيل Firebase
+Authentication، وكلمة المرور تأتي منك ولا تُخزَّن في المستودع.
 
 ## الصلاحيات
 

@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from datetime import date
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-DB = os.environ.get('SADARA_DB_PATH', os.path.join(ROOT, 'sadara.db'))
+DB = os.environ.get('SADARA_DB_PATH', os.path.join(ROOT, 'sadara-local.db'))
 SESSIONS = {}
 
 def connect():
@@ -97,6 +97,46 @@ def init_db():
     if not c.execute('SELECT 1 FROM schedules LIMIT 1').fetchone():
         c.executemany('INSERT INTO schedules(day_name,time_range,group_name,coach) VALUES(?,?,?,?)', [('السبت','16:00 - 17:30','المبتدئون','المدرب سليم'),('الأحد','17:00 - 18:30','المتوسطون','المدرب سليم'),('الإثنين','16:00 - 18:00','المتقدمون','المدربة نادية'),('الثلاثاء','17:00 - 18:30','المبتدئون','المدرب سليم'),('الخميس','16:00 - 18:00','المتقدمون','المدربة نادية')])
     c.commit(); c.close()
+
+# The three accounts a developer expects to find on their own machine. This is
+# the local development database and nothing else: the name has to say so, and a
+# password is only ever written here when the file it lands in is the local one.
+LOCAL_DB_NAME = 'sadara-local.db'
+LOCAL_PASSWORD = 'Sadara@2026'
+LOCAL_ACCOUNTS = (
+    ('admin@sadara.local', 'admin', 'مدير', 'النادي'),
+    ('president@sadara.local', 'president', 'رئيس', 'الجمعية'),
+    ('coach@sadara.local', 'coach', 'مدرب', 'النادي'),
+)
+
+
+def db_path():
+    return os.environ.get('SADARA_DB_PATH', LOCAL_DB_NAME)
+
+
+def seed_local_accounts(path):
+    """Gives a fresh local database someone to sign in as.
+
+    Without this, a clean checkout serves a login page that nobody can get past,
+    because the only other source of credentials is the environment. It applies
+    to the local development file only: any other path, and any database that
+    already holds an account, is left untouched.
+    """
+    if os.path.basename(path) != LOCAL_DB_NAME:
+        return []
+    c = sqlite3.connect(path)
+    try:
+        if c.execute('SELECT 1 FROM users LIMIT 1').fetchone():
+            return []
+        c.executemany('INSERT OR IGNORE INTO users(first_name,last_name,email,password_hash,role)'
+                      ' VALUES(?,?,?,?,?)',
+                      [(first, last, email, password_hash(LOCAL_PASSWORD), role)
+                       for email, role, first, last in LOCAL_ACCOUNTS])
+        c.commit()
+    finally:
+        c.close()
+    return [a[0] for a in LOCAL_ACCOUNTS]
+
 
 class App(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -423,11 +463,21 @@ def report_accounts(db_path):
 
 
 if __name__ == '__main__':
-    db = os.environ.get('SADARA_DB_PATH', 'sadara.db')
+    db = db_path()
     init_db()
+    seeded = seed_local_accounts(db)
     port = int(os.environ.get('PORT', '4173'))
     print(f'Sadara platform listening on port {port}')
     print(f'  قاعدة البيانات: {os.path.abspath(db)}')
+    if seeded:
+        print()
+        print('  قاعدة بيانات محلية جديدة — أُنشئت حسابات التطوير التالية:')
+        for email in seeded:
+            print('    %-30s كلمة المرور: %s' % (email, LOCAL_PASSWORD))
+        print()
+        print('  هذه كلمة مرور للتطوير المحلي فقط، وهي معروفة للجميع.')
+        print('  لا تستعملها على المنصة المنشورة، وغيرها قبل أي استعمال حقيقي:')
+        print('    npm run user')
     report_accounts(db)
     print()
     ThreadingHTTPServer(('0.0.0.0', port), App).serve_forever()
