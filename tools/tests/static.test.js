@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { JSDOM } = require('jsdom');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..', '..');
 const PUBLIC = path.join(ROOT, 'firebase-public');
@@ -132,7 +133,64 @@ for (const m of js.matchAll(/https?:\/\/[^"')\s]+/g)) {
     problems.push(`insecure external link: ${m[0]}`);
 }
 
-// 7. no debris in the test folder
+// 7. every document parses, and the head holds nothing but markup
+/* A meta tag split across two lines left its content stranded as plain text,
+   which the browser printed above the page. Nothing caught it because nothing
+   parsed the document. jsdom resolves markup the same way a browser does, so
+   comparing what it built against what the source says finds that class of
+   damage without needing a validator. */
+const PAGES = [
+  ['index.html', path.join(PUBLIC, 'index.html')],
+  ['istimara/index.html', path.join(PUBLIC, 'istimara', 'index.html')]
+];
+for (const [name, file] of PAGES) {
+  if (!fs.existsSync(file)) { problems.push(`${name} is missing from the deployable tree`); continue; }
+  const src = fs.readFileSync(file, 'utf8');
+  const head = (src.match(/<head\b[\s\S]*?<\/head>/i) || [''])[0];
+
+  // a tag that opens but does not close on the same line: how the split began
+  for (const line of head.split('\n')) {
+    if (/^\s*<[a-zA-Z][^>]*$/.test(line.trim())) {
+      problems.push(`${name}: a tag is opened and left open -- "${line.trim().slice(0, 60)}"`);
+    }
+  }
+
+  // what the browser ends up with, which is what actually shows on the page
+  const dom = new JSDOM(src);
+  const doc = dom.window.document;
+
+  // text in the head is never rendered as page content, so anything visible
+  // there means the parser was pushed out of a tag and left the rest as text
+  for (const node of doc.head.childNodes) {
+    if (node.nodeType === 3 && node.textContent.trim()) {
+      problems.push(`${name}: stray text in the head, shown above the page -- "${node.textContent.trim().slice(0, 60)}"`);
+    }
+  }
+  // the same damage can push text into the body's first children
+  const lead = [...doc.body.childNodes].slice(0, 2)
+    .filter(n => n.nodeType === 3 && n.textContent.trim())
+    .map(n => n.textContent.trim().slice(0, 60));
+  if (lead.length) problems.push(`${name}: stray text at the top of the body -- ${lead.join(' / ')}`);
+
+  /* A tag that swallowed its neighbour leaves two tags under one name, so
+     duplicates are the thing to look for. Absence is a choice, not damage --
+     /istimara/ has never carried a keywords tag, and search engines have
+     ignored meta keywords since 2019 anyway. */
+  const once = (selector, label) => {
+    const n = doc.querySelectorAll(selector);
+    if (n.length > 1) problems.push(`${name}: ${n.length} ${label} tags, one is swallowing another`);
+    return n[0];
+  };
+  const desc = once('meta[name="description"]', 'description');
+  if (!desc) problems.push(`${name}: no description meta tag`);
+  else if (!desc.getAttribute('content')) problems.push(`${name}: the description meta tag has no content`);
+  once('meta[property="og:title"]', 'og:title');
+  once('meta[property="og:description"]', 'og:description');
+  once('meta[property="og:image"]', 'og:image');
+  if (!doc.title) problems.push(`${name}: no title`);
+}
+
+// 8. no debris in the test folder
 /* A suite is a .test.js file, or one of the helpers the suites shell out to.
    Anything else is a scratch script that was never cleaned up: it does not run,
    it is not maintained, and it makes the folder lie about what is covered. */
@@ -157,7 +215,7 @@ for (const name of fs.readdirSync(path.join(ROOT, 'tools', 'tests'))) {
   problems.push(`tools/tests/${name} is not a suite and not a known helper -- leftover scratch?`);
 }
 
-// 8. workflow triggers on the branch that exists
+// 9. workflow triggers on the branch that exists
 const wf = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'firebase-hosting.yml'), 'utf8');
 if (!/branches:\s*\[main, master\]/.test(wf)) problems.push('workflow does not listen on main and master');
 
@@ -166,5 +224,5 @@ if (problems.length) {
   [...new Set(problems)].forEach(p => console.log('  - ' + p));
   process.exit(1);
 }
-console.log('Static checks passed: sync, assets, CSS coverage, print rules, links, clean test folder, workflow.');
+console.log('Static checks passed: sync, assets, CSS coverage, print rules, links, valid documents, clean test folder, workflow.');
 console.log('print @media blocks:', printBlocks, '| css classes defined:', defined.size, '| used:', used.size);
