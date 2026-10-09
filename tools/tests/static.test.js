@@ -132,7 +132,32 @@ for (const m of js.matchAll(/https?:\/\/[^"')\s]+/g)) {
     problems.push(`insecure external link: ${m[0]}`);
 }
 
-// 7. workflow triggers on the branch that exists
+// 7. no debris in the test folder
+/* A suite is a .test.js file, or one of the helpers the suites shell out to.
+   Anything else is a scratch script that was never cleaned up: it does not run,
+   it is not maintained, and it makes the folder lie about what is covered. */
+const TESTS = path.join(ROOT, 'tools', 'tests');
+const npmScripts = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).scripts || {};
+/* Reached from an npm script... */
+const HELPERS = new Set(
+  Object.values(npmScripts)
+    .map(cmd => /tools[\\/]tests[\\/]([\w.-]+\.js)/.exec(String(cmd)))
+    .filter(Boolean)
+    .map(m => m[1]));
+/* ...or loaded by another file in the same folder, which is how the in-suite
+   helpers (modal-fields.js, smoke.js) are reached. */
+for (const name of fs.readdirSync(TESTS)) {
+  if (!name.endsWith('.js')) continue;
+  const body = fs.readFileSync(path.join(TESTS, name), 'utf8');
+  for (const m of body.matchAll(/[\w.-]+\.js/g)) HELPERS.add(m[0]);
+}
+for (const name of fs.readdirSync(path.join(ROOT, 'tools', 'tests'))) {
+  if (!fs.statSync(path.join(ROOT, 'tools', 'tests', name)).isFile()) continue;
+  if (name.endsWith('.test.js') || HELPERS.has(name)) continue;
+  problems.push(`tools/tests/${name} is not a suite and not a known helper -- leftover scratch?`);
+}
+
+// 8. workflow triggers on the branch that exists
 const wf = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'firebase-hosting.yml'), 'utf8');
 if (!/branches:\s*\[main, master\]/.test(wf)) problems.push('workflow does not listen on main and master');
 
@@ -141,5 +166,5 @@ if (problems.length) {
   [...new Set(problems)].forEach(p => console.log('  - ' + p));
   process.exit(1);
 }
-console.log('Static checks passed: sync, assets, CSS coverage, print rules, links, workflow.');
+console.log('Static checks passed: sync, assets, CSS coverage, print rules, links, clean test folder, workflow.');
 console.log('print @media blocks:', printBlocks, '| css classes defined:', defined.size, '| used:', used.size);
