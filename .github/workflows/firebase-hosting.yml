@@ -28,6 +28,23 @@ jobs:
             fi
           done
 
+      - name: The public registration folder is published and identical
+        run: |
+          set -e
+          # istimara/ is hand-written and copied into firebase-public by the
+          # build. A folder that exists only in one of the two places means the
+          # live form is either missing or serving yesterday's copy.
+          for f in index.html istimara.css istimara.js print.js; do
+            if [ ! -f "firebase-public/istimara/$f" ]; then
+              echo "::error file=istimara/$f::missing from firebase-public, /istimara/ would 404"
+              exit 1
+            fi
+            if ! diff -q "istimara/$f" "firebase-public/istimara/$f" >/dev/null 2>&1; then
+              echo "::error file=istimara/$f::firebase-public/istimara/$f is out of sync with the source copy"
+              exit 1
+            fi
+          done
+
       - name: Every asset the site references must be published
         run: |
           set -e

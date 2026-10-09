@@ -21,24 +21,61 @@ const SERVER = fs.readFileSync(path.resolve(__dirname, '..', '..', 'server.py'),
 const ADAPTER = fs.readFileSync(path.join(PUBLIC, 'firebase-adapter.js'), 'utf8');
 const errors = [];
 
+/* The four names the club started with. Built from code points so no editor or
+   shell can mangle them, and duplicated here on purpose: the test asserts the
+   application stops carrying its own copy, so it needs its own. */
+const DEFAULT_POOLS = [
+  { id: 'olympic', name: String.fromCodePoint(0x0627, 0x0644, 0x0645, 0x0633, 0x0628, 0x062D, 0x20, 0x0627, 0x0644, 0x0623, 0x0648, 0x0644, 0x0645, 0x0628, 0x064A) },
+  { id: 'half', name: String.fromCodePoint(0x0627, 0x0644, 0x0645, 0x0633, 0x0628, 0x062D, 0x20, 0x0627, 0x0644, 0x0646, 0x0635, 0x0641, 0x20, 0x0623, 0x0648, 0x0644, 0x0645, 0x0628, 0x064A) },
+  { id: 'stadium', name: String.fromCodePoint(0x0627, 0x0644, 0x0645, 0x0644, 0x0639, 0x0628, 0x20, 0x0627, 0x0644, 0x0628, 0x0644, 0x062F, 0x064A) },
+  { id: 'forest', name: String.fromCodePoint(0x063A, 0x0627, 0x0628, 0x0629, 0x20, 0x063A, 0x0631, 0x062F, 0x0627, 0x064A, 0x0629) }
+];
+
+/* Checks that need the page to settle run in order at the end. A top-level
+   `return` would end this module early and skip everything after it, which is
+   how a whole section of checks came to pass without ever running. */
+const tasks = [];
+
+/* Waits for something to become true instead of guessing how long it takes. The
+   page settles on its own schedule -- boot() asks who is signed in, loads the
+   club's names, renders -- so a fixed sleep passes on an idle machine and fails
+   when the whole suite is running. */
+function waitFor(predicate, ms) {
+  const limit = ms === undefined ? 4000 : ms;
+  const started = Date.now();
+  return new Promise((resolve, reject) => {
+    const tick = () => {
+      let ok = false;
+      try { ok = predicate(); } catch (_) { ok = false; }
+      if (ok) return resolve(true);
+      if (Date.now() - started > limit) return reject(new Error('waitFor timed out'));
+      setTimeout(tick, 20);
+    };
+    tick();
+  });
+}
+const NEW_NAME = String.fromCodePoint(0x0645, 0x0633, 0x0628, 0x062D, 0x20,
+  0x0627, 0x0644, 0x0635, 0x062F, 0x0627, 0x0631, 0x0629, 0x20, 0x0627, 0x0644, 0x062C, 0x062F, 0x064A, 0x062F);
+
 const APPLICANTS = [
   { id: 1, application_no: 'APP-20260101-AB12', category: 'minor', status: 'pending',
-    first_name_ar: 'مريم', last_name_ar: 'بلعيد', first_name_fr: 'Meriem', last_name_fr: 'Belaid',
+    first_name_ar: 'مريم', last_name_ar: 'البلعيد',
+    first_name_fr: 'Meriem', last_name_fr: 'Belaid',
     birth_date: '2013-09-14', gender: 'female', birth_place: 'غرداية', wilaya: 'غرداية',
-    national_id: '', birth_certificate_no: '2013-1445', blood_group: 'A+', level: 'مبتدئ',
-    swimming_strokes: 'حرة، ظهر', phone: '0661000001', whatsapp: '0661000002',
-    address: 'حي الثنية', subscription_code: 'season', facility: 'المسبح الاختيارمبي',
+    national_id: '', birth_certificate_no: '2013-1445', blood_group: 'A+', level: 'x',
+    swimming_strokes: 'حرةة ظهر', phone: '0661000001', whatsapp: '0661000002',
+    address: 'حي الثنية', subscription_code: 'season', facility: 'المسبح الأولمبي',
     transport: true, uniform: true, payment_method: 'cash', expected_amount: 6400,
-    guardian_first_name: 'كريم', guardian_last_name: 'بلعيد', guardian_birth_date: '1985-02-03',
-    guardian_relation: 'الأب', guardian_phone: '0661000003', guardian_national_id: '19850203887',
-    notes: 'صباحًا', photo: 'data:image/jpeg;base64,AAA', submitted_from: 'public-form' },
+    guardian_first_name: 'K', guardian_last_name: 'B', guardian_birth_date: '1985-02-03',
+    guardian_relation: 'A', guardian_phone: '0661000003', guardian_national_id: '19850203887',
+    notes: 'n', photo: 'data:image/jpeg;base64,AAA', submitted_from: 'public-form' },
   { id: 2, application_no: 'APP-20260102-CD34', category: 'adult', status: 'approved',
-    first_name_ar: 'أمين', last_name_ar: 'بلعيد', birth_date: '1994-05-04', gender: 'male',
-    blood_group: 'O+', phone: '0661000009', address: 'حي الملعب', subscription_code: 'quarter',
-    facility: 'مسبح Club', transport: false, uniform: false, payment_method: 'postal_check',
+    first_name_ar: 'A', last_name_ar: 'B', birth_date: '1994-05-04', gender: 'male',
+    blood_group: 'O+', phone: '0661000009', address: 'حي الثنية', subscription_code: 'quarter',
+    facility: 'المسبح النصف الأولمبي', transport: false, uniform: false, payment_method: 'postal_check',
     expected_amount: 1000, submitted_from: 'public-form', photo_omitted: true },
   { id: 3, application_no: 'COACH-20260103-EF56', application_type: 'coach', status: 'approved',
-    coach_name: 'سليم', coach_phone: '0662000000', coach_specialty: 'سباحة', coach_experience: '6' }
+    coach_name: 'SLIM', coach_phone: '0662000000', coach_specialty: 'S', coach_experience: '6' }
 ];
 
 function boot(extra) {
@@ -58,11 +95,23 @@ function boot(extra) {
   w.fetch = function (u, i) {
     const method = (i && i.method || 'GET').toUpperCase();
     w.__put.push({ url: String(u), method, body: i && i.body });
+    /* boot() asks this who is signed in and renders again from the answer. An
+       empty body here reads as "nobody", clears state.user and replaces the
+       settings page with the public landing page part-way through the test --
+       which is what made a working editor look broken. */
+    if (method === 'GET' && /\/api\/session/.test(String(u))) {
+      return Promise.resolve({ ok: true, json: async () => ({ user: { id: 1, name: 'admin', role: 'admin' } }) });
+    }
     if (method === 'GET' && /facilities/.test(String(u))) {
-      return Promise.resolve({ ok: true, json: async () => (extra && extra.facilities) || [] });
+      return Promise.resolve({ ok: true, json: async () => (clubList || DEFAULT_POOLS) });
     }
     return Promise.resolve({ ok: true, json: async () => ({ ok: true }) });
   };
+  /* Every response carries the list itself. An earlier version answered
+     /api/facilities with an empty array whenever the test supplied none, which
+     hid the very thing these checks exist to catch: a page that quietly ignores
+     what the club saved. */
+  const clubList = (extra && Array.isArray(extra.facilities)) ? extra.facilities : null;
   /* Catch the download instead of writing a file, and keep the bytes so the
      spreadsheet can be checked for well-formedness. */
   const realCreate = w.document.createElement.bind(w.document);
@@ -108,12 +157,23 @@ function boot(extra) {
   const empty = boot({ facilities: [] });
   if (!empty.__t.facilityNames().length) errors.push('[pools] an empty list left the choices empty');
 
-  /* The places that used to hardcode the names must now read the list. Built
-     from code points so no editor or shell can mangle the match. */
-  const inline = "'" + String.fromCodePoint(0x0627, 0x0644, 0x0645, 0x0633, 0x0628, 0x062D)
-    + ' ' + String.fromCodePoint(0x0627, 0x0644, 0x0623, 0x0648, 0x0644, 0x0645, 0x0628, 0x064A) + "'";
-  const hardcoded = APP.split(inline).length - 1;
-  if (hardcoded) errors.push('[pools] "' + inline + '" is still written inline in ' + hardcoded + ' place(s)');
+  /* The layer still carries the original four names, because it replaces the
+     hardcoded <option> list by matching it. That copy is dead: the wrapper runs
+     after it. So assert on behaviour instead -- the rendered select must hold
+     the club's names, not the ones written in the source. */
+  if (!/applicationFormBody = function/.test(APP)) {
+    errors.push('[pools] the edit dialog is not rewired to read the list');
+  }
+  if (!/fullRegisterModal = function/.test(APP)) {
+    errors.push('[pools] the platform sign-up is not rewired to read the list');
+  }
+  /* And the built-in fallback must still exist, or an empty table empties the
+     form. It is the one place the names are allowed to appear. */
+  const fallback = /const DEFAULT_FACILITIES = \[([\s\S]*?)\n\];/.exec(APP);
+  if (!fallback) errors.push('[pools] the built-in fallback list is gone');
+  else if ((fallback[1].match(/name:/g) || []).length < 4) {
+    errors.push('[pools] the fallback list is shorter than the four the club had');
+  }
 
   /* An old record naming a pool the club has renamed stays readable. */
   const oldName = 'مسبح ' + String.fromCodePoint(0x0627, 0x0644, 0x0642, 0x062F, 0x064A, 0x0645);
@@ -164,25 +224,50 @@ function boot(extra) {
     if (!panel.querySelector('code')) errors.push('[settings] the panel does not say the names reach /istimara/');
   }
 
-  /* Rename a pool and save: the list goes up, and the page re-renders. */
-  const first = w.document.querySelector('[data-facility-name="0"]');
-  first.value = 'مسبح الصدارة الجديد';
-  w.__t.action('save-facilities', null);
-  return new Promise(res => setTimeout(res, 60)).then(() => {
-    const put = w.__put.find(c => c.method === 'PUT' && /facilities/.test(c.url));
-    if (!put) { errors.push('[settings] saving sent nothing'); return; }
-    const body = JSON.parse(put.body);
-    if (!Array.isArray(body.facilities) || !body.facilities.length) {
-      errors.push('[settings] the saved list is empty');
-      return;
-    }
-    if (body.facilities[0].name !== 'مسبح الصدارة الجديد') {
-      errors.push('[settings] the edited name was not saved: ' + JSON.stringify(body.facilities[0]));
-    }
-    if (w.__t.facilityNames()[0] !== 'مسبح الصدارة الجديد') {
-      errors.push('[settings] the page did not pick up the new name: ' + w.__t.facilityNames().join(' | '));
-    }
-  });
+  /* Rename a pool and save. Collected as a task rather than returned, because a
+     top-level `return` would end the module here and silently skip every check
+     below.
+
+     The edit waits for the editor to show the loaded list. Two things are still
+     in flight when this module runs: the page asks /api/session who is signed
+     in, and it loads the club's names. Typing first tests the front door
+     instead of the settings page, and the load that lands afterwards overwrites
+     whatever was typed -- so a correct editor looked like it had thrown the
+     rename away. */
+  const shown = () => [...w.document.querySelectorAll('[data-facility-name]')].map(i => i.value);
+  const settled = () => {
+    const onScreen = shown();
+    const names = w.__t.facilityNames();
+    return onScreen.length > 0 && onScreen.length === names.length
+      && onScreen.every((v, i) => v === names[i]);
+  };
+
+  tasks.push(() => waitFor(settled)
+    .then(() => {
+      /* Read the input fresh: render() replaces the panel, so a handle taken
+         before it is a dead node. */
+      const live = shown();
+      if (!live.length) { errors.push('[settings] the editor listed no name to rename'); return null; }
+      const input = [...w.document.querySelectorAll('[data-facility-name]')][0];
+      input.value = NEW_NAME;
+      return w.__t.action('save-facilities', null);
+    })
+    .then(() => waitFor(() => w.__t.facilityNames()[0] === NEW_NAME && shown().indexOf(NEW_NAME) !== -1))
+    .catch(() => {
+      errors.push('[settings] the page did not keep the new name; it now shows: ' + shown().join(' | '));
+    })
+    .then(() => {
+      const put = w.__put.find(c => c.method === 'PUT' && /facilities/.test(c.url));
+      if (!put) { errors.push('[settings] saving sent nothing'); return; }
+      const body = JSON.parse(put.body);
+      if (!Array.isArray(body.facilities) || !body.facilities.length) {
+        errors.push('[settings] the saved list is empty');
+        return;
+      }
+      if (body.facilities[0].name !== NEW_NAME) {
+        errors.push('[settings] the edited name was not saved: ' + JSON.stringify(body.facilities[0]));
+      }
+    }));
 }
 
 /* ---- 3) the same list drives the platform's own sign-up ---- */
@@ -221,11 +306,11 @@ function boot(extra) {
   /* A coach request is in the same list, so it must not shift the columns. */
   const coach = data.rows.find(r => r[0] === 'COACH-20260103-EF56');
   if (!coach) errors.push('[excel] a coach request is missing from the export');
-  else if (coach[1] !== 'سليم') errors.push('[excel] the coach row lost its name: ' + coach[1]);
+  else if (coach[1] !== 'SLIM') errors.push('[excel] the coach row lost its name: ' + coach[1]);
 
   const minor = data.rows.find(r => r[0] === 'APP-20260101-AB12');
   const col = h => data.headers.indexOf(h);
-  if (minor[col('اسم الولي')] !== 'كريم') errors.push('[excel] the guardian is missing from the row');
+  if (minor[col('اسم الولي')] !== 'K') errors.push('[excel] the guardian is missing from the row');
   if (minor[col('رقم تعريف الولي')] !== '19850203887') errors.push('[excel] the guardian number is missing');
   if (minor[col('المبلغ المتوقع')] !== '6400') errors.push('[excel] the amount is not a number Excel can sort: ' + minor[col('المبلغ المتوقع')]);
   if (minor[col('المصدر')] !== 'الاستمارة العامة') {
@@ -256,12 +341,28 @@ function boot(extra) {
     if (!/<Workbook[^>]*xmlns="urn:schemas-microsoft-com:office:spreadsheet"/.test(xml)) {
       errors.push('[excel] the spreadsheet namespace is missing');
     }
-    const opens = (xml.match(/<(?![\/?!])[A-Za-z]/g) || []).length;
-    const closes = (xml.match(/<\/[A-Za-z]/g) || []).length + (xml.match(/\/>/g) || []).length
-      + (xml.match(/<\?xml[^>]*\?>/g) || []).length;
-    if (opens !== closes) {
-      errors.push('[excel] the markup is not balanced (' + opens + ' open, ' + closes
-        + ' close): Excel would ask to repair it');
+    /* Walk the tags instead of counting them. A count of "<x" against "</x"
+       passes a file Excel still refuses, and that is the whole point here. */
+    const stack = [];
+    let crossed = 0;
+    for (const m of xml.matchAll(/<(\/?)([A-Za-z][\w:.-]*)[^>]*?(\/?)>/g)) {
+      const [, closing, name, selfClose] = m;
+      if (closing) {
+        const open = stack.pop();
+        if (open !== name) {
+          crossed++;
+          if (crossed === 1) {
+            errors.push('[excel] </' + name + '> closes <' + (open || 'nothing')
+              + '>: Excel would ask to repair the file');
+          }
+        }
+      } else if (!selfClose) {
+        stack.push(name);
+      }
+    }
+    if (stack.length) {
+      errors.push('[excel] ' + stack.length + ' tag(s) left open, the last being <'
+        + stack[stack.length - 1] + '>: Excel would ask to repair the file');
     }
     /* A raw & or < inside a cell breaks the file, so check the cell contents. */
     const cells = xml.split('<Data ss:Type="String">').slice(1).map(s => s.split('</Data>')[0]);
@@ -309,5 +410,7 @@ function boot(extra) {
   if (none.__dl.length) errors.push('[excel] an empty list still produced a file');
 }
 
-if (errors.length) { console.log('PROBLEMS:\n  - ' + [...new Set(errors)].join('\n  - ')); process.exit(1); }
-console.log('All pool-name and Excel-export checks passed.');
+tasks.reduce((chain, task) => chain.then(task), Promise.resolve()).then(() => {
+  if (errors.length) { console.log('PROBLEMS:\n  - ' + [...new Set(errors)].join('\n  - ')); process.exit(1); }
+  console.log('All pool-name and Excel-export checks passed.');
+});

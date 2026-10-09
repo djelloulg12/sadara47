@@ -3102,10 +3102,17 @@ function xmlText(v) {
     /* Excel rejects a raw control character inside a cell. */
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 }
+/* An empty cell is written as <Cell/> rather than a Cell holding an empty
+   Data. Both are legal, but Excel collapses the empty Data form on save and
+   some readers count it as a column with no value, so the shorter form is used.
+   A cell whose value is an empty string is genuinely empty; use keep:true for a
+   label whose value is missing on purpose. */
 function xlsRow(values, style) {
-  return '<Row>' + values.map(v =>
-    '<Cell' + (style ? ' ss:StyleID="' + style + '"' : '') + '><Data ss:Type="String">'
-    + xmlText(v) + '</Data></Cell>').join('') + '</Row>';
+  return '<Row>' + values.map(v => {
+    if (v === undefined || v === null || v === '') return '<Cell' + (style ? ' ss:StyleID="' + style + '"' : '') + '/>';
+    return '<Cell' + (style ? ' ss:StyleID="' + style + '"' : '') + '><Data ss:Type="String">'
+      + xmlText(v) + '</Data></Cell>';
+  }).join('') + '</Row>';
 }
 function downloadXml(filename, xml) {
   /* The BOM is what makes Excel read the Arabic as Arabic instead of mojibake. */
@@ -3124,7 +3131,9 @@ function downloadXml(filename, xml) {
    and the Excel file can never list different fields. */
 const REGISTRATION_COLUMNS = [
   ['رقم الطلب', a => a.application_no || a.id || ''],
-  ['الاسم بالعربية', a => a.first_name_ar || ''],
+  /* A coach request has no swimmer identity, so it carries the coach's name in
+     the same two columns rather than leaving the row nameless. */
+  ['الاسم بالعربية', a => a.first_name_ar || a.coach_name || ''],
   ['اللقب بالعربية', a => a.last_name_ar || ''],
   ['الاسم بالفرنسية', a => a.first_name_fr || ''],
   ['اللقب بالفرنسية', a => a.last_name_fr || ''],
