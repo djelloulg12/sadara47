@@ -68,6 +68,57 @@ def call(url, token, method="GET", payload=None):
             return e.code, None
 
 
+
+def account_state(token, address):
+    """None if unknown, else a dict of what the account actually has.
+
+    The project-wide accounts list reports zero accounts while accounts
+    demonstrably exist, so it is looked up by address instead -- that endpoint
+    also works when the list one does not.
+    """
+    url = ("https://identitytoolkit.googleapis.com/v1/projects/%s/accounts:lookup"
+           % PROJECT)
+    st, res = call(url, token, "POST", {"email": [address]})
+    if st != 200:
+        return None
+    users = (res or {}).get("users") or []
+    if not users:
+        return None
+    u = users[0]
+    return {"uid": u.get("localId"), "verified": bool(u.get("emailVerified")),
+            "disabled": bool(u.get("disabled"))}
+
+
+def report(token, addresses):
+    """Say what the list says, and what the accounts say. They can disagree, and
+    when they do the platform quietly shows the person as a member."""
+    print("owners of %s:" % PROJECT)
+    for a in addresses:
+        print("   " + a)
+    if not addresses:
+        print("   (none -- nobody holds owner rights)")
+        print()
+        return
+
+    print()
+    for a in addresses:
+        info = account_state(token, a)
+        if info is None:
+            print("   %s -- NO ACCOUNT. Create it: python tools\\seed-accounts.py" % a)
+            continue
+        if info["disabled"]:
+            print("   %s -- the account is DISABLED, so it cannot sign in." % a)
+            continue
+        if not info["verified"]:
+            # This is the one that costs days: the address is on the list, the
+            # account works, and the platform still refuses every owner right.
+            print("   %s -- NOT VERIFIED." % a)
+            print("      The rules require a verified address, so until it is the")
+            print("      platform shows this account as an ordinary member. Verify it:")
+            print("         python tools\\verify-owner-account.py")
+            continue
+        print("   %s -- verified, every right granted." % a)
+
 def main():
     token = access_token()
     base = ("https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents"
@@ -82,11 +133,7 @@ def main():
 
     action = sys.argv[1] if len(sys.argv) > 1 else "show"
     if action == "show":
-        print("owners of %s:" % PROJECT)
-        for e in current:
-            print("   " + e)
-        if not current:
-            print("   (none -- nobody holds owner rights)")
+        report(token, current)
         return 0
 
     if action not in ("add", "remove"):
@@ -134,10 +181,8 @@ def main():
         return 1
 
     print("%s %s" % ("owner added:" if action == "add" else "owner removed:", address))
-    print("owners now: " + ", ".join(current))
     print()
-    print("The address must be verified on the account, or the rules will not")
-    print("recognise it, and Authentication must be on for it to sign in.")
+    report(token, current)
     return 0
 
 
