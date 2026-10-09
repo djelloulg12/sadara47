@@ -235,5 +235,40 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
   cleanup(w);
 }
 
+/* ---- the photo must reach the database, not only this device ---- */
+{
+  const APP = fs.readFileSync(path.join(PUBLIC, 'app.js'), 'utf8');
+  const body = fn => {
+    const m = APP.match(new RegExp('(?:async )?function ' + fn + '\\([\\s\\S]*?\\n\\}'));
+    return m ? m[0] : '';
+  };
+
+  const persist = body('persistPhoto');
+  if (!persist) {
+    errors.push('[photo] persistPhoto is gone');
+  } else {
+    /* An empty photo is what made the /api/profile write a no-op. */
+    if (/photo:\s*''/.test(persist)) {
+      errors.push('[photo] persistPhoto still reports an empty photo, so nothing is written to the database');
+    }
+    if (!/photo:\s*dataUrl/.test(persist)) {
+      errors.push('[photo] persistPhoto does not pass the picture on to be saved');
+    }
+  }
+
+  const restore = body('restorePhoto');
+  if (!restore) {
+    errors.push('[photo] restorePhoto is gone');
+  } else {
+    /* The database is the source of truth; the cache only covers a picture that
+       was never saved. If the profile read comes after the cache, a member who
+       cleared this device sees a blank photo again. */
+    const at = (needle) => { const i = restore.indexOf(needle); return i < 0 ? 1e9 : i; };
+    if (at('/api/profile') > at('photoStoreGet')) {
+      errors.push('[photo] the local cache is read before the database, so a photo saved on another device never appears');
+    }
+  }
+}
+
 if (errors.length) { console.log('PROBLEMS:\n  - ' + [...new Set(errors)].join('\n  - ')); process.exit(1); }
 console.log('All photo / permission / form-overlay checks passed.');

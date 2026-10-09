@@ -2728,19 +2728,36 @@ async function photoStoreDel(key) {
   });
 }
 
-/* يفضّل IndexedDB، ويرجع إلى الحقل النصي حين لا تتوفر */
+/* الصورة تعشي في القاعدة، وIndexedDB يُحتفظ محمًاً فقط
+   The picture belongs in the database. It used to be written to IndexedDB and
+   reported back with an empty photo, so the /api/profile write was skipped and
+   the database never received it. IndexedDB almost always succeeds, so the only
+   copy lived on the device that uploaded it: another phone saw no photo, the
+   card printed blank, and the upload still said it had worked.
+
+   shrinkPhoto() has already brought the image under 100 KB, and a Firestore
+   document holds about 1 MB, so it fits comfortably. IndexedDB is kept as a
+   cache -- it makes the picture appear without waiting on the network -- but it
+   is never the only copy again. */
 async function persistPhoto(dataUrl) {
   const key = (state.user && state.user.id) || 'guest';
-  try {
-    await photoStorePut(key, dataUrl);
-    return { photo: '', photo_in_store: true };
-  } catch (_) {
-    return { photo: dataUrl, photo_in_store: false };
-  }
+  let cached = false;
+  try { await photoStorePut(key, dataUrl); cached = true; } catch (_) { /* cache is optional */ }
+  return { photo: dataUrl, photo_in_store: cached };
 }
+/* The database is the source of truth; the local cache only covers a picture that
+   was never saved, so a member who cleared this device still sees their photo. */
 async function restorePhoto() {
   if (state.profile && state.profile.photo) return state.profile.photo;
   const key = (state.user && state.user.id) || 'guest';
+  try {
+    const saved = await api('/api/profile', 'GET');
+    const fromServer = saved && saved.profile && saved.profile.photo;
+    if (fromServer) {
+      state.profile = Object.assign({}, state.profile, { photo: fromServer });
+      return fromServer;
+    }
+  } catch (_) { /* not signed in, or offline */ }
   try {
     const stored = await photoStoreGet(key);
     if (stored) {
