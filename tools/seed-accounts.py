@@ -39,15 +39,28 @@ with io.open(os.path.join(ROOT, ".firebaserc"), encoding="utf-8") as fh:
     PROJECT = json.load(fh)["projects"]["default"]
 
 
+# The club owner. Listed in Firestore config/owners, which is what actually
+# grants every right; the role below is written alongside so the account also
+# carries it in the interface.
+OWNER_ADDRESS = "kabrag12@gmail.com"
+
+# Three addresses that exist only for a developer's own machine. They are not the
+# default any more: someone following the deploy notes made three accounts nobody
+# could sign in with, and still had no account for the owner.
+DEMO_ACCOUNTS = [
+    ("admin@sadara.local", "admin"),
+    ("president@sadara.local", "president"),
+    ("coach@sadara.local", "coach"),
+]
+
+
 def read_accounts():
-    """address;role,address;role -- or the club's existing local addresses."""
+    """address;role,address;role -- or the owner's own account."""
     raw = os.environ.get("SADARA_SEED_ACCOUNTS", "").strip()
+    if os.environ.get("SADARA_SEED_DEMO"):
+        raw = ";".join("%s,%s" % a for a in DEMO_ACCOUNTS)
     if not raw:
-        return [
-            ("admin@sadara.local", "admin"),
-            ("president@sadara.local", "president"),
-            ("coach@sadara.local", "coach"),
-        ]
+        return [(OWNER_ADDRESS, "admin")]
     out = []
     for item in raw.split(";"):
         item = item.strip()
@@ -76,15 +89,29 @@ for _address, _role in ACCOUNTS:
         raise SystemExit("Unknown role %r for %s.\n  Known roles: %s"
                          % (_role, _address, ", ".join(ROLES)))
 
+if "--show" in sys.argv[1:]:
+    print("accounts this would create:")
+    for _address, _role in ACCOUNTS:
+        note = "  (the club owner -- every right, from config/owners)" \
+            if _address == OWNER_ADDRESS else ""
+        print("   %-30s %s%s" % (_address, _role, note))
+    print()
+    print("Run without --show to create them. You will be asked for a password;")
+    print("it is never printed, never stored, and never sent to this project")
+    print("in plain text.")
+    raise SystemExit(0)
+
 PASSWORD = (os.environ.get("SADARA_SEED_PASSWORD")
-            or (sys.argv[1] if len(sys.argv) > 1 else ""))
+            or (sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] != "--show" else ""))
 if not PASSWORD:
     if not sys.stdin.isatty():
         raise SystemExit(
             "No password given.\n"
             "  Pass one as an argument, or set SADARA_SEED_PASSWORD.\n"
             "  This script never invents one and never stores it.")
-    PASSWORD = getpass.getpass("Password for the staff accounts: ")
+    PASSWORD = getpass.getpass(
+        "Password for %s: " % (ACCOUNTS[0][0] if len(ACCOUNTS) == 1
+                               else "%d accounts" % len(ACCOUNTS)))
 if len(PASSWORD) < 10:
     raise SystemExit("That password is too short for a public site. Use at least 10 characters.")
 
