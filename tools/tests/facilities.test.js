@@ -273,7 +273,7 @@ function boot(extra) {
 /* ---- 3) the same list drives the platform's own sign-up ---- */
 {
   const w = boot({ facilities: [{ id: 'a', name: 'مسبح الاختبار' }] });
-  w.__t.action('register', null);
+  w.__t.action('register-desk', null);
   const sel = w.document.querySelector('#reg-facility');
   if (!sel) { errors.push('[sign-up] the platform sign-up has no pool select'); return; }
   const opts = [...sel.options].map(o => o.textContent);

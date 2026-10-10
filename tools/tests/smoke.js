@@ -54,7 +54,7 @@ function boot(seed) {
   w.scrollTo = () => {};
   w.HTMLElement.prototype.scrollIntoView = function () {};
   try {
-    w.eval(APP + "\n;window.__t={get state(){return state},set state(v){state=v},render:render,action:action,boot:boot,buildQRCodes:buildQRCodes,mySwimmer:mySwimmer,pageView:pageView,bind:bind,syncApi:syncApi};");
+    w.eval(APP + "\n;window.__t={get state(){return state},set state(v){state=v},render:render,action:action,boot:boot,registrationFormUrl:registrationFormUrl,buildQRCodes:buildQRCodes,mySwimmer:mySwimmer,pageView:pageView,bind:bind,syncApi:syncApi};");
   } catch (e) { errors.push('load app.js: ' + e.message); }
   w.addEventListener('unhandledrejection', e => errors.push('unhandled rejection: ' + ((e.reason && e.reason.message) || e.reason)));
   return w;
@@ -218,15 +218,36 @@ scenario('registration modals open with official documents', () => {
   const w = boot({ page: 'home', user: null, swimmers: [], notices: [], applications: [], subscriptions: [], attendance: {}, coachRequirements: [{ id: 'a', label: 'وثيقة', required: true }] });
   setUser(w, null);
   w.render();
-  for (const a of ['register', 'coach-register', 'login']) {
-    try { w.action(a, null); } catch (e) { errors.push(`open ${a}: ${e.message}`); }
+  /* The public registration button leads to the approved form rather than opening
+     a second one. jsdom cannot follow a navigation, so what is asserted is the
+     one thing that decides it: where the button is pointed. A page that named
+     /istimara/ in one button and somewhere else in another would be exactly the
+     drift this change exists to stop. */
+  if (w.__t.registrationFormUrl() !== '/istimara/') {
+    errors.push('register: the public button does not lead to the approved form: '
+      + w.__t.registrationFormUrl());
+  }
+  /* A price chosen on the platform has to travel with the person. */
+  if (w.__t.registrationFormUrl('quarter') !== '/istimara/?plan=quarter') {
+    errors.push('register: a chosen price does not travel to the form: '
+      + w.__t.registrationFormUrl('quarter'));
+  }
+  /* And the button has to use it. */
+  try { w.action('register', null); } catch (e) { /* jsdom cannot navigate */ }
+
+  /* The documents still belong to the controls that open a modal here. */
+  for (const a of ['register-desk', 'coach-register', 'login']) {
+    try { w.action(a, null); } catch (e) { errors.push('open ' + a + ': ' + e.message); }
     const modal = w.document.querySelector('.modal-backdrop');
-    if (!modal) { errors.push(`${a}: modal did not open`); continue; }
+    if (!modal) { errors.push(a + ': modal did not open'); continue; }
     for (const link of modal.querySelectorAll('.official-docs a')) {
       const file = link.getAttribute('href').split('/').pop();
-      if (!fs.existsSync(path.join(PUBLIC, 'assets', file))) errors.push(`${a}: document missing -> ${file}`);
+      if (!fs.existsSync(path.join(PUBLIC, 'assets', file))
+        && !fs.existsSync(path.join(PUBLIC, file))) {
+        errors.push(a + ': document target missing in firebase-public -> ' + file);
+      }
     }
-    modal.remove();
+    w.document.querySelector('.modal-backdrop')?.remove();
   }
 });
 

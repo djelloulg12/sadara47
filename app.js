@@ -81,6 +81,24 @@ async function boot(){
   save();render();
 }
 
+/* Where the public registration button leads.
+
+   The approved form is /istimara/. The platform used to carry a second one with
+   the same fields and the same rules about a minor's declaration, written out
+   twice -- which is how the pool names came to be hard-coded in three places and
+   had to be dragged back into the database. Two registration forms drift, and the
+   one that drifts is the one the public fills in.
+
+   A price chosen on the platform travels with the person, so the plan is already
+   selected when they arrive. */
+const REGISTRATION_FORM = '/istimara/';
+function registrationFormUrl(plan) {
+  return REGISTRATION_FORM + (plan ? '?plan=' + encodeURIComponent(plan) : '');
+}
+function goToRegistration(plan) {
+  location.assign(registrationFormUrl(plan));
+}
+
 function fullRegisterModal(){return `<div class="modal-backdrop" role="dialog" aria-modal="true"><div class="modal registration-modal"><button class="close" data-action="close" aria-label="إغلاق">×</button><div class="modal-heading"><span class="logo">🏊</span><h2>استمارة التسجيل</h2><p>بطاقة المعلومات الرسمية لنادي الصدارة</p></div><div class="form-section-title">1. الاختيار الرياضي والاشتراك</div><label>الرياضة<select id="reg-sport"><option>السباحة</option><option>العدو الريفي</option><option>العدو السريع</option></select></label><label>الفئة<select id="reg-category"><option value="minor">أصاغر — بيانات الولي مطلوبة</option><option value="adult">أكابر — تسجيل مباشر</option></select></label><label>الاشتراك<select id="reg-plan"><option value="quarter">فصلي — 1000 دج</option><option value="season">موسمي — 3000 دج</option><option value="agreement">اتفاقية — 3000 دج</option></select></label><label>المسبح أو المنشأة<select id="reg-facility"><option>المسبح الأولمبي</option><option>المسبح النصف أولمبي</option><option>الملعب البلدي</option><option>غابة غرداية</option></select></label><label class="check-line"><input id="reg-transport" type="checkbox"> النقل — 900 دج</label><label class="check-line"><input id="reg-uniform" type="checkbox"> البدلة الرياضية — 2500 دج</label><label>طريقة الدفع<select id="reg-payment"><option value="cash">نقدًا</option><option value="postal_check">صك بريدي</option><option value="postal_transfer">حوالة بريدية</option></select></label><div class="form-section-title">2. معلومات الرياضي</div><div class="form-two"><label>الاسم بالعربية *<input id="reg-first-ar"></label><label>اللقب بالعربية *<input id="reg-last-ar"></label><label>الاسم بالفرنسية<input id="reg-first-fr"></label><label>اللقب بالفرنسية<input id="reg-last-fr"></label><label>رقم التعريف الوطني<input id="reg-nin"></label><label>رقم شهادة الميلاد<input id="reg-birth-cert"></label><label>بلدية الميلاد<input id="reg-birth-place"></label><label>الولاية<input id="reg-wilaya" placeholder="غرداية"></label></div><label>تاريخ الميلاد *<input id="reg-birth" type="date"></label><div class="form-two"><label>الجنس<select id="reg-gender"><option>ذكر</option><option>أنثى</option></select></label><label>فصيلة الدم<select id="reg-blood"><option>O+</option><option>O-</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option></select></label><label>المستوى الرياضي<select id="reg-level"><option>مبتدئ</option><option>متوسط</option><option>متقدم</option><option>نخبة</option></select></label><label>الهاتف *<input id="reg-phone" placeholder="05xx xx xx xx"></label></div><label>رقم واتساب<input id="reg-whatsapp"></label><label>العنوان *<input id="reg-address"></label><label>الصورة الشخصية<input id="reg-photo" type="file" accept="image/*"></label><div class="form-section-title">3. معلومات الولي والتصريح</div><div class="form-two"><label>اسم الولي<input id="reg-guardian-first"></label><label>لقب الولي<input id="reg-guardian-last"></label><label>صلة القرابة<input id="reg-guardian-relation" value="الأب"></label><label>هاتف الولي<input id="reg-guardian-phone"></label></div><label>رقم تعريف الولي<input id="reg-guardian-nin"></label><label class="check-line"><input id="reg-guardian-consent" type="checkbox"> أقر بصحة المعلومات وأوافق على ممارسة النشاط الرياضي</label><div class="official-docs"><a href="assets/registration-card.jpg" target="_blank">معاينة بطاقة التسجيل الرسمية</a><a href="assets/internal-regulations.jpg" target="_blank">معاينة النظام الداخلي</a></div><button class="btn btn-primary full" data-action="send-full-request">إرسال طلب التسجيل</button></div></div>`}
 function coachRegisterModal() {
   const reqs = state.coachRequirements || [];
@@ -159,7 +177,13 @@ action = async function(a,el){
     const res=await fetch('/api/coach-requirements',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({requirements})}); if(!res.ok){const d=await res.json();showToast(d.error||'تعذر حفظ القائمة','error');return} state.coachRequirements=requirements;showToast('تم حفظ قائمة الوثائق المطلوبة.');render();return;
   }
   if(a==='reject-app'){const reason=prompt('سبب رفض الطلب:','الوثائق ناقصة');if(reason===null)return;await fetch('/api/applications/'+el.dataset.id,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({status:'rejected',decision_reason:reason})});await syncApi();render();return}
-  if(a==='register'){document.querySelector('.modal-backdrop')?.remove();document.body.insertAdjacentHTML('beforeend',fullRegisterModal());bind();setupRegistrationMode();return}
+  if(a==='register'){goToRegistration(el&&el.dataset&&el.dataset.plan);return}
+  if(a==='register-desk'){
+    /* Registering somebody standing in front of you, from inside the dashboard.
+       Reached only from the applications page: this one is a different tool from
+       the public form, not a second way to the same one. */
+    document.querySelector('.modal-backdrop')?.remove();document.body.insertAdjacentHTML('beforeend',fullRegisterModal());bind();setupRegistrationMode();return;
+  }
   if(a==='send-full-request'){
     const payload={sport:$('#reg-sport').value,category:$('#reg-category').value,swimming_strokes:($('#reg-strokes')||{value:''}).value,subscription_code:$('#reg-plan').value,facility:$('#reg-facility').value,transport:$('#reg-transport').checked,uniform:$('#reg-uniform').checked,payment_method:$('#reg-payment').value,first_name_ar:$('#reg-first-ar').value,last_name_ar:$('#reg-last-ar').value,first_name_fr:$('#reg-first-fr').value,last_name_fr:$('#reg-last-fr').value,national_id:$('#reg-nin').value,birth_certificate_no:$('#reg-birth-cert').value,birth_place:$('#reg-birth-place').value,wilaya:$('#reg-wilaya').value,birth_date:$('#reg-birth').value,gender:$('#reg-gender').value,blood_group:$('#reg-blood').value,level:$('#reg-level').value,phone:$('#reg-phone').value,whatsapp:$('#reg-whatsapp').value,address:$('#reg-address').value,guardian_first_name:$('#reg-guardian-first').value,guardian_last_name:$('#reg-guardian-last').value,guardian_relation:$('#reg-guardian-relation').value,guardian_phone:$('#reg-guardian-phone').value,guardian_national_id:$('#reg-guardian-nin').value,guardian_consent:$('#reg-guardian-consent').checked};
     if(!payload.first_name_ar||!payload.last_name_ar||!payload.birth_date||!payload.phone||!payload.address){alert('يرجى إكمال الحقول الإلزامية');return}
@@ -831,7 +855,7 @@ function roleApplications(){
   const phone=String(state.user?.phone||'').replace(/\s/g,'');
   const mine=(state.applications||[]).filter(a=>String(a.phone||'').replace(/\s/g,'')===phone);
   return '<div class="toolbar"><span class="page-description">طلبات التسجيل والاشتراكات الخاصة بك.</span>'
-    +'<div class="toolbar-group">'+printBtn('print-role-applications','طباعة')+'<button class="btn btn-primary" data-action="register">+ طلب تسجيل جديد</button></div></div>'
+    +'<div class="toolbar-group">'+printBtn('print-role-applications','طباعة')+'<button class="btn btn-primary" data-action="register-desk">+ طلب تسجيل جديد</button></div></div>'
     +'<section class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>رقم الطلب</th><th>الرياضي</th><th>الاشتراك</th><th>المبلغ</th><th>الحالة</th></tr></thead><tbody>'
     +(mine.length?mine.map(a=>'<tr><td dir="ltr">'+esc(a.application_no||a.id)+'</td><td><b>'+esc(appName(a))+'</b></td><td>'+esc(planName(a.subscription_code))+'</td>'
       +'<td>'+esc(money(a.expected_amount))+'</td><td><span class="status '+(a.status==='approved'?'success':'pending')+'">'+esc(stateLabel(a.status))+'</span></td></tr>').join('')

@@ -138,7 +138,7 @@ const seed = (user, extra) => Object.assign({
     }
     return Promise.resolve({ ok: true, json: async () => ({}) });
   };
-  w.__t.action('register', null);
+  w.__t.action('register-desk', null);
   const set = (id, v) => { const n = w.document.querySelector(id); if (n) n.value = v; return n; };
   set('#reg-first-ar', 'أمين'); set('#reg-last-ar', 'بلعيد'); set('#reg-birth', '2013-05-04');
   set('#reg-phone', '0661000001'); set('#reg-address', 'غرداية'); set('#reg-plan', 'quarter');

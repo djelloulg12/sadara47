@@ -159,9 +159,29 @@
           });
         }
         paintPlans();
+        applyArrival();
         updateTotal();
       })
       .catch(function () { /* the fallback list stays in place */ });
+  }
+
+  /* What the visitor was told on the way here: a plan chosen on the platform's
+     price cards travels in the query, and this applies it. Without it the form
+     opens on the first plan in the list, so the person would pick one price and
+     be registered on another.
+
+     Applied after the prices arrive, because until then the select holds the
+     built-in list and paintPlans() would overwrite it. A parameter naming a plan
+     that no longer exists is ignored rather than leaving the select on nothing. */
+  function applyArrival() {
+    var wanted = null;
+    try { wanted = new URLSearchParams(location.search).get('plan'); } catch (_) { /* older browser */ }
+    if (!wanted) return;
+    var box = el('subscription_code');
+    if (!box) return;
+    var known = Array.prototype.some.call(box.options, function (o) { return o.value === wanted; });
+    if (!known) return;
+    box.value = wanted;
   }
 
   /* The pool names come from the club, so a rename in Settings reaches this form

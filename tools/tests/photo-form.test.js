@@ -138,7 +138,7 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
   const w = boot(seedFor({ id: 1, name: 'u', role: 'admin' }));
 
   // the interface: pick the adults category and read what is left on screen
-  w.__t.action('register', null);
+  w.__t.action('register-desk', null);
   const cat = w.document.querySelector('#reg-category');
   const modal = w.document.querySelector('.registration-modal');
   if (!cat || !modal) {
