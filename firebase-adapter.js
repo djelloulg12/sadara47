@@ -62,6 +62,9 @@
     if (!profile || !['admin', 'president'].includes(profile.role)) return { error: message, status: 403 };
     return { profile };
   };
+  /* The only roles the rules and the page both understand. */
+  const ROLES = ['admin', 'president', 'coach', 'member', 'parent', 'swimmer_adult', 'swimmer_minor'];
+  const currentUserUid = () => (auth.currentUser ? auth.currentUser.uid : '');
   const ROW_LIMIT = 1000;
   // Reads are unordered on purpose: a query with an orderBy fails outright when
   // any older document is missing the field, so the display order is applied here.
@@ -249,6 +252,49 @@
         const mine = String(profile.member_no || '');
         return jsonResponse(mine ? list.filter(x => String(x.membership_no) === mine) : []);
       }
+/* ---------------- accounts and their permissions ----------------
+         The rules already let a manager read and update any users document.
+         Nothing reached it: there was no endpoint, so the only way to give
+         somebody a role was to run a script against the database. */
+      if (path === '/api/accounts' && method === 'GET') {
+        const gate = await managerView('عرض الحسابات لرئيس النادي فقط');
+        if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
+        const list = await db.collection('users').get();
+        const owners = await ownerAddresses();
+        return jsonResponse(list.docs.map(d => {
+          const f = d.data() || {};
+          return {
+            id: d.id, name: f.name || '', email: f.email || '',
+            role: f.role || 'member', owner: owners.indexOf(f.email) !== -1,
+            joined: f.created_at && f.created_at.toDate ? f.created_at.toDate().toISOString().slice(0, 10) : ''
+          };
+        }));
+      }
+      if (path === '/api/accounts' && method === 'PUT') {
+        const gate = await managerView('تعديل الصلاحيات لرئيس النادي فقط');
+        if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
+        const uid = String(body.id || '');
+        const role = String(body.role || '');
+        if (!uid) return jsonResponse({ error: 'معرّف الحساب مطلوب' }, 400);
+        if (!ROLES.indexOf(role)) {
+          /* Written anyway it would be an account that can do nothing, and the
+             interface would show it as broken rather than wrong. */
+          return jsonResponse({ error: 'سلمي غير معروف: ' + role }, 400);
+        }
+        if (uid === currentUserUid()) {
+          /* You can change anyone else's role, not your own: there is no second
+             manager on the platform to undo it, and the club would be locked out. */
+          return jsonResponse({ error: 'لا يُغيّر صلاحتياتك بنفسك' }, 400);
+        }
+        await db.collection('users').doc(uid).set({ role }, { merge: true });
+        await db.collection('audit_logs').add({
+          action: 'role_changed', entity_type: 'user', entity_id: uid,
+          details: { role }, user_id: gate.profile.id,
+          created_at: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        return jsonResponse({ ok: true, id: uid, role });
+      }
+
       if (path === '/api/swimmers' && method === 'POST') {
         const gate = await managerView('هذه العملية لرئيس النادي فقط');
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
@@ -381,6 +427,29 @@
           });
         }
         await db.collection('applications').doc(appMatch[1]).set({ ...patch, reviewed_by: gate.profile.id, updated_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+
+        /* Accepting a request used to change the request's status and stop
+           there, so nobody became a swimmer and the club had to add them again by
+           hand. The swimmer is written under the application number, which makes
+           approving twice update one person rather than create two. */
+        if (patch.status === 'approved') {
+          const no = patch.application_no || appMatch[1];
+          const src = (await db.collection('applications').doc(no).get()).data() || {};
+          if (src.application_type !== 'coach') {
+            await db.collection('swimmers').doc(no).set({
+              membership_no: src.membership_no || no.slice(-8),
+              name: [src.first_name_ar, src.last_name_ar].filter(Boolean).join(' '),
+              first_name_ar: src.first_name_ar || '', last_name_ar: src.last_name_ar || '',
+              birth_date: src.birth_date || '', phone: src.phone || '',
+              whatsapp: src.whatsapp || '', blood_group: src.blood_group || '',
+              level: src.level || '', facility: src.facility || '',
+              group_name: src.group_name || src.level || 'المبتدئون',
+              national_id: src.national_id || '',
+              status: 'active', from_application: no,
+              created_at: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+          }
+        }
         return jsonResponse({ ok: true, expected_amount: patch.expected_amount });
       }
       return jsonResponse({ error: 'المسار غير موجود' }, 404);

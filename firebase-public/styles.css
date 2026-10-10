@@ -463,4 +463,18 @@ body.printing .print-sheet10{display:block!important}
    source order, otherwise anything toggled with the hidden attribute stays
    on screen -- which is how a guardian's consent box survived being hidden.
    -------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+   Accounts and their permissions. A row, not a table: the platform is used on a
+   phone in the clubhouse, where a wide table is the thing that breaks.
+   ------------------------------------------------------------------------ */
+.account-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.account-who { display:flex; flex-direction:column; flex:1 1 190px; min-width:0; }
+.account-who b { font-weight:700; }
+.account-who span { font-size:.85rem; opacity:.72; overflow-wrap:anywhere; }
+.owner-mark { color:#d4af37; font-weight:700; margin-inline-start:6px; }
+.account-row select { flex:0 1 190px; min-width:130px; }
+/* Your own row says what it is instead of offering a control the server will
+   refuse, so the page never asks for something it will not do. */
+.role-fixed { flex:0 1 190px; opacity:.75; font-weight:600; }
+
 [hidden]{display:none!important}

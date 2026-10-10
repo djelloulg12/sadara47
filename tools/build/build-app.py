@@ -55,7 +55,7 @@ base = base.replace("['card','\u0628\u0637\u0627\u0642\u0627\u062a \u0627\u0644\
                     "['card','\u0628\u0637\u0627\u0642\u0627\u062a \u0627\u0644\u0627\u0646\u062e\u0631\u0627\u0637'],['audit','\u0633\u062c\u0644 \u0627\u0644\u062a\u062f\u0642\u064a\u0642']].map")
 assert "aria-label" in base and "bare = options.bare" in base and "سجل التدقيق" in base
 
-order = ["part-h.js","part-i.js","part-j.js","part-k.js","part-l.js","part-m.js","part-n.js","part-p.js","part-s.js","part-t.js","part-u.js","part-v.js","part-q.js","part-w.js","part-x.js"]
+order = ["part-h.js","part-i.js","part-j.js","part-k.js","part-l.js","part-m.js","part-n.js","part-p.js","part-s.js","part-t.js","part-u.js","part-v.js","part-q.js","part-w.js","part-x.js","part-y.js"]
 layers = [gconst] + [io.open(tmp + "\\" + n, encoding="utf-8").read().rstrip() for n in order]
 out = base + "\n\n/* ---------- layers added after the baseline commit ---------- */\n\n" + "\n\n".join(layers)
 out = out.rstrip() + "\n\n/* ---------- final layer ---------- */\n\n" + io.open(tmp + r"\part-r.js", encoding="utf-8").read().rstrip() + "\n"

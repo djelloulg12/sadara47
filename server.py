@@ -102,6 +102,10 @@ def init_db():
 # the local development database and nothing else: the name has to say so, and a
 # password is only ever written here when the file it lands in is the local one.
 LOCAL_DB_NAME = 'sadara-local.db'
+# The roles the platform recognises. One that is not here would produce an
+# account that can do nothing at all, so it is refused rather than stored.
+ROLES = ('admin', 'president', 'coach', 'member', 'parent', 'swimmer_adult', 'swimmer_minor')
+
 LOCAL_PASSWORD = 'Sadara@2026'
 LOCAL_ACCOUNTS = (
     ('admin@sadara.local', 'admin', 'مدير', 'النادي'),
@@ -205,6 +209,25 @@ class App(SimpleHTTPRequestHandler):
             today = c.execute("SELECT COUNT(*) AS n FROM visits WHERE date(visited_at)=date('now')").fetchone()['n']
             week = c.execute("SELECT COUNT(*) AS n FROM visits WHERE visited_at >= date('now','-7 day')").fetchone()['n']
             c.close(); self.send_json({'visits': total, 'today': today, 'week': week}); return
+        if path == '/api/accounts':
+            user = self.authorized()
+            if not user: return
+            if user['role'] not in ('admin', 'president'):
+                self.send_json({'error': 'عرض الحسابات لرئيس النادي فقط'}, 403); return
+            c = connect()
+            try:
+                rows = c.execute("SELECT id,first_name,last_name,email,role,created_at FROM users"
+                                 " ORDER BY case role when 'admin' then 0 when 'president' then 1"
+                                 " when 'coach' then 2 else 3 end, email").fetchall()
+                self.send_json([{
+                    'id': r['id'],
+                    'name': (str(r['first_name'] or '') + ' ' + str(r['last_name'] or '')).strip(),
+                    'email': r['email'] or '', 'role': r['role'] or 'member',
+                    'owner': False, 'joined': r['created_at'] or ''
+                } for r in rows])
+            finally:
+                c.close()
+            return
         if path == '/api/session': self.send_json({'user':user}); c.close(); return
         if path == '/api/audit':
             rows=[{'action':r['action'],'entity_type':r['entity_type'],'entity_id':r['entity_id'],
@@ -320,6 +343,36 @@ class App(SimpleHTTPRequestHandler):
         path=urlparse(self.path).path; data=self.read_json()
         user=self.authorized()
         if not user: return
+        if path == '/api/accounts':
+            # An unknown role is refused rather than stored: an account holding one
+            # can do nothing at all and looks broken rather than wrong. And you
+            # may not change your own role, because there is no second manager
+            # here to undo it.
+            if user['role'] not in ('admin', 'president'):
+                self.send_json({'error': 'تعديل الصلاحيات لرئيس النادي فقط'}, 403); return
+            uid = str(data.get('id', '')).strip()
+            role = str(data.get('role', '')).strip()
+            if not uid:
+                self.send_json({'error': 'معرّف الحساب مطلوب'}, 400); return
+            if role not in ROLES:
+                self.send_json({'error': 'دور غير معروف: ' + role}, 400); return
+            if str(user['id']) == uid:
+                self.send_json({'error': 'لا تُغيّر صلاحياتك بنفسك'}, 400); return
+            c = connect()
+            try:
+                row = c.execute('SELECT id FROM users WHERE id=?', (uid,)).fetchone()
+                if not row:
+                    self.send_json({'error': 'الحساب غير موجود'}, 404); return
+                c.execute('UPDATE users SET role=? WHERE id=?', (role, uid))
+                c.execute('INSERT INTO audit_logs(user_id,action,entity_type,entity_id,details)'
+                          ' VALUES(?,?,?,?,?)',
+                          (user['id'], 'role_changed', 'user', uid,
+                           json.dumps({'role': role}, ensure_ascii=False)))
+                c.commit()
+                self.send_json({'ok': True, 'id': uid, 'role': role})
+            finally:
+                c.close()
+            return
         if path == '/api/profile':
             allowed={k:str(v)[:2000] for k,v in data.items() if k in (
                 'name','first_name_fr','last_name_fr','birth_date','birth_place','wilaya','address',
@@ -441,6 +494,23 @@ class App(SimpleHTTPRequestHandler):
                            data.get('cashier_name') or '', app_id))
             fields.append("updated_at=datetime('now')"); values.append(app_id)
             c.execute('UPDATE applications SET '+','.join(fields)+' WHERE id=?',values)
+            # Accepting a request used to change its status and stop there, so the
+            # club approved a child and then added them again by hand, and the
+            # two records could disagree. The application number is the swimmer's
+            # identity, so approving twice updates one person, not two.
+            if data.get('status') == 'approved':
+                row = c.execute('SELECT * FROM applications WHERE id=?', (app_id,)).fetchone()
+                if row and (row['application_type'] or 'swimmer') != 'coach':
+                    no = row['application_no'] or str(app_id)
+                    name = ' '.join(x for x in [row['first_name_ar'], row['last_name_ar']] if x)
+                    group = row['level'] or 'المبتدئون'
+                    have = c.execute('SELECT id FROM swimmers WHERE membership_no=?', (no,)).fetchone()
+                    if have:
+                        c.execute('UPDATE swimmers SET name=?,group_name=?,phone=?,status=? WHERE membership_no=?',
+                                  (name, group, row['phone'] or '', 'active', no))
+                    else:
+                        c.execute('INSERT INTO swimmers(membership_no,name,group_name,phone,status)'
+                                  " VALUES(?,?,?,?,'active')", (no, name, group, row['phone'] or ''))
             c.execute('INSERT INTO audit_logs(user_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?)',
                       (user['id'],'تعديل طلب','application',app_id,json.dumps(data,ensure_ascii=False)))
             c.commit(); self.send_json({'ok':True})
