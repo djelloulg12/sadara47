@@ -8,7 +8,7 @@
     "build": "python tools/build/build-app.py",
     "check": "node tools/verify.js",
     "check:print": "python tools/check-form-placement.py",
-    "check:all": "npm run check && npm run check:print",
+    "check:all": "npm run check && npm run check:print && npm run check:manifests",
     "user": "python tools/create-user.py",
     "preview:form": "node tools/tests/packet-preview.js",
     "preview:placement": "node tools/tests/form-placement.js",
@@ -19,7 +19,8 @@
     "projects": "powershell -ExecutionPolicy Bypass -File tools/firebase.ps1 projects:list",
     "deploy": "npm run check:all && powershell -ExecutionPolicy Bypass -File tools/firebase.ps1 deploy",
     "deploy:rules": "powershell -ExecutionPolicy Bypass -File tools/firebase.ps1 deploy --only firestore:rules,storage",
-    "preview": "npm run check:all && powershell -ExecutionPolicy Bypass -File tools/firebase.ps1 hosting:channel:deploy preview"
+    "preview": "npm run check:all && powershell -ExecutionPolicy Bypass -File tools/firebase.ps1 hosting:channel:deploy preview",
+    "check:manifests": "python tools/check-manifests.py"
   },
   "devDependencies": {
     "firebase-tools": "^15.32.1",
