@@ -36,7 +36,6 @@ const FORM_SPOTS = [
   { id: 'address',            y: 104.65, x0: 62.3, colon: 178.3 },
   { id: 'blood_group',        y: 114.45, x0: 62.1,  colon: 178.3 },
   { id: 'phone',              y: 124.25, x0: 62.3,  colon: 178.3 },
-  { id: 'medical_person',     y: 148.57, x0: 60.2,  colon: 151.7 },
   { id: 'parent_name',        y: 208.78, x0: 105.7, colon: 152.9 },
   { id: 'parent_birth',       y: 208.78, x0: 32.9,  colon: 71.9 },
   { id: 'parent_last_name',   y: 208.78, x0: 4.2,   colon: 31.5 },
@@ -74,7 +73,12 @@ function formValues(a){
     address: v('address'),
     blood_group: v('blood_group'),
     phone: v('phone'),
-    medical_person: (v('first_name_ar') + ' ' + v('last_name_ar')).trim(),
+    /* There is no doctor value. It used to be the swimmer's own name, written
+       into the line reserved for the doctor who certifies them, and on a document
+       the club keeps that is the wrong name in the wrong place. The scan has no
+       line wide enough for a doctor, a signature and a place of issue, so there
+       is nothing to print; the club fills that part in by hand. */
+    medical_person: '',
     /* The declaration reads "أنا الولي ... السيد(ة) ___ المولود(ة) بتاريخ ___ بن ___",
        so the given name and the surname are separate blanks, exactly as the
        identity block at the top separates الإسم from اللقب. Nationality has no

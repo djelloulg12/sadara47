@@ -18,7 +18,10 @@ const DATA = {
   /* Present and empty: every signed-in read of the owner list needs the document
      to exist, and a mock that named everybody an owner would pass every check
      for the wrong reason. payments is written to when a request is settled. */
-  config: { owners: { emails: [] } }, payments: {}, audit_logs: {}
+  config: { owners: { emails: [] } }, payments: {}, audit_logs: {},
+  /* The public read asks for the pools alongside the plans, because the fee
+     depends on which pool the swimmer is going to. */
+  facilities: { olympic: { name: 'x', order: 1, active: true } }
 };
 
 function makeFirestore() {

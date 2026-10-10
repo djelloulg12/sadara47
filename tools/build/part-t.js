@@ -174,10 +174,12 @@ function packetDocument(app, what) {
   const only = what || 'all';
   const pages = [];
   if (only === 'all' || only === 'form') pages.push(overlaySheet(app));
-  if (only === 'all' || only === 'receipt') pages.push(receiptSheet(app));
+  /* The club's own rules go straight after the form, then the money: the packet
+     was form, receipt, regulations, which put the rules on the third page. */
   if (only === 'all' || only === 'regs') pages.push(regulationsSheet());
+  if (only === 'all' || only === 'receipt') pages.push(receiptSheet(app));
   const label = only === 'all'
-    ? '\u0627\u0644\u0627\u0633\u062a\u0645\u0627\u0631\u0629 \u0627\u0644\u0631\u0633\u0645\u064a\u0629\u060c \u0648\u0635\u0644 \u0627\u0633\u062a\u0644\u0627\u0645 \u0627\u0644\u0645\u0633\u062a\u062d\u0642\u0627\u062a\u060c \u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u062f\u0627\u062e\u0644\u064a.'
+    ? '\u0627\u0644\u0627\u0633\u062a\u0645\u0627\u0631\u0629 \u0627\u0644\u0631\u0633\u0645\u064a\u0629\u060c \u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u062f\u0627\u062e\u0644\u064a\u060c \u0648\u0635\u0644 \u0627\u0633\u062a\u0644\u0627\u0645 \u0627\u0644\u0645\u0633\u062a\u062d\u0642\u0627\u062a.'
     : only === 'receipt' ? '\u0648\u0635\u0644 \u0627\u0633\u062a\u0644\u0627\u0645 \u0627\u0644\u0645\u0633\u062a\u062d\u0642\u0627\u062a.'
       : only === 'regs' ? '\u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u062f\u0627\u062e\u0644\u064a.'
         : '\u0627\u0644\u0627\u0633\u062a\u0645\u0627\u0631\u0629 \u0627\u0644\u0631\u0633\u0645\u064a\u0629.';

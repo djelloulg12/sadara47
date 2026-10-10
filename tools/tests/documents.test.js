@@ -59,8 +59,17 @@ const errors = [];
   else if (serial[1].length > 12) errors.push('the registration serial is too long for the printed line: ' + serial[1]);
   let blank = '';
   try { blank = w.__t.overlaySheet(null); } catch (e) { errors.push('blank overlay threw: ' + e.message); }
+  /* Counted from the spot list rather than written as a literal: a hardcoded
+     number has to be edited every time a field is added or removed, and the day
+     nobody does is the day it stops meaning anything. */
   const spots = t => (t.match(/class="f-spot"/g) || []).length;
-  if (spots(sheet) !== 15 || spots(blank) !== 15) errors.push('overlay slot count changed');
+  const expected = (APP.match(/const FORM_SPOTS = \[([\s\S]*?)\n\];/) || [, ''])[1]
+    .match(/id: '\w+'/g) || [];
+  if (!expected.length) errors.push('the spot list could not be read');
+  if (spots(sheet) !== expected.length || spots(blank) !== expected.length) {
+    errors.push('overlay slot count changed: ' + spots(sheet) + '/' + spots(blank)
+      + ' against ' + expected.length + ' spots');
+  }
   if (!/class="f-photo"/.test(blank)) errors.push('blank overlay must keep the photo frame');
   const order = [61.95, 75.25, 85.05, 94.85, 104.65, 114.45, 124.25];
   const bottoms = [...sheet.matchAll(/bottom:([\d.]+)mm/g)].map(m => 297 - Number(m[1]) - 0.4);

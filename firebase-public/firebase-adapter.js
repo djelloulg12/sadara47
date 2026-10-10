@@ -90,6 +90,48 @@
     try { const snap = await extrasDoc().get(); return snap.exists ? (snap.data() || {}) : {}; }
     catch (_) { return {}; }
   };
+
+  /* What a category is called in the fee matrix. Anything that is not a minor is
+     charged as an adult, so a new category does not silently fall back to the
+     cheapest row. */
+  const feeCategory = d => String((d && d.category) || 'adult').toLowerCase() === 'minor' ? 'minor' : 'adult';
+  const feePool = d => String((d && (d.facility_id || d.facility)) || '').trim();
+
+  /* The one answer to "what does this cost", so the form, the total, the receipt
+     and the manager's screen cannot disagree.
+
+     A row is looked for by pool and category, then by category alone, then by the
+     single price that was always there. An entry with available:false is a real
+     answer -- the club does not offer that service there -- and comes back as a
+     price of 0 with offered:false, which is what hides the checkbox on the form. */
+  const feeFor = (extras, d, key) => {
+    const base = Number(extras && extras[key]) || (key === 'transport' ? 900 : 2500);
+    const m = (extras && extras.matrix) || {};
+    const cat = feeCategory(d);
+    const pool = feePool(d);
+    const rows = [pool && m[pool], m['*'], m.defaults && m.defaults[cat]];
+    for (const row of rows) {
+      if (!row) continue;
+      const cell = row[cat] && row[cat][key];
+      if (cell === undefined || cell === null) continue;
+      if (typeof cell === 'object') {
+        return { offered: cell.available !== false, amount: Number(cell.amount) || 0 };
+      }
+      return { offered: true, amount: Number(cell) || 0 };
+    }
+    return { offered: true, amount: base };
+  };
+  const extrasFor = (extras, d) => ({
+    transport: feeFor(extras, d, 'transport').amount,
+    uniform: feeFor(extras, d, 'uniform').amount
+  });
+  /* What the form should offer: an entry the club has switched off is hidden. */
+  const offeredFor = (extras, d) => ({
+    transport: feeFor(extras, d, 'transport').offered,
+    uniform: feeFor(extras, d, 'uniform').offered
+  });
+  const SUBSCRIPTION_DEFAULT = 600;
+  const subscriptionDefault = extras => Number(extras && extras.subscription_default) || SUBSCRIPTION_DEFAULT;
   const DEFAULT_PLANS = [
     { code: 'quarter', name: 'اشتراك فصلي', amount: 1000, duration: '3 أشهر' },
     { code: 'season', name: 'اشتراك موسمي', amount: 3000, duration: 'موسم' },
@@ -109,10 +151,14 @@
     { id: 'forest', name: 'غابة غرداية', order: 4 }
   ];
   const amountFor = (d, plans, extras) => {
-    const plan = plans.find(x => x.code === (d.subscription_code || 'quarter'));
-    return (Number(plan && plan.amount) || 0)
-      + (d.transport ? Number(extras && extras.transport) || 900 : 0)
-      + (d.uniform ? Number(extras && extras.uniform) || 2500 : 0);
+    const plan = plans.find(x => x.code === d.subscription_code);
+    /* No plan named falls back to the manager's default subscription rather than
+       to a quarter that may not exist. */
+    const base = plan ? Number(plan.amount) || 0 : subscriptionDefault(extras);
+    const forThis = extrasFor(extras, d);
+    return base
+      + (d.transport ? forThis.transport : 0)
+      + (d.uniform ? forThis.uniform : 0);
   };
   const originalFetch = window.fetch.bind(window);
   window.fetch = async function (input, init = {}) {
@@ -159,10 +205,55 @@
         return jsonResponse(plans.length ? plans : DEFAULT_PLANS);
       }
       if (path === '/api/subscription-plans' && method === 'GET') {
-        const [plans, extras] = await Promise.all([rows('subscription_plans'), readExtras()]);
+        const [plans, extras, pools] = await Promise.all([
+          rows('subscription_plans'), readExtras(), rows('facilities')
+        ]);
+        /* The category and the pool travel with the question, because the fee
+           depends on both: answering once for everybody priced a junior at the
+           senior rate, and offered a uniform at a pool that has no changing room.
+           'offered' is separate from the price so the form can hide a checkbox
+           rather than charge for something the club does not do there. */
+        /* `url` here is the raw string the caller passed and `path` is its
+           pathname, so the query has to be read off a URL of its own. */
+        const ask = new URL(url, location.origin).searchParams;
+        const who = {
+          category: ask.get('category') || 'adult',
+          facility: ask.get('facility') || ''
+        };
         return jsonResponse({
-          plans: plans.length ? byOrder(plans) : DEFAULT_PLANS.map((p, i) => ({ id: p.code, active: true, ...p, order: i + 1 })),
-          extras: { transport: Number(extras.transport) || 900, uniform: Number(extras.uniform) || 2500 }
+          plans: plans.length ? byOrder(plans)
+            : DEFAULT_PLANS.map((p, i) => ({ ...p, id: p.code, active: true, order: i + 1 })),
+          extras: extrasFor(extras, who),
+          offered: offeredFor(extras, who),
+          subscription_default: subscriptionDefault(extras),
+          pools: pools.length ? byOrder(pools).map(x => ({ id: x.id, name: x.name })) : []
+        });
+      }
+      if (path === '/api/fees' && method === 'PUT') {
+        /* The matrix and the default subscription. Written as a whole document
+           rather than merged, because removing a pool's row has to remove it --
+           a merge would leave the row there, switched on, forever. */
+        const gate = await managerView('تعديل الرسوم لرئيس النادي فقط');
+        if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
+        const extras = {
+          transport: Number(body.transport) || 0,
+          uniform: Number(body.uniform) || 0,
+          subscription_default: Number(body.subscription_default) || SUBSCRIPTION_DEFAULT,
+          matrix: (body.matrix && typeof body.matrix === 'object') ? body.matrix : {},
+          updated_by: gate.profile.id,
+          updated_at: new Date().toISOString().slice(0, 10)
+        };
+        await db.collection('fee_settings').doc('extras').set(extras, { merge: true });
+        return jsonResponse({ ok: true, extras });
+      }
+      if (path === '/api/fees' && method === 'GET') {
+        const [extras, pools] = await Promise.all([readExtras(), rows('facilities')]);
+        return jsonResponse({
+          transport: Number(extras.transport) || 900,
+          uniform: Number(extras.uniform) || 2500,
+          subscription_default: subscriptionDefault(extras),
+          matrix: extras.matrix || {},
+          pools: pools.map(p => ({ id: p.id, name: p.name }))
         });
       }
       if (path === '/api/subscription-plans' && method === 'PUT') {
@@ -415,7 +506,13 @@
         const patch = { ...body };
         if ('subscription_code' in patch || 'transport' in patch || 'uniform' in patch) {
           const [plans, extras] = await Promise.all([rows('subscription_plans'), readExtras()]);
-          patch.expected_amount = amountFor(patch, plans.length ? plans : DEFAULT_PLANS, extras);
+          /* The patch carries only what changed, so it is worked out over the
+             record as it stands. Calculating from the patch alone found no plan,
+             fell back to the default subscription, and charged a manager adding
+             a service less than the plan they were quoted. */
+          const stored = (await db.collection('applications').doc(appMatch[1]).get()).data() || {};
+          const merged = Object.assign({}, stored, patch);
+          patch.expected_amount = amountFor(merged, plans.length ? plans : DEFAULT_PLANS, extras);
         }
         delete patch.id;
         // a scan lives in Cloud Storage; never write the inline copy into Firestore

@@ -80,12 +80,26 @@
      required list when the category changes -- otherwise an adult is stopped by
      a field they never see. The swimmer's national number goes the other way:
      a child does not hold one, so it leaves the form with the minors. */
-  var GUARDIAN_FIELDS = ['guardian_first_name', 'guardian_last_name', 'guardian_national_id'];
+  /* The printed declaration carries the guardian's given name, surname, date of
+     birth and national number. All four are required of a minor, because the
+     declaration cannot be completed without them, and none is required of an
+     adult, who has no guardian. */
+  var GUARDIAN_FIELDS = ['guardian_first_name', 'guardian_last_name', 'guardian_birth_date', 'guardian_national_id'];
   function syncCategory() {
     var minor = category() === 'minor';
+    /* The fee follows the category and the pool, so both changes re-ask. */
+    loadPlans();
     var card = el('guardian-card');
     card.hidden = !minor;
     GUARDIAN_FIELDS.forEach(function (id) { el(id).required = minor; });
+  /* Hidden alone is not enough: a hidden input can still be filled by keyboard and
+     can still carry a value into a record that has no guardian. Disabled and
+     cleared, an adult's declaration genuinely does not exist. */
+  document.querySelectorAll('#guardian-card input, #guardian-card select').forEach(function (node) {
+    node.disabled = !minor;
+    if (!minor && node.type !== 'checkbox') { node.value = ''; node.classList.remove('bad'); }
+    if (!minor && node.type === 'checkbox') { node.checked = false; }
+  });
     /* A child has no national number: asking for one would stop every minor.
        The value is cleared too, so switching back and forth cannot leave a
        number on a child's record. */
@@ -106,11 +120,22 @@
 
   /* ---------------- the plans and the live total ---------------- */
 
+  /* Which extras the club offers here. Absent means offered, so an answer from
+     an older server, or a failed request, leaves the form as it was. */
+  var offered = { transport: true, uniform: true };
+
   function loadPlans() {
     /* Prices are public in firestore.rules, and the endpoint answers without a
        session, so a visitor sees what the club actually charges. If it fails the
-       form still works on the built-in list. */
-    return fetch('/api/subscription-plans')
+       form still works on the built-in list.
+
+       The category and the pool travel with the question, because the fee depends
+       on both: asked once for everybody, a junior at a pool with no changing room
+       was quoted the senior uniform price and offered a service that pool does
+       not have. */
+    var q = 'category=' + encodeURIComponent(category())
+      + '&facility=' + encodeURIComponent(val('facility') || '');
+    return fetch('/api/subscription-plans?' + q)
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
         if (!data) return;
@@ -120,6 +145,18 @@
             transport: Number(data.extras.transport) || FALLBACK_EXTRAS.transport,
             uniform: Number(data.extras.uniform) || FALLBACK_EXTRAS.uniform
           };
+        }
+        if (data.offered) {
+          offered = { transport: data.offered.transport !== false, uniform: data.offered.uniform !== false };
+          /* A service the club does not offer here is not shown, and is not
+             silently charged for either. */
+          ['transport', 'uniform'].forEach(function (key) {
+            var box = el(key);
+            if (!box) return;
+            var line = box.closest('.opt') || box.parentNode;
+            if (line && line.classList) line.hidden = !offered[key];
+            if (!offered[key]) box.checked = false;
+          });
         }
         paintPlans();
         updateTotal();
@@ -333,7 +370,10 @@
       gender: val('gender'),
       blood_group: val('blood_group'),
       level: val('level'),
-      swimming_strokes: val('swimming_strokes'),
+      /* The stroke field is off the form: the club takes it from the swimmer's level
+       at the pool. The key stays so the shape of a request does not change, and
+       records collected before this still print it. */
+      swimming_strokes: '',
       phone: val('phone'),
       whatsapp: val('whatsapp'),
       address: val('address'),

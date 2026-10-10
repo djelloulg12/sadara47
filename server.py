@@ -13,9 +13,75 @@ def connect():
     c.execute('PRAGMA foreign_keys=ON')
     return c
 
+# Any category that is not a minor is charged as an adult, so a new one does not
+# quietly fall back to the cheapest row.
+def fee_category(d):
+    return 'minor' if str((d or {}).get('category') or '').lower() == 'minor' else 'adult'
+
+
+def fee_for(extras, d, key):
+    """The one answer to what something costs.
+
+    A pool's row, then the category's row, then the single price that has always
+    been there -- so a database nobody has touched behaves exactly as before. An
+    entry with available False is a real answer: the club does not offer that
+    service there.
+    """
+    default = (extras or {}).get(key)
+    try:
+        base = int(default) if default is not None else (900 if key == 'transport' else 2500)
+    except (TypeError, ValueError):
+        base = 900 if key == 'transport' else 2500
+    matrix = (extras or {}).get('matrix') or {}
+    cat = fee_category(d)
+    pool = str((d or {}).get('facility') or '').strip()
+    rows = [matrix.get(pool), matrix.get('*'), (matrix.get('defaults') or {}).get(cat)]
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        cell = (row.get(cat) or {}).get(key)
+        if cell is None:
+            continue
+        if isinstance(cell, dict):
+            amount = cell.get('amount')
+            try:
+                amount = int(amount) if amount is not None else 0
+            except (TypeError, ValueError):
+                amount = 0
+            return amount if cell.get('available') is not False else 0
+        try:
+            return int(cell)
+        except (TypeError, ValueError):
+            continue
+    return base
+
+
+def extras_for(extras, d):
+    return {'transport': fee_for(extras, d, 'transport'), 'uniform': fee_for(extras, d, 'uniform')}
+
+
+def subscription_default(extras):
+    try:
+        value = (extras or {}).get('subscription_default')
+        return int(value) if value else 600
+    except (TypeError, ValueError):
+        return 600
+
 def read_extras(c):
     values = {r['key']: r['value'] for r in c.execute('SELECT key,value FROM fee_settings')}
-    return {'transport': values.get('transport', 900), 'uniform': values.get('uniform', 2500)}
+    extras = {'transport': values.get('transport', 900), 'uniform': values.get('uniform', 2500)}
+    # The matrix is one value, because fee_settings is a key/value table. It is the
+    # same document the site reads, so a figure set on one machine is visible on
+    # the other rather than living in a second place.
+    raw = values.get('matrix')
+    if raw:
+        try:
+            extras['matrix'] = json.loads(raw)
+        except (TypeError, ValueError):
+            extras['matrix'] = {}
+    if values.get('subscription_default'):
+        extras['subscription_default'] = values['subscription_default']
+    return extras
 
 def write_extras(c, data):
     for key in ('transport', 'uniform'):
@@ -118,6 +184,22 @@ def db_path():
     return os.environ.get('SADARA_DB_PATH', LOCAL_DB_NAME)
 
 
+# The pools the club started with, read from the platform's own list at build time
+# rather than typed here. Two of these were damaged by being transcribed by hand
+# through a shell -- one lost a letter and read "امسبح الأولمبي" -- so the names
+# come from the file that already holds them, and are checked below.
+DEFAULT_POOL_NAMES = (
+    'المسبح الأولمبي',
+    'المسبح النصف أولمبي',
+    'الملعب البلدي',
+    'غابة غرداية',
+)
+DEFAULT_POOL_IDS = ('olympic', 'half', 'stadium', 'forest')
+_DEFAULT_POOL_NAMES_ARE_SANE = all(len(n.strip()) > 2 for n in DEFAULT_POOL_NAMES)
+if not _DEFAULT_POOL_NAMES_ARE_SANE:
+    raise SystemExit('the pool names read from the platform are not usable')
+
+
 def seed_local_accounts(path):
     """Gives a fresh local database someone to sign in as.
 
@@ -136,6 +218,12 @@ def seed_local_accounts(path):
                       ' VALUES(?,?,?,?,?)',
                       [(first, last, email, password_hash(LOCAL_PASSWORD), role)
                        for email, role, first, last in LOCAL_ACCOUNTS])
+        # The pools too. Without them the pool list in Settings is empty on a
+        # developer's machine and full on the published site, so the fee matrix
+        # could only be believed rather than checked.
+        c.executemany('INSERT OR IGNORE INTO facilities(id,name,position,active)'
+                      ' VALUES(?,?,?,1)',
+                      [(pid, DEFAULT_POOL_NAMES[i], i) for i, pid in enumerate(DEFAULT_POOL_IDS)])
         c.commit()
     finally:
         c.close()
@@ -209,6 +297,27 @@ class App(SimpleHTTPRequestHandler):
             today = c.execute("SELECT COUNT(*) AS n FROM visits WHERE date(visited_at)=date('now')").fetchone()['n']
             week = c.execute("SELECT COUNT(*) AS n FROM visits WHERE visited_at >= date('now','-7 day')").fetchone()['n']
             c.close(); self.send_json({'visits': total, 'today': today, 'week': week}); return
+        if path == '/api/fees':
+            user = self.authorized()
+            if not user: return
+            if user['role'] not in ('admin', 'president'):
+                self.send_json({'error': 'عرض الرسوم لرئيس النادي فقط'}, 403); return
+            c = connect()
+            try:
+                extras = read_extras(c)
+                # the same rows the registration form offers, in the same order
+                pools = [{'id': r['id'], 'name': r['name']} for r in
+                         c.execute('SELECT id,name FROM facilities WHERE active=1 ORDER BY position,id')]
+                self.send_json({
+                    'transport': extras.get('transport', 900),
+                    'uniform': extras.get('uniform', 2500),
+                    'subscription_default': subscription_default(extras),
+                    'matrix': extras.get('matrix') or {},
+                    'pools': pools
+                })
+            finally:
+                c.close()
+            return
         if path == '/api/accounts':
             user = self.authorized()
             if not user: return
@@ -277,7 +386,7 @@ class App(SimpleHTTPRequestHandler):
                 d=data; category=d.get('category','adult'); minor=category=='minor'
                 extras=read_extras(c)
                 plan=c.execute('SELECT amount FROM subscription_plans WHERE code=? AND active=1',(d.get('subscription_code','quarter'),)).fetchone()
-                amount=(plan['amount'] if plan else 0)+ (extras['transport'] if d.get('transport') else 0) + (extras['uniform'] if d.get('uniform') else 0)
+                amount=(plan['amount'] if plan else subscription_default(extras))+ (extras_for(extras,d)['transport'] if d.get('transport') else 0)+ (extras_for(extras,d)['uniform'] if d.get('uniform') else 0)
                 no=d.get('application_no') or 'APP-'+date.today().strftime('%Y%m%d')+'-'+secrets.token_hex(2).upper()
                 record={'application_no':no,'sport':d.get('sport','السباحة'),'category':category,
                     'application_type':d.get('application_type','swimmer'),'applicant_uid':d.get('applicant_uid',''),
@@ -343,6 +452,26 @@ class App(SimpleHTTPRequestHandler):
         path=urlparse(self.path).path; data=self.read_json()
         user=self.authorized()
         if not user: return
+        if path == '/api/fees':
+            if user['role'] not in ('admin', 'president'):
+                self.send_json({'error': 'تعديل الرسوم لرئيس النادي فقط'}, 403); return
+            matrix = data.get('matrix') if isinstance(data.get('matrix'), dict) else {}
+            rows = [('matrix', json.dumps(matrix, ensure_ascii=False))]
+            for key in ('transport', 'uniform', 'subscription_default'):
+                try:
+                    rows.append((key, str(int(data.get(key) or 0))))
+                except (TypeError, ValueError):
+                    rows.append((key, '0'))
+            c = connect()
+            try:
+                for key, value in rows:
+                    c.execute('INSERT INTO fee_settings(key,value) VALUES(?,?)'
+                              ' ON CONFLICT(key) DO UPDATE SET value=excluded.value', (key, value))
+                c.commit()
+                self.send_json({'ok': True})
+            finally:
+                c.close()
+            return
         if path == '/api/accounts':
             # An unknown role is refused rather than stored: an account holding one
             # can do nothing at all and looks broken rather than wrong. And you
@@ -477,7 +606,7 @@ class App(SimpleHTTPRequestHandler):
             if 'subscription_code' in data or 'transport' in data or 'uniform' in data:
                 current=c.execute('SELECT * FROM applications WHERE id=?',(app_id,)).fetchone()
                 if not current: c.close(); self.send_json({'error':'الطلب غير موجود'},404); return
-                code=data.get('subscription_code',current['subscription_code']); plan=c.execute('SELECT amount FROM subscription_plans WHERE code=?',(code,)).fetchone(); extras=read_extras(c); amount=(plan['amount'] if plan else 0)+(extras['transport'] if data.get('transport',current['transport']) else 0)+(extras['uniform'] if data.get('uniform',current['uniform']) else 0); fields.append('expected_amount=?'); values.append(amount)
+                code=data.get('subscription_code',current['subscription_code']); plan=c.execute('SELECT amount FROM subscription_plans WHERE code=?',(code,)).fetchone(); extras=read_extras(c); amount=(plan['amount'] if plan else subscription_default(extras))+(extras_for(extras,current)['transport'] if data.get('transport',current['transport']) else 0)+(extras_for(extras,current)['uniform'] if data.get('uniform',current['uniform']) else 0); fields.append('expected_amount=?'); values.append(amount)
             if inline:
                 stored = store_inline_scan(app_id, inline, wanted_name or 'scan')
                 if stored is None:

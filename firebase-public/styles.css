@@ -477,4 +477,22 @@ body.printing .print-sheet10{display:block!important}
    refuse, so the page never asks for something it will not do. */
 .role-fixed { flex:0 1 190px; opacity:.75; font-weight:600; }
 
+/* ---------------------------------------------------------------------------
+   Fees. A grid, because the question is "for this category at this pool", which
+   a list of labelled inputs cannot show at a glance. It scrolls sideways on a
+   phone rather than shrinking the cells into unreadability.
+   ------------------------------------------------------------------------ */
+.fee-head { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:12px; }
+.fee-head label { display:flex; flex-direction:column; gap:4px; font-size:.85rem; }
+.fee-head input { width:130px; }
+.fee-scroll { overflow-x:auto; }
+.fee-table { width:100%; border-collapse:collapse; min-width:520px; }
+.fee-table th, .fee-table td { padding:6px 8px; text-align:center; vertical-align:top; }
+.fee-table thead th { border-bottom:2px solid rgba(127,127,127,.35); font-size:.85rem; }
+.fee-table tbody th { text-align:start; font-weight:600; white-space:nowrap; }
+.fee-table td { display:table-cell; }
+.fee-table td small { display:block; font-size:.72rem; opacity:.7; }
+.fee-amount { width:88px; text-align:center; }
+.fee-on { display:inline-flex; align-items:center; gap:4px; font-size:.8rem; }
+
 [hidden]{display:none!important}

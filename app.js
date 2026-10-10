@@ -81,7 +81,7 @@ async function boot(){
   save();render();
 }
 
-function fullRegisterModal(){return `<div class="modal-backdrop" role="dialog" aria-modal="true"><div class="modal registration-modal"><button class="close" data-action="close" aria-label="إغلاق">×</button><div class="modal-heading"><span class="logo">🏊</span><h2>استمارة التسجيل</h2><p>بطاقة المعلومات الرسمية لنادي الصدارة</p></div><div class="form-section-title">1. الاختيار الرياضي والاشتراك</div><label>الرياضة<select id="reg-sport"><option>السباحة</option><option>العدو الريفي</option><option>العدو السريع</option></select></label><label>الفئة<select id="reg-category"><option value="minor">أصاغر — بيانات الولي مطلوبة</option><option value="adult">أكابر — تسجيل مباشر</option></select></label><label>نمط السباحة<input id="reg-strokes" placeholder="حرة، ظهر، صدر، فراشة، متناوبة"></label><label>الاشتراك<select id="reg-plan"><option value="quarter">فصلي — 1000 دج</option><option value="season">موسمي — 3000 دج</option><option value="agreement">اتفاقية — 3000 دج</option></select></label><label>المسبح أو المنشأة<select id="reg-facility"><option>المسبح الأولمبي</option><option>المسبح النصف أولمبي</option><option>الملعب البلدي</option><option>غابة غرداية</option></select></label><label class="check-line"><input id="reg-transport" type="checkbox"> النقل — 900 دج</label><label class="check-line"><input id="reg-uniform" type="checkbox"> البدلة الرياضية — 2500 دج</label><label>طريقة الدفع<select id="reg-payment"><option value="cash">نقدًا</option><option value="postal_check">صك بريدي</option><option value="postal_transfer">حوالة بريدية</option></select></label><div class="form-section-title">2. معلومات الرياضي</div><div class="form-two"><label>الاسم بالعربية *<input id="reg-first-ar"></label><label>اللقب بالعربية *<input id="reg-last-ar"></label><label>الاسم بالفرنسية<input id="reg-first-fr"></label><label>اللقب بالفرنسية<input id="reg-last-fr"></label><label>رقم التعريف الوطني<input id="reg-nin"></label><label>رقم شهادة الميلاد<input id="reg-birth-cert"></label><label>بلدية الميلاد<input id="reg-birth-place"></label><label>الولاية<input id="reg-wilaya" placeholder="غرداية"></label></div><label>تاريخ الميلاد *<input id="reg-birth" type="date"></label><div class="form-two"><label>الجنس<select id="reg-gender"><option>ذكر</option><option>أنثى</option></select></label><label>فصيلة الدم<select id="reg-blood"><option>O+</option><option>O-</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option></select></label><label>المستوى الرياضي<select id="reg-level"><option>مبتدئ</option><option>متوسط</option><option>متقدم</option><option>نخبة</option></select></label><label>الهاتف *<input id="reg-phone" placeholder="05xx xx xx xx"></label></div><label>رقم واتساب<input id="reg-whatsapp"></label><label>العنوان *<input id="reg-address"></label><label>الصورة الشخصية<input id="reg-photo" type="file" accept="image/*"></label><div class="form-section-title">3. معلومات الولي والتصريح</div><div class="form-two"><label>اسم الولي<input id="reg-guardian-first"></label><label>لقب الولي<input id="reg-guardian-last"></label><label>صلة القرابة<input id="reg-guardian-relation" value="الأب"></label><label>هاتف الولي<input id="reg-guardian-phone"></label></div><label>رقم تعريف الولي<input id="reg-guardian-nin"></label><label class="check-line"><input id="reg-guardian-consent" type="checkbox"> أقر بصحة المعلومات وأوافق على ممارسة النشاط الرياضي</label><div class="official-docs"><a href="assets/registration-card.jpg" target="_blank">معاينة بطاقة التسجيل الرسمية</a><a href="assets/internal-regulations.jpg" target="_blank">معاينة النظام الداخلي</a></div><button class="btn btn-primary full" data-action="send-full-request">إرسال طلب التسجيل</button></div></div>`}
+function fullRegisterModal(){return `<div class="modal-backdrop" role="dialog" aria-modal="true"><div class="modal registration-modal"><button class="close" data-action="close" aria-label="إغلاق">×</button><div class="modal-heading"><span class="logo">🏊</span><h2>استمارة التسجيل</h2><p>بطاقة المعلومات الرسمية لنادي الصدارة</p></div><div class="form-section-title">1. الاختيار الرياضي والاشتراك</div><label>الرياضة<select id="reg-sport"><option>السباحة</option><option>العدو الريفي</option><option>العدو السريع</option></select></label><label>الفئة<select id="reg-category"><option value="minor">أصاغر — بيانات الولي مطلوبة</option><option value="adult">أكابر — تسجيل مباشر</option></select></label><label>الاشتراك<select id="reg-plan"><option value="quarter">فصلي — 1000 دج</option><option value="season">موسمي — 3000 دج</option><option value="agreement">اتفاقية — 3000 دج</option></select></label><label>المسبح أو المنشأة<select id="reg-facility"><option>المسبح الأولمبي</option><option>المسبح النصف أولمبي</option><option>الملعب البلدي</option><option>غابة غرداية</option></select></label><label class="check-line"><input id="reg-transport" type="checkbox"> النقل — 900 دج</label><label class="check-line"><input id="reg-uniform" type="checkbox"> البدلة الرياضية — 2500 دج</label><label>طريقة الدفع<select id="reg-payment"><option value="cash">نقدًا</option><option value="postal_check">صك بريدي</option><option value="postal_transfer">حوالة بريدية</option></select></label><div class="form-section-title">2. معلومات الرياضي</div><div class="form-two"><label>الاسم بالعربية *<input id="reg-first-ar"></label><label>اللقب بالعربية *<input id="reg-last-ar"></label><label>الاسم بالفرنسية<input id="reg-first-fr"></label><label>اللقب بالفرنسية<input id="reg-last-fr"></label><label>رقم التعريف الوطني<input id="reg-nin"></label><label>رقم شهادة الميلاد<input id="reg-birth-cert"></label><label>بلدية الميلاد<input id="reg-birth-place"></label><label>الولاية<input id="reg-wilaya" placeholder="غرداية"></label></div><label>تاريخ الميلاد *<input id="reg-birth" type="date"></label><div class="form-two"><label>الجنس<select id="reg-gender"><option>ذكر</option><option>أنثى</option></select></label><label>فصيلة الدم<select id="reg-blood"><option>O+</option><option>O-</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option></select></label><label>المستوى الرياضي<select id="reg-level"><option>مبتدئ</option><option>متوسط</option><option>متقدم</option><option>نخبة</option></select></label><label>الهاتف *<input id="reg-phone" placeholder="05xx xx xx xx"></label></div><label>رقم واتساب<input id="reg-whatsapp"></label><label>العنوان *<input id="reg-address"></label><label>الصورة الشخصية<input id="reg-photo" type="file" accept="image/*"></label><div class="form-section-title">3. معلومات الولي والتصريح</div><div class="form-two"><label>اسم الولي<input id="reg-guardian-first"></label><label>لقب الولي<input id="reg-guardian-last"></label><label>صلة القرابة<input id="reg-guardian-relation" value="الأب"></label><label>هاتف الولي<input id="reg-guardian-phone"></label></div><label>رقم تعريف الولي<input id="reg-guardian-nin"></label><label class="check-line"><input id="reg-guardian-consent" type="checkbox"> أقر بصحة المعلومات وأوافق على ممارسة النشاط الرياضي</label><div class="official-docs"><a href="assets/registration-card.jpg" target="_blank">معاينة بطاقة التسجيل الرسمية</a><a href="assets/internal-regulations.jpg" target="_blank">معاينة النظام الداخلي</a></div><button class="btn btn-primary full" data-action="send-full-request">إرسال طلب التسجيل</button></div></div>`}
 function coachRegisterModal() {
   const reqs = state.coachRequirements || [];
   return `<div class="modal-backdrop" role="dialog" aria-modal="true"><div class="modal registration-modal"><button class="close" data-action="close" aria-label="إغلاق">×</button><div class="modal-heading"><span class="logo">🏊</span><h2>تسجيل مدرب</h2><p>يرسل الطلب إلى رئيس النادي للمراجعة والموافقة أو الرفض.</p></div><div class="form-section-title">معلومات المدرب والحساب الآمن</div><div class="form-two"><label>الاسم واللقب *<input id="coach-name" required></label><label>البريد الإلكتروني *<input id="coach-email" type="email" required></label><label>رقم الهاتف *<input id="coach-phone" type="tel" required></label><label>كلمة مرور الحساب *<input id="coach-password" type="password" minlength="6" required></label><label>سنوات الخبرة<input id="coach-experience" type="number" min="0"></label></div><label>التخصص والشهادة<input id="coach-specialty" placeholder="مدرب سباحة، منقذ، ..."></label><label>ملاحظات إضافية<textarea id="coach-notes" rows="3"></textarea></label><div class="form-section-title">الوثائق المطلوبة</div><p class="page-description">يرجى جمع الوثائق التالية في ملف PDF واحد، ثم رفعه. الحد الأقصى 10 ميغابايت.</p><ul class="coach-requirements">${reqs.map(r=>`<li>${r.required!==false?'* ':''}${esc(r.label)}</li>`).join('')}</ul><label>ملف الوثائق PDF *<input id="coach-pdf" type="file" accept="application/pdf" required></label><button class="btn btn-primary full" data-action="send-coach-request">إنشاء الحساب وإرسال الطلب</button></div></div>`;
@@ -161,7 +161,7 @@ action = async function(a,el){
   if(a==='reject-app'){const reason=prompt('سبب رفض الطلب:','الوثائق ناقصة');if(reason===null)return;await fetch('/api/applications/'+el.dataset.id,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({status:'rejected',decision_reason:reason})});await syncApi();render();return}
   if(a==='register'){document.querySelector('.modal-backdrop')?.remove();document.body.insertAdjacentHTML('beforeend',fullRegisterModal());bind();setupRegistrationMode();return}
   if(a==='send-full-request'){
-    const payload={sport:$('#reg-sport').value,category:$('#reg-category').value,swimming_strokes:$('#reg-strokes').value,subscription_code:$('#reg-plan').value,facility:$('#reg-facility').value,transport:$('#reg-transport').checked,uniform:$('#reg-uniform').checked,payment_method:$('#reg-payment').value,first_name_ar:$('#reg-first-ar').value,last_name_ar:$('#reg-last-ar').value,first_name_fr:$('#reg-first-fr').value,last_name_fr:$('#reg-last-fr').value,national_id:$('#reg-nin').value,birth_certificate_no:$('#reg-birth-cert').value,birth_place:$('#reg-birth-place').value,wilaya:$('#reg-wilaya').value,birth_date:$('#reg-birth').value,gender:$('#reg-gender').value,blood_group:$('#reg-blood').value,level:$('#reg-level').value,phone:$('#reg-phone').value,whatsapp:$('#reg-whatsapp').value,address:$('#reg-address').value,guardian_first_name:$('#reg-guardian-first').value,guardian_last_name:$('#reg-guardian-last').value,guardian_relation:$('#reg-guardian-relation').value,guardian_phone:$('#reg-guardian-phone').value,guardian_national_id:$('#reg-guardian-nin').value,guardian_consent:$('#reg-guardian-consent').checked};
+    const payload={sport:$('#reg-sport').value,category:$('#reg-category').value,swimming_strokes:($('#reg-strokes')||{value:''}).value,subscription_code:$('#reg-plan').value,facility:$('#reg-facility').value,transport:$('#reg-transport').checked,uniform:$('#reg-uniform').checked,payment_method:$('#reg-payment').value,first_name_ar:$('#reg-first-ar').value,last_name_ar:$('#reg-last-ar').value,first_name_fr:$('#reg-first-fr').value,last_name_fr:$('#reg-last-fr').value,national_id:$('#reg-nin').value,birth_certificate_no:$('#reg-birth-cert').value,birth_place:$('#reg-birth-place').value,wilaya:$('#reg-wilaya').value,birth_date:$('#reg-birth').value,gender:$('#reg-gender').value,blood_group:$('#reg-blood').value,level:$('#reg-level').value,phone:$('#reg-phone').value,whatsapp:$('#reg-whatsapp').value,address:$('#reg-address').value,guardian_first_name:$('#reg-guardian-first').value,guardian_last_name:$('#reg-guardian-last').value,guardian_relation:$('#reg-guardian-relation').value,guardian_phone:$('#reg-guardian-phone').value,guardian_national_id:$('#reg-guardian-nin').value,guardian_consent:$('#reg-guardian-consent').checked};
     if(!payload.first_name_ar||!payload.last_name_ar||!payload.birth_date||!payload.phone||!payload.address){alert('يرجى إكمال الحقول الإلزامية');return}
     const res=await fetch('/api/applications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await res.json();if(!res.ok){alert(data.error||'تعذر إرسال الطلب');return}alert('تم إرسال الطلب رقم '+data.application_no+' والمبلغ المتوقع '+data.expected_amount+' دج');document.querySelector('.modal-backdrop')?.remove();return
   }
@@ -1749,7 +1749,6 @@ const FORM_SPOTS = [
   { id: 'address',            y: 104.65, x0: 62.3, colon: 178.3 },
   { id: 'blood_group',        y: 114.45, x0: 62.1,  colon: 178.3 },
   { id: 'phone',              y: 124.25, x0: 62.3,  colon: 178.3 },
-  { id: 'medical_person',     y: 148.57, x0: 60.2,  colon: 151.7 },
   { id: 'parent_name',        y: 208.78, x0: 105.7, colon: 152.9 },
   { id: 'parent_birth',       y: 208.78, x0: 32.9,  colon: 71.9 },
   { id: 'parent_last_name',   y: 208.78, x0: 4.2,   colon: 31.5 },
@@ -1787,7 +1786,12 @@ function formValues(a){
     address: v('address'),
     blood_group: v('blood_group'),
     phone: v('phone'),
-    medical_person: (v('first_name_ar') + ' ' + v('last_name_ar')).trim(),
+    /* There is no doctor value. It used to be the swimmer's own name, written
+       into the line reserved for the doctor who certifies them, and on a document
+       the club keeps that is the wrong name in the wrong place. The scan has no
+       line wide enough for a doctor, a signature and a place of issue, so there
+       is nothing to print; the club fills that part in by hand. */
+    medical_person: '',
     /* The declaration reads "أنا الولي ... السيد(ة) ___ المولود(ة) بتاريخ ___ بن ___",
        so the given name and the surname are separate blanks, exactly as the
        identity block at the top separates الإسم from اللقب. Nationality has no
@@ -2433,10 +2437,12 @@ function packetDocument(app, what) {
   const only = what || 'all';
   const pages = [];
   if (only === 'all' || only === 'form') pages.push(overlaySheet(app));
-  if (only === 'all' || only === 'receipt') pages.push(receiptSheet(app));
+  /* The club's own rules go straight after the form, then the money: the packet
+     was form, receipt, regulations, which put the rules on the third page. */
   if (only === 'all' || only === 'regs') pages.push(regulationsSheet());
+  if (only === 'all' || only === 'receipt') pages.push(receiptSheet(app));
   const label = only === 'all'
-    ? '\u0627\u0644\u0627\u0633\u062a\u0645\u0627\u0631\u0629 \u0627\u0644\u0631\u0633\u0645\u064a\u0629\u060c \u0648\u0635\u0644 \u0627\u0633\u062a\u0644\u0627\u0645 \u0627\u0644\u0645\u0633\u062a\u062d\u0642\u0627\u062a\u060c \u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u062f\u0627\u062e\u0644\u064a.'
+    ? '\u0627\u0644\u0627\u0633\u062a\u0645\u0627\u0631\u0629 \u0627\u0644\u0631\u0633\u0645\u064a\u0629\u060c \u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u062f\u0627\u062e\u0644\u064a\u060c \u0648\u0635\u0644 \u0627\u0633\u062a\u0644\u0627\u0645 \u0627\u0644\u0645\u0633\u062a\u062d\u0642\u0627\u062a.'
     : only === 'receipt' ? '\u0648\u0635\u0644 \u0627\u0633\u062a\u0644\u0627\u0645 \u0627\u0644\u0645\u0633\u062a\u062d\u0642\u0627\u062a.'
       : only === 'regs' ? '\u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u062f\u0627\u062e\u0644\u064a.'
         : '\u0627\u0644\u0627\u0633\u062a\u0645\u0627\u0631\u0629 \u0627\u0644\u0631\u0633\u0645\u064a\u0629.';
@@ -3550,6 +3556,161 @@ boot = async function () {
   boot = async function () {
     await coreBootAccounts();
     if (state.user && ['admin', 'president'].indexOf(state.user.role) !== -1) await loadAccounts();
+  };
+})();
+
+/* ============================================================================
+   رسوم النقل والبدلة — part-z.js
+
+   Transport and uniform were one price each for everybody. The club asked for
+   them to follow what is actually available: a pool without a changing room does
+   not charge for a uniform, and a junior group is not charged the senior rate.
+
+   So the manager sets, for each pool and each category, whether transport and
+   uniform are on offer and at what price. A blank cell falls back to the single
+   price that was always there, so a database nobody has touched keeps behaving
+   exactly as it did.
+
+   The subscription default sits at the top of the panel: 600, held in the
+   database and changed here. The three real plans are untouched.
+
+   The figures shown are the ones the server will charge, because they are read
+   back from it after saving rather than from what was typed -- a total the club
+   can see has to be the total the club will get.
+   ========================================================================= */
+(function () {
+  'use strict';
+
+  const CATS = [['minor', 'أصاغر'], ['adult', 'أكابر']];
+  const SERVICES = [['transport', 'النقل'], ['uniform', 'البدلة الرياضية']];
+  const cell = (row, cat, key) => {
+    const c = row && row[cat] && row[cat][key];
+    if (c && typeof c === 'object') return c;
+    return null;
+  };
+  const number = v => (v === '' || v === undefined || v === null) ? '' : String(v);
+
+  const panel = () => {
+    const f = state.fees;
+    if (!f || typeof f !== 'object') return '';
+    const pools = [{ id: '*', name: 'كل المسابح (افتراضي)' }].concat(f.pools || []);
+    const rows = pools.map(pool => '<tr data-pool="' + esc(pool.id) + '">'
+      + '<th>' + esc(pool.name) + '</th>'
+      + CATS.map(cat => SERVICES.map(key => {
+        const c = cell(f.matrix && f.matrix[pool.id], cat[0], key[0]);
+        const on = c ? c.available !== false : true;
+        const amt = c ? c.amount : (key[0] === 'transport' ? f.transport : f.uniform);
+        return '<td><label class="fee-on">'
+          + '<input type="checkbox" data-fee="on" data-pool="' + esc(pool.id)
+          + '" data-cat="' + cat[0] + '" data-key="' + key[0] + '"' + (on ? ' checked' : '') + '>'
+          + '</label>'
+          + '<input type="number" min="0" step="50" class="fee-amount" data-fee="amount" data-pool="'
+          + esc(pool.id) + '" data-cat="' + cat[0] + '" data-key="' + key[0]
+          + '" value="' + esc(number(amt)) + '"' + (on ? '' : ' disabled') + '>'
+          + '<small>' + esc(key[1]) + '</small></td>';
+      }).join('')).join('')
+      + '</tr>').join('');
+
+    return '<section class="panel settings" id="fees-panel">'
+      + '<div class="panel-head"><div>'
+      + '<h3>رسوم النقل والبدلة الرياضية</h3>'
+      + '<p>لكل صنف ولكل مسبح. الخانة الفارغة تأخذ القيمة العامة أعلاه.</p>'
+      + '</div></div>'
+      + '<div class="fee-head">'
+      + '<label>اشتراك النادي الافتراضي (دج)'
+      + '<input type="number" min="0" step="50" id="fee-subscription" value="'
+      + esc(number(f.subscription_default)) + '"></label>'
+      + '<label>النقل — سعر عام (دج)'
+      + '<input type="number" min="0" step="50" id="fee-transport" value="'
+      + esc(number(f.transport)) + '"></label>'
+      + '<label>البدلة — سعر عام (دج)'
+      + '<input type="number" min="0" step="50" id="fee-uniform" value="'
+      + esc(number(f.uniform)) + '"></label>'
+      + '<button class="btn btn-primary" data-action="save-fees">حفظ الرسوم</button>'
+      + '</div>'
+      + '<div class="fee-scroll"><table class="fee-table">'
+      + '<thead><tr><th>المسبح</th>'
+      + CATS.map(c => '<th colspan="2">' + esc(c[1]) + '</th>').join('')
+      + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+      + '</section>';
+  };
+
+  const coreSettingsFees = pageSettings;
+  pageSettings = function () {
+    return coreSettingsFees() + panel();
+  };
+
+  async function loadFees() {
+    try {
+      const res = await fetch('/api/fees', { credentials: 'same-origin' });
+      state.fees = await res.json().catch(() => null);
+      await refreshOffered();
+    } catch (_) { state.fees = null; }
+  }
+
+  /* What the club offers at this pool for this category, so the registration
+     form hides a checkbox rather than charging for a service that is not there. */
+  async function refreshOffered() {
+    try {
+      const q = 'category=' + encodeURIComponent(val('#reg-category') || 'adult')
+        + '&facility=' + encodeURIComponent(val('#reg-facility') || '');
+      const res = await fetch('/api/subscription-plans?' + q);
+      const data = await res.json().catch(() => null);
+      if (!data) return;
+      if (data.extras) state.extras = Object.assign({}, state.extras, data.extras);
+      const on = data.offered || { transport: true, uniform: true };
+      [['#reg-transport', on.transport], ['#reg-uniform', on.uniform]].forEach(pair => {
+        const box = $(pair[0]);
+        if (!box) return;
+        const line = box.closest('.check-line') || box.parentNode;
+        if (line) line.hidden = !pair[1];
+        if (!pair[1]) box.checked = false;
+      });
+    } catch (_) { /* the built-in list stands */ }
+  }
+
+  const coreSyncFees = syncApi;
+  syncApi = async function () {
+    await coreSyncFees();
+    if (state.user && ['admin', 'president'].indexOf(state.user.role) !== -1) await loadFees();
+  };
+
+  const coreActionFees = action;
+  action = async function (a, el) {
+    if(a!=='save-fees'){return coreActionFees(a, el);}
+
+    const matrix = {};
+    document.querySelectorAll('#fees-panel [data-fee="amount"]').forEach(box => {
+      const pool = box.dataset.pool, cat = box.dataset.cat, key = box.dataset.key;
+      const on = document.querySelector('[data-fee="on"][data-pool="' + pool
+        + '"][data-cat="' + cat + '"][data-key="' + key + '"]');
+      if (!matrix[pool]) matrix[pool] = {};
+      if (!matrix[pool][cat]) matrix[pool][cat] = {};
+      matrix[pool][cat][key] = {
+        available: !!(on && on.checked),
+        amount: Number(box.value) || 0
+      };
+    });
+    const body = {
+      transport: Number(($('#fee-transport') || {}).value) || 0,
+      uniform: Number(($('#fee-uniform') || {}).value) || 0,
+      subscription_default: Number(($('#fee-subscription') || {}).value) || 0,
+      matrix: matrix
+    };
+    const res = await api('/api/fees', 'PUT', body);
+    if (!res || res.error) { showToast((res && res.error) || 'تعذّر حفظ الرسوم.', 'error'); return; }
+    /* Read back what the server now holds, not what was typed. The club has to
+       see the figures that will actually be charged. */
+    await loadFees();
+    save();
+    render();
+    showToast('حُفظت الرسوم. صارت تسري على كل استمارة جديدة.');
+  };
+
+  const coreBootFees = boot;
+  boot = async function () {
+    await coreBootFees();
+    if (state.user && ['admin', 'president'].indexOf(state.user.role) !== -1) await loadFees();
   };
 })();
 
