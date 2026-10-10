@@ -276,7 +276,12 @@
         const uid = String(body.id || '');
         const role = String(body.role || '');
         if (!uid) return jsonResponse({ error: 'معرّف الحساب مطلوب' }, 400);
-        if (!ROLES.indexOf(role)) {
+        /* indexOf returns -1 when the role is unknown, so this must be compared
+           to -1. Written as `!ROLES.indexOf(role)` it is false for -1, which is
+           the one case the check exists for, and every unknown role is accepted.
+           The local server uses `role not in ROLES`, which is right; the two have
+           to say the same thing. */
+        if (ROLES.indexOf(role) === -1) {
           /* Written anyway it would be an account that can do nothing, and the
              interface would show it as broken rather than wrong. */
           return jsonResponse({ error: 'سلمي غير معروف: ' + role }, 400);
@@ -437,7 +442,7 @@
           const src = (await db.collection('applications').doc(no).get()).data() || {};
           if (src.application_type !== 'coach') {
             await db.collection('swimmers').doc(no).set({
-              membership_no: src.membership_no || no.slice(-8),
+              membership_no: src.membership_no || no,
               name: [src.first_name_ar, src.last_name_ar].filter(Boolean).join(' '),
               first_name_ar: src.first_name_ar || '', last_name_ar: src.last_name_ar || '',
               birth_date: src.birth_date || '', phone: src.phone || '',

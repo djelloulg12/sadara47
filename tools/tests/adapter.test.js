@@ -14,7 +14,11 @@ const DATA = {
   swimmers: { 'SDR-A1': { membership_no: 'SDR-A1', name: 'أمين', group_name: 'المبتدئون', phone: '0661', status: 'active' } },
   notices: { n1: { title: 'إعلان', body: 'نص', kind: 'تذكير' } },
   schedules: { s1: { day_name: 'السبت', time_range: '16:00', group_name: 'المبتدئون', coach: 'سليم' } },
-  attendance: {}, cards: {}, applications: {}, coach_requirements: {}
+  attendance: {}, cards: {}, applications: {}, coach_requirements: {},
+  /* Present and empty: every signed-in read of the owner list needs the document
+     to exist, and a mock that named everybody an owner would pass every check
+     for the wrong reason. payments is written to when a request is settled. */
+  config: { owners: { emails: [] } }, payments: {}, audit_logs: {}
 };
 
 function makeFirestore() {
@@ -189,6 +193,96 @@ test('coach file path is stored on the application', async () => {
   const stored = DATA.applications[r.data.application_no];
   if (!stored || stored.application_type !== 'coach' || !stored.documents) errors.push('coach application fields missing');
 });
+
+
+test('a manager can give an account a role', async () => {
+  const w = boot(asUser('u1'));
+  /* The rules already allowed this; nothing reached them. */
+  const list = await call(w, '/api/accounts');
+  if (!list.ok || !list.data.length) {
+    errors.push('a manager cannot read the accounts: ' + JSON.stringify(list.data).slice(0, 120));
+    return;
+  }
+  if (!list.data.every(a => 'id' in a && 'role' in a)) {
+    errors.push('an account is listed without an id or a role: ' + JSON.stringify(list.data[0]));
+  }
+
+  const other = list.data.find(a => a.id !== 'u1');
+  if (!other) { errors.push('the fixture has no second account to change'); return; }
+
+  const changed = await call(w, '/api/accounts', 'PUT', { id: other.id, role: 'coach' });
+  if (!changed.ok) errors.push('a manager could not change a role: ' + JSON.stringify(changed.data).slice(0, 120));
+  const again = await call(w, '/api/accounts');
+  const now = again.data.find(a => a.id === other.id);
+  if (!now || now.role !== 'coach') errors.push('the new role did not stick: ' + JSON.stringify(now));
+
+  /* An account holding a role the platform does not know can do nothing at all,
+     and would look broken rather than wrong. */
+  const bogus = await call(w, '/api/accounts', 'PUT', { id: other.id, role: 'wizard' });
+  if (bogus.ok) errors.push('an unknown role was accepted');
+
+  /* You may change anyone else's role, not your own: there is no second manager
+     here to undo it, and the club would be locked out. */
+  const own = await call(w, '/api/accounts', 'PUT', { id: 'u1', role: 'member' });
+  if (own.ok) errors.push('a manager was able to demote themselves');
+});
+
+test('a member cannot read or change the accounts', async () => {
+  const w = boot(asUser('u3'));
+  const list = await call(w, '/api/accounts');
+  if (list.ok) errors.push('an ordinary member can read every account');
+  const changed = await call(w, '/api/accounts', 'PUT', { id: 'u1', role: 'member' });
+  if (changed.ok) errors.push('an ordinary member can change a role');
+});
+
+test('accepting a request produces a swimmer', async () => {
+  const w = boot(asUser('u1'));
+  const sent = await call(w, '/api/applications', 'POST', {
+    application_no: 'APP-SWIM-1', category: 'minor', first_name_ar: '\u0645\u0631\u064a\u0645',
+    last_name_ar: '\u0627\u0644\u0628\u0644\u0639\u064a\u062f', birth_date: '2013-09-14',
+    phone: '0661000001', address: '\u062d\u064a \u0627\u0644\u062b\u0646\u064a\u0629',
+    subscription_code: 'quarter', level: '\u0645\u0628\u062a\u062f\u0626',
+    guardian_first_name: '\u0643\u0631\u064a\u0645', guardian_last_name: '\u0627\u0644\u0628\u0644\u0639\u064a\u062f',
+    guardian_consent: true
+  });
+  if (sent.status !== 201) { errors.push('the fixture request was refused: ' + JSON.stringify(sent.data).slice(0, 120)); return; }
+
+  const before = (await call(w, '/api/swimmers')).data.length;
+  const approved = await call(w, '/api/applications/APP-SWIM-1', 'PATCH', { status: 'approved' });
+  if (!approved.ok) { errors.push('a request could not be accepted: ' + JSON.stringify(approved.data).slice(0, 120)); return; }
+
+  /* Accepting used to change the status and stop, so nobody became a swimmer and
+     the club added them again by hand. */
+  const after = (await call(w, '/api/swimmers')).data;
+  if (after.length !== before + 1) {
+    errors.push('accepting did not produce a swimmer: ' + before + ' -> ' + after.length);
+    return;
+  }
+  const made = after.find(x => x.membership_no === 'APP-SWIM-1');
+  if (!made) {
+    errors.push('the swimmer was created under a name of its own, so accepting twice makes two people');
+  } else if (!/\u0645\u0631\u064a\u0645/.test(made.name || '')) {
+    errors.push('the swimmer has no name: ' + JSON.stringify(made));
+  }
+
+  /* Keyed by the application number, so approving again is one person. */
+  await call(w, '/api/applications/APP-SWIM-1', 'PATCH', { status: 'approved' });
+  const again = (await call(w, '/api/swimmers')).data.length;
+  if (again !== after.length) errors.push('accepting twice produced a second swimmer: ' + after.length + ' -> ' + again);
+});
+
+test('accepting a coach request does not create a swimmer', async () => {
+  const w = boot(asUser('u1'));
+  await call(w, '/api/applications', 'POST', {
+    application_no: 'COACH-1', application_type: 'coach', coach_name: 'SLIM',
+    coach_phone: '06', coach_specialty: 'S', coach_experience: '6', applicant_uid: 'u2'
+  });
+  const before = (await call(w, '/api/swimmers')).data.length;
+  await call(w, '/api/applications/COACH-1', 'PATCH', { status: 'approved' });
+  const after = (await call(w, '/api/swimmers')).data.length;
+  if (after !== before) errors.push('a coach request produced a swimmer: ' + before + ' -> ' + after);
+});
+
 
 (async () => {
   let failed = 0;
