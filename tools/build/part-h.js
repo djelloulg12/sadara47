@@ -1,3 +1,53 @@
+/* What the person has typed into the registration form, as a record the printed
+   sheet can read. The same fields the submit posts, so the two cannot disagree. */
+function registrationRecordFromForm() {
+  const value = sel => { const n = $(sel); return n ? (n.type === 'checkbox' ? n.checked : n.value) : ''; };
+  const record = {
+    sport: value('#reg-sport'), category: value('#reg-category'),
+    swimming_strokes: value('#reg-strokes'), subscription_code: value('#reg-plan'),
+    facility: value('#reg-facility'), transport: value('#reg-transport'),
+    uniform: value('#reg-uniform'), payment_method: value('#reg-payment'),
+    first_name_ar: value('#reg-first-ar'), last_name_ar: value('#reg-last-ar'),
+    first_name_fr: value('#reg-first-fr'), last_name_fr: value('#reg-last-fr'),
+    national_id: value('#reg-nin'), birth_certificate_no: value('#reg-birth-cert'),
+    birth_place: value('#reg-birth-place'), wilaya: value('#reg-wilaya'),
+    birth_date: value('#reg-birth'), gender: value('#reg-gender'),
+    blood_group: value('#reg-blood'), level: value('#reg-level'),
+    phone: value('#reg-phone'), whatsapp: value('#reg-whatsapp'),
+    address: value('#reg-address'),
+    guardian_first_name: value('#reg-guardian-first'),
+    guardian_last_name: value('#reg-guardian-last'),
+    guardian_relation: value('#reg-guardian-relation'),
+    guardian_phone: value('#reg-guardian-phone'),
+    guardian_national_id: value('#reg-guardian-nin')
+  };
+  /* An adult has no guardian block on the page. Leaving the keys out keeps the
+     guardian's fields off their form, which is what is printed for a minor who
+     fills them in. */
+  if (record.category !== 'minor') {
+    delete record.guardian_first_name; delete record.guardian_last_name;
+    delete record.guardian_relation; delete record.guardian_phone;
+    delete record.guardian_national_id;
+  }
+  return record;
+}
+
+/* ---------------------- نافذة الطباعة ---------------------- */
+/* A window to print into, or null when the browser refused one.
+
+   window.open with 'noopener' returns null by definition -- that is what
+   noopener means -- so asking for isolation in the feature string and then
+   writing into the result could never work. Every print did exactly that, so the
+   guard always fired, the sheet was never written, and the person got an empty
+   tab and a message blaming popups they had allowed. The opener is cleared
+   afterwards instead: same isolation, and the handle survives. */
+function printWindow(features) {
+  const w = window.open('', '_blank', features || '');
+  if (!w) return null;
+  try { w.opener = null; } catch (_) { /* already severed */ }
+  return w;
+}
+
 /* ---------------------- ربط وثائق النادي ---------------------- */function coachAccounts(){return (state.cards||[]).filter(c=>c.role==='coach'||c.kind==='coach');}function luxPreviewBox(items,kind){
   if(!items.length) return '<div class="panel empty-cell">لا توجد بيانات.</div>';
   return '<div class="lux-preview">'+items.slice(0,4).map(p=>luxuryCard(p,kind)).join('')+'</div>';

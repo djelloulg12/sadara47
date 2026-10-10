@@ -1,79 +1,21 @@
-# sadara47 — منصة النادي الرياضي الصدارة
-#
-# The platform is a static site with its data in Firestore. That is not a
-# simplification, it is the architecture: firebase-adapter.js answers every /api/*
-# call from Firebase Auth and Firestore as soon as the page is not on localhost,
-# so the folder published below is the whole application.
-#
-# An earlier blueprint here declared a Docker web service running server.py. That
-# would have been a second, parallel platform rather than this one:
-#
-#   * server.py has its own /api/login and its own SQLite accounts, and knows
-#     nothing about Firebase -- so kabrag12@gmail.com would not exist there, and
-#     none of the Firestore security rules would apply
-#   * the club's data lives in thirteen Firestore collections, seeded through the
-#     admin API. A fresh SQLite file contains none of it
-#   * a SQLite file on Render is wiped on every deploy and every restart, because
-#     the filesystem is ephemeral. "A complete database" would have been an empty
-#     one, most of the time
-#
-# Rendering the site statically keeps the database that already holds everything,
-# keeps the rules that protect it, and costs nothing.
-#
-# Deploy: push this file, then in Render choose New -> Blueprint and point it at
-# the repository. One click, no environment variables.
-staticSites:
-  - name: sadara-platform
-    # Already built: firebase-public is what Firebase serves and what every test
-    # loads, so there is nothing to compile here. Building it again on Render
-    # would publish something the tests had never seen.
-    buildCommand: ""
-    publishPath: ./firebase-public
+services:
+  - type: web
+    name: sadara-swimming-platform
+    runtime: docker
+    plan: free
+    healthCheckPath: /
     autoDeployTrigger: commit
-    # Sign-in is refused by Firebase on a domain it does not know. Add this
-    # site's hostname as soon as Render gives it one:
-    #
-    #   python tools/set-auth-domains.py add <the hostname>.onrender.com
-    #
-    # Until then the public pages work and only the sign-in button fails.
-    headers:
-      # The code must not be cached, or a fix looks like it did not take.
-      - path: /app.js
-        name: Cache-Control
-        value: no-cache
-      - path: /styles.css
-        name: Cache-Control
-        value: no-cache
-      - path: /firebase-adapter.js
-        name: Cache-Control
-        value: no-cache
-      - path: /firebase-config.js
-        name: Cache-Control
-        value: no-cache
-      # The service worker decides for itself, and must be allowed to rule the
-      # whole origin.
-      - path: /sw.js
-        name: Cache-Control
-        value: no-cache, no-store, must-revalidate
-      - path: /sw.js
-        name: Service-Worker-Allowed
-        value: /
-      - path: /index.html
-        name: Cache-Control
-        value: no-cache
-      - path: /istimara/
-        name: Cache-Control
-        value: no-cache
-      - path: /istimara/index.html
-        name: Cache-Control
-        value: no-cache
-      # The scans are large and never change.
-      - path: /assets/*
-        name: Cache-Control
-        value: public, max-age=604800
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
-      - path: /*
-        name: Referrer-Policy
-        value: strict-origin-when-cross-origin
+    envVars:
+      - key: SADARA_ADMIN_EMAIL
+        sync: false
+      - key: SADARA_ADMIN_PASSWORD
+        sync: false
+      - key: SADARA_PRESIDENT_EMAIL
+        sync: false
+      - key: SADARA_PRESIDENT_PASSWORD
+        sync: false
+      - key: SADARA_COACH_EMAIL
+        sync: false
+      - key: SADARA_COACH_PASSWORD
+        sync: false
+

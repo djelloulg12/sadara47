@@ -192,7 +192,7 @@ function packetDocument(app, what) {
 }
 function printPacket(app, what) {
   const doc = packetDocument(app, what);
-  const win = window.open('', '_blank', 'noopener,noreferrer');
+  const win = printWindow();
   if (!win) { showToast('اسمح بالنوافذ المنبثقة لطباعة الحزمة.', 'error'); return false; }
   try {
     win.document.open();

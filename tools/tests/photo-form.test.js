@@ -235,6 +235,56 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
   cleanup(w);
 }
 
+/* ---- printing must actually print ---- */
+{
+  const APP = fs.readFileSync(path.join(PUBLIC, 'app.js'), 'utf8');
+
+  /* A window opened with noopener returns null, whatever the browser then does
+     with the tab. Writing into its result could never have worked. */
+  for (const m of APP.matchAll(/window\.open\('',\s*'_blank'[^)]*\)/g)) {
+    if (/noopener/.test(m[0])) {
+      errors.push('[print] opens a window it can never write into: ' + m[0]);
+    }
+  }
+  /* It has to be written into from somewhere, though: a window opened and left
+     empty is the other half of the same defect. */
+  if (!/function printWindow\(/.test(APP)) {
+    errors.push('[print] there is no printWindow helper to open a writable window');
+  }
+
+  /* The printed sheet reads a record. An empty one renders a blank form and
+     reports nothing wrong. */
+  const route = /if\(a==='print-registration-form'\)\{([^\n]*)\}/.exec(APP);
+  if (!route) {
+    errors.push('[print] the registration form has no print route at all');
+  } else {
+    if (/printOfficialForms\(\[\{\}\]\)/.test(route[1])) {
+      errors.push('[print] the registration form prints an empty record, so the sheet comes out blank');
+    }
+    if (!/registrationRecordFromForm\(\)/.test(route[1])) {
+      errors.push('[print] the registration form does not read what the person typed');
+    }
+  }
+
+  /* And the record has to come from the form, not be invented. */
+  const build = /function registrationRecordFromForm\([\s\S]*?\n\}/.exec(APP);
+  if (!build) {
+    errors.push('[print] registrationRecordFromForm is missing');
+  } else {
+    for (const field of ['#reg-first-ar', '#reg-last-ar', '#reg-birth', '#reg-phone',
+                         '#reg-address', '#reg-nin', '#reg-blood']) {
+      if (build[0].indexOf(field) === -1) {
+        errors.push('[print] the printed record never reads ' + field);
+      }
+    }
+    /* An adult has no guardian block, so those keys must be left out rather
+       than printed blank. */
+    if (!/category !== 'minor'/.test(build[0])) {
+      errors.push('[print] a guardian field could reach an adult\'s form');
+    }
+  }
+}
+
 /* ---- the photo must reach the database, not only this device ---- */
 {
   const APP = fs.readFileSync(path.join(PUBLIC, 'app.js'), 'utf8');

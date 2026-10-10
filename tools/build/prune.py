@@ -77,9 +77,9 @@ function pageTitle(p){ return '\\u0646\\u0638\\u0631\\u0629 \\u0639\\u0627\\u064
 # the two retired form generators both fold into the official overlay sheet
 FORM_ROUTES = [
     ("if(a==='print-registration-form'){printRegistrationForm();return}",
-     "if(a==='print-registration-form'){printOfficialForms([{}]);return}"),
+     "if(a==='print-registration-form'){printOfficialForms([registrationRecordFromForm()]);return}"),
     ("if(a==='print-registration'){printRegistrationFormA4();return}",
-     "if(a==='print-registration'){printOfficialForms([{}]);return}"),
+     "if(a==='print-registration'){printOfficialForms([registrationRecordFromForm()]);return}"),
 ]
 
 

@@ -59,7 +59,7 @@ function printOfficialForms(list){
     + '<div class="f-hint"><b>جاهزة للطباعة:</b> استعمل Ctrl+P ثم اختر <b>حفظ بصيغة PDF</b> للحصول على نسخة مطابقة تمامًا. خلف كل صفحة صورة الاستمارة الرسمية، وكل حقل مملوء فوق سطره.</div>'
     + pages
     + '</body></html>';
-  const w = window.open('', '_blank', 'noopener,noreferrer');
+  const w = printWindow();
   if (!w) { showToast('اسمح بالنوافذ المنبثقة لطباعة الاستمارة.', 'error'); return; }
   w.document.open();
   w.document.write(doc);

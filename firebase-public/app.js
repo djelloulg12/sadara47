@@ -268,7 +268,7 @@ state.user=data.user;state.page='home';save();document.querySelector('.modal-bac
     const res=await fetch('/api/notices',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({title,body,kind:'إعلان'})});
     const data=await res.json(); if(!res.ok){alert(data.error||'تعذر إضافة الإعلان');return} await syncApi();render();return;
   }
-  if(a==='print-registration-form'){printOfficialForms([{}]);return}
+  if(a==='print-registration-form'){printOfficialForms([registrationRecordFromForm()]);return}
   if(a==='notification'){state.page='notices';save();render();return}
   return currentAction(a,el);
 };
@@ -913,7 +913,7 @@ action=async function(a,el){
   if(a==='print-attendance'){printAttendanceSheet();return}
   if(a==='print-cards'||a==='print-all-cards'){printCardsSheet();return}
   if(a==='print-cards-quick'){state.page='card';save();render();printCardsSheet();return}
-  if(a==='print-registration'){printOfficialForms([{}]);return}
+  if(a==='print-registration'){printOfficialForms([registrationRecordFromForm()]);return}
   if(a==='print-groups'){printGroupsSheet();return}
   if(a==='print-group'){printGroupRoster(el.dataset.group);return}
   if(a==='print-role-card'){const me=mySwimmer();if(me)printSingleCard(me.id);else showToast('حسابك غير مربوط ببطاقة انخراط.','error');return}
@@ -1207,6 +1207,56 @@ const CLUB_FR = 'Clubsportif Sadara – Ghardaia';
 const CLUB_MOTTO = 'أخلاق، احترام، وانضباط';
 const STAR = '<svg viewBox="0 0 24 24" class="star"><path d="M12 2l2.6 6.3 6.8.4-5.2 4.3 1.7 6.6L12 16l-5.9 3.6 1.7-6.6L2.6 8.7l6.8-.4z"/></svg>';
 const ORNAMENT = '<svg class="orn" viewBox="0 0 200 60" preserveAspectRatio="none"><path d="M0 30 Q25 6 50 30 T100 30 T150 30 T200 30" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M0 34 Q25 10 50 34 T100 34 T150 34 T200 34" fill="none" stroke="currentColor" stroke-width=".7" opacity=".6"/></svg>';
+
+/* What the person has typed into the registration form, as a record the printed
+   sheet can read. The same fields the submit posts, so the two cannot disagree. */
+function registrationRecordFromForm() {
+  const value = sel => { const n = $(sel); return n ? (n.type === 'checkbox' ? n.checked : n.value) : ''; };
+  const record = {
+    sport: value('#reg-sport'), category: value('#reg-category'),
+    swimming_strokes: value('#reg-strokes'), subscription_code: value('#reg-plan'),
+    facility: value('#reg-facility'), transport: value('#reg-transport'),
+    uniform: value('#reg-uniform'), payment_method: value('#reg-payment'),
+    first_name_ar: value('#reg-first-ar'), last_name_ar: value('#reg-last-ar'),
+    first_name_fr: value('#reg-first-fr'), last_name_fr: value('#reg-last-fr'),
+    national_id: value('#reg-nin'), birth_certificate_no: value('#reg-birth-cert'),
+    birth_place: value('#reg-birth-place'), wilaya: value('#reg-wilaya'),
+    birth_date: value('#reg-birth'), gender: value('#reg-gender'),
+    blood_group: value('#reg-blood'), level: value('#reg-level'),
+    phone: value('#reg-phone'), whatsapp: value('#reg-whatsapp'),
+    address: value('#reg-address'),
+    guardian_first_name: value('#reg-guardian-first'),
+    guardian_last_name: value('#reg-guardian-last'),
+    guardian_relation: value('#reg-guardian-relation'),
+    guardian_phone: value('#reg-guardian-phone'),
+    guardian_national_id: value('#reg-guardian-nin')
+  };
+  /* An adult has no guardian block on the page. Leaving the keys out keeps the
+     guardian's fields off their form, which is what is printed for a minor who
+     fills them in. */
+  if (record.category !== 'minor') {
+    delete record.guardian_first_name; delete record.guardian_last_name;
+    delete record.guardian_relation; delete record.guardian_phone;
+    delete record.guardian_national_id;
+  }
+  return record;
+}
+
+/* ---------------------- نافذة الطباعة ---------------------- */
+/* A window to print into, or null when the browser refused one.
+
+   window.open with 'noopener' returns null by definition -- that is what
+   noopener means -- so asking for isolation in the feature string and then
+   writing into the result could never work. Every print did exactly that, so the
+   guard always fired, the sheet was never written, and the person got an empty
+   tab and a message blaming popups they had allowed. The opener is cleared
+   afterwards instead: same isolation, and the handle survives. */
+function printWindow(features) {
+  const w = window.open('', '_blank', features || '');
+  if (!w) return null;
+  try { w.opener = null; } catch (_) { /* already severed */ }
+  return w;
+}
 
 /* ---------------------- ربط وثائق النادي ---------------------- */function coachAccounts(){return (state.cards||[]).filter(c=>c.role==='coach'||c.kind==='coach');}function luxPreviewBox(items,kind){
   if(!items.length) return '<div class="panel empty-cell">لا توجد بيانات.</div>';
@@ -1917,7 +1967,7 @@ function printOfficialForms(list){
     + '<div class="f-hint"><b>جاهزة للطباعة:</b> استعمل Ctrl+P ثم اختر <b>حفظ بصيغة PDF</b> للحصول على نسخة مطابقة تمامًا. خلف كل صفحة صورة الاستمارة الرسمية، وكل حقل مملوء فوق سطره.</div>'
     + pages
     + '</body></html>';
-  const w = window.open('', '_blank', 'noopener,noreferrer');
+  const w = printWindow();
   if (!w) { showToast('اسمح بالنوافذ المنبثقة لطباعة الاستمارة.', 'error'); return; }
   w.document.open();
   w.document.write(doc);
@@ -2401,7 +2451,7 @@ function packetDocument(app, what) {
 }
 function printPacket(app, what) {
   const doc = packetDocument(app, what);
-  const win = window.open('', '_blank', 'noopener,noreferrer');
+  const win = printWindow();
   if (!win) { showToast('اسمح بالنوافذ المنبثقة لطباعة الحزمة.', 'error'); return false; }
   try {
     win.document.open();
