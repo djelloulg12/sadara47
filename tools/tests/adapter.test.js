@@ -658,6 +658,62 @@ test('a request with nothing that says who it is says so on its own face', async
   if (record.claim_only) errors.push('a coach file is a person waiting and must not be marked as a name held');
 });
 
+test('a member still gets a number where no counter can be kept', async () => {
+  /* This project's rules have no collection to keep a running count in, so every
+     read and every write of one is refused. Left at that, no member would ever be
+     given a number at all -- which is the whole of what was asked for.
+
+     The count is taken from the numbers already on file instead. Checked on a
+     project where the counter cannot be read or written, because a number that is
+     only produced where a counter happens to exist is not a number. */
+  const year = new Date().getFullYear();
+  const w = boot(asUser('u1'));
+  const original = w.firebase.firestore;
+  const stubbed = Object.assign(() => {
+    const real = original();
+    const realCollection = real.collection.bind(real);
+    real.collection = (name) => {
+      const api = realCollection(name);
+      if (name === 'counters') {
+        api.doc = (id) => {
+          const e = new Error('Missing or insufficient permissions.');
+          e.code = 'permission-denied';
+          const refuse = () => Promise.reject(e);
+          return { id, get: refuse, set: refuse };
+        };
+      }
+      return api;
+    };
+    return real;
+  }, original);
+  w.firebase.firestore = stubbed;
+  w.eval(ADAPTER);
+
+  const seen = [];
+  for (let i = 0; i < 3; i++) {
+    const res = await call(w, '/api/applications/APP-NOCNT-' + i, 'PATCH', { status: 'approved' });
+    if (!res.ok) { errors.push('accepting was refused where no counter can be kept: ' + JSON.stringify(res.data).slice(0, 140)); return; }
+    const stored = DATA.applications['APP-NOCNT-' + i];
+    seen.push(stored && stored.registration_id);
+  }
+  /* Each number runs on from the last, and none of them is blank. */
+  for (const id of seen) {
+    if (!id) { errors.push('a member was accepted with no registration number'); return; }
+    const m = /^E(\d{4})(\d{1,2})(\d{4})$/.exec(id);
+    if (!m || Number(m[1]) !== year) { errors.push('the number counted from records is not in the agreed shape: ' + id); return; }
+  }
+  const seqs = seen.map(id => Number(id.slice(-4)));
+  if (!seqs.every((n, i) => i === 0 || n === seqs[i - 1] + 1)) {
+    errors.push('the count taken from records did not run on: ' + seqs.join(', '));
+  }
+  /* And it lands on the card, not only on the request. */
+  const made = Object.values(DATA.swimmers).find(s => s.from_application === 'APP-NOCNT-2');
+  if (!made || made.membership_no !== seen[2]) {
+    errors.push('the number the member was given did not reach the card: '
+      + JSON.stringify(made && made.membership_no));
+  }
+});
+
 (async () => {
   let failed = 0;
   for (const t of tests) {

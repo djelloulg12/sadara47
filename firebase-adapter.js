@@ -280,9 +280,44 @@
 
      The four digits come from a counter raised inside a transaction, so two
      people registering at the same moment get two different numbers rather than
-     the same one twice. */
+     the same one twice.
+
+     Where a counter cannot be kept -- this project's rules do not have the
+     collection, so every read and every write of one is refused -- the count is
+     taken from the numbers already on file instead. Two managers accepting at the
+     same instant could land on the same number that way, which is a far narrower
+     window than a member leaving the club with no number at all. */
   const ID_LETTER = { swimmer: 'E', coach: 'C', admin: 'A' };
   const idLetter = kind => ID_LETTER[kind] || ID_LETTER.swimmer;
+
+  /* What a registration number says, read back out of the number itself rather
+     than out of anything stored beside it -- so a number written by an earlier
+     version still counts towards the next one. */
+  const readRegistrationId = (value, kind, year, pool) => {
+    const m = /^([A-Z])(\d{4})(\d{1,2})(\d{4})$/.exec(String(value || ''));
+    if (!m) return 0;
+    if (m[1] !== idLetter(kind)) return 0;
+    if (Number(m[2]) !== year || Number(m[3]) !== pool) return 0;
+    return Number(m[4]);
+  };
+
+  /* The next count when nothing can be written to keep one.
+     Reading the requests is management's privilege, and this is only ever reached
+     when the club accepts a request -- which is management -- so the read is
+     allowed there. A refusal is not treated as an empty list: "nobody has a
+     number yet" and "I was not allowed to look" are different answers, and only
+     the first of them may be answered with 0001. */
+  const countedFromRecords = async (kind, year, pool) => {
+    let list;
+    try { list = await rows('applications'); }
+    catch (error) { console.warn('cannot read the requests to count registrations', error); return 0; }
+    let highest = 0;
+    for (const r of list) {
+      const seq = readRegistrationId(r.registration_id || r.membership_no, kind, year, pool);
+      if (seq > highest) highest = seq;
+    }
+    return highest + 1;
+  };
 
   /* The pool's number, as the club counts its pools.
 
@@ -308,9 +343,13 @@
   const yearOf = () => new Date().getFullYear();
 
   const nextRegistrationId = async (kind, poolNo) => {
-    if (!await countersAvailable()) return '';
     const year = yearOf();
     const pool = Math.max(0, Math.min(99, Number(poolNo) || 0));
+    const letter = idLetter(kind);
+    if (!await countersAvailable()) {
+      const seq = await countedFromRecords(kind, year, pool);
+      return seq ? letter + year + String(pool) + String(seq).padStart(4, '0') : '';
+    }
     const ref = db.collection('counters').doc('registration_' + year + '_' + pool);
     /* The transaction belongs to the database, not to the document: the compat
        build the site loads has no runTransaction on a reference, and calling it
@@ -318,10 +357,10 @@
     const seq = await db.runTransaction(async tx => {
       const snap = await tx.get(ref);
       const next = (snap.exists ? Number(snap.data().value) || 0 : 0) + 1;
-      tx.set(ref, { value: next, year, pool, kind: idLetter(kind), updated_at: firebase.firestore.FieldValue.serverTimestamp() });
+      tx.set(ref, { value: next, year, pool, kind: letter, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
       return next;
     });
-    return idLetter(kind) + year + String(pool) + String(seq).padStart(4, '0');
+    return letter + year + String(pool) + String(seq).padStart(4, '0');
   };
 
   const extrasDoc = () => db.collection('fee_settings').doc('extras');
