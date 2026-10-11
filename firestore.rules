@@ -65,10 +65,17 @@ service cloud.firestore {
 
     // Applications: public sign-ups always start pending; coach files belong to the applicant.
     match /applications/{id} {
+      // Every request has to say which kind of file it is. The rules deployed to
+      // the project refuse a document without application_type; these rules did
+      // not, so a request missing it was accepted locally and rejected on the
+      // site -- which is how the public form came to answer every registration
+      // with "you do not have permission". Naming it 'swimmer' explicitly means
+      // an omission is now refused here too, where it can be seen.
       allow create: if (request.resource.data.application_type == 'coach')
         ? (signedIn() && request.resource.data.applicant_uid == request.auth.uid
            && request.resource.data.status == 'pending')
-        : (request.resource.data.status == 'pending'
+        : (request.resource.data.application_type == 'swimmer'
+           && request.resource.data.status == 'pending'
            && !('reviewed_by' in request.resource.data));
       allow read: if manager()
         || (signedIn() && resource.data.application_type == 'coach'

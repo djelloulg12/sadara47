@@ -95,14 +95,22 @@
           </label>
         </div>
 
+        <!-- Both are chosen from lists rather than typed. A wilaya that does not
+             exist, or a commune that belongs to the next wilaya over, is not a
+             spelling mistake here -- it is a record the club cannot use, and it
+             is the mistake a person makes most often. The wilayas are the 69 of
+             the 2026 reform (Law 26-06); the communes are filled in from
+             istimara/communes.json once a wilaya is picked. -->
         <div class="row two">
           <label class="f">
             <span class="lbl">مكان الميلاد</span>
-            <input id="birth_place" name="birth_place" type="text" maxlength="60" />
+            <select id="birth_place" name="birth_place">
+              <option value="">--</option>
+            </select>
           </label>
           <label class="f">
             <span class="lbl">الولاية</span>
-            <input id="wilaya" name="wilaya" type="text" maxlength="40" value="غرداية" />
+            <select id="wilaya" name="wilaya"></select>
           </label>
         </div>
 
@@ -208,19 +216,9 @@
         </label>
       </fieldset>
 
-      <!-- ---------- 3. medical: filled in by hand on paper ---------- -->
+      <!-- ---------- 3. photo ---------- -->
       <fieldset class="card">
-        <legend><span class="step-no">٣</span> الفحص الطبي</legend>
-        <p class="card-note">
-          استمارة النادي الرسمية لا تتّسع لاسم الطبيب، والنادي يملأ هذا الجزء
-          بيده على النسخة الورقية بعد الفحص. لذلك لا يُكتب هنا شيء، ويبقى في
-          الاستمارة المطبوعة سطر فارغ مخصّص لذلك.
-        </p>
-      </fieldset>
-
-      <!-- ---------- 4. photo ---------- -->
-      <fieldset class="card">
-        <legend><span class="step-no">٤</span> الصورة الشخصية</legend>
+        <legend><span class="step-no">٣</span> الصورة الشخصية</legend>
         <p class="card-note">تظهر في إطار «الصورة» على الاستمارة الرسمية وبطاقة الانخراط.</p>
         <div class="photo-row">
           <div class="photo-preview" id="photo-preview"><span>لا توجد صورة</span></div>
@@ -237,7 +235,7 @@
 
       <!-- ---------- 5. subscription ---------- -->
       <fieldset class="card">
-        <legend><span class="step-no">٥</span> الاشتراك والدفع</legend>
+        <legend><span class="step-no">٤</span> الاشتراك والدفع</legend>
 
         <div class="row">
           <label class="f">
@@ -295,7 +293,7 @@
 
       <!-- ---------- 6. notes + send ---------- -->
       <fieldset class="card">
-        <legend><span class="step-no">٦</span> ملاحظات</legend>
+        <legend><span class="step-no">٥</span> ملاحظات</legend>
         <div class="row">
           <label class="f">
             <span class="lbl">ملاحظة للنادي</span>
@@ -382,6 +380,7 @@
   <script src="/firebase-config.js"></script>
   <script src="/firebase-adapter.js"></script>
   <script src="print.js"></script>
+  <script src="algeria.js"></script>
   <script src="istimara.js"></script>
   <script>if ('serviceWorker' in navigator && location.protocol === 'https:')
     window.addEventListener('load', function () {

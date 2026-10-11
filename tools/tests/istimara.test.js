@@ -26,6 +26,8 @@ const HTML = fs.readFileSync(path.join(FOLDER, 'index.html'), 'utf8');
 const CSS = fs.readFileSync(path.join(FOLDER, 'istimara.css'), 'utf8');
 const PAGE = fs.readFileSync(path.join(FOLDER, 'istimara.js'), 'utf8');
 const PRINT = fs.readFileSync(path.join(FOLDER, 'print.js'), 'utf8');
+const ALGERIA = fs.readFileSync(path.join(FOLDER, 'algeria.js'), 'utf8');
+const COMMUNES = fs.readFileSync(path.join(FOLDER, 'communes.json'), 'utf8');
 const APP = fs.readFileSync(path.join(PUB, 'app.js'), 'utf8');
 const RULES = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
 
@@ -133,6 +135,11 @@ function boot(seedDraft) {
         extras: { transport: 900, uniform: 2500 }
       }) });
     }
+    if (/communes\.json/.test(String(url))) {
+      /* The real file, so the counts the page offers are the counts it ships. */
+      if (w.__communesFail) return Promise.resolve({ ok: false, status: 503 });
+      return Promise.resolve({ ok: true, json: async () => JSON.parse(COMMUNES) });
+    }
     return Promise.resolve({
       ok: true, json: async () => ({ ok: true, application_no: 'APP-20260101-AB12', expected_amount: 4400 })
     });
@@ -199,6 +206,10 @@ function boot(seedDraft) {
   };
 
   w.eval(PRINT);
+  /* The wilaya list is a separate file the page loads before itself, so it is
+     loaded here too -- evaluating the page without it would leave the field
+     empty and every check about it would pass for the wrong reason. */
+  w.eval(ALGERIA);
   w.eval(PAGE);
   return w;
 }
@@ -671,6 +682,156 @@ tasks.push(() => {
       }
     });
 });
+
+/* ---- 14) the request says which kind of file it is ----
+   The rules deployed to the project refuse a request with no application_type.
+   Without it this page's every registration was answered "you do not have
+   permission" while the local server, which does not read the rules, took it
+   happily -- so nothing local ever saw the failure. The stub here accepts
+   anything, deliberately: what is checked is the request itself. */
+tasks.push(() => {
+  const w = boot();
+  fill(w, 'adult');
+  w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  return waitFor(w, () => w.__calls.some(c => c.method === 'POST'))
+    .catch(() => errors.push('[send] the request was never sent'))
+    .then(() => {
+      const post = w.__calls.filter(c => c.method === 'POST' && /\/api\/applications$/.test(c.url))[0];
+      if (!post) return;
+      const body = JSON.parse(post.body);
+      if (body.application_type !== 'swimmer') {
+        errors.push('[send] the request does not say it is a swimmer\'s file: '
+          + JSON.stringify(body.application_type)
+          + ' -- the deployed rules refuse it and answer "you do not have permission"');
+      }
+      if (body.status !== 'pending') errors.push('[send] a public request must start pending');
+    });
+});
+
+/* ---- 15) the wilaya and the commune are chosen, not spelled ---- */
+tasks.push(() => {
+  const book = JSON.parse(COMMUNES);
+  const list = JSON.parse(ALGERIA.slice(ALGERIA.indexOf('=') + 1, ALGERIA.lastIndexOf(';')));
+  const w = boot();
+  const d = w.document;
+
+  const wilaya = d.getElementById('wilaya');
+  const place = d.getElementById('birth_place');
+  if (wilaya.tagName !== 'SELECT') errors.push('[wilaya] the wilaya is still a box to type into');
+  if (place.tagName !== 'SELECT') errors.push('[wilaya] the birthplace is still a box to type into');
+  /* 69 is the count after the reform of April 2026. The 58-wilaya lists still in
+     circulation name several districts that are no longer wilayas at all. */
+  if (wilaya.options.length !== 70) {
+    errors.push('[wilaya] 69 wilayas plus the empty option expected, got ' + (wilaya.options.length - 1));
+  }
+  if (wilaya.value !== 'غرداية') {
+    errors.push('[wilaya] the form does not open on the club\'s own wilaya: ' + wilaya.value);
+  }
+
+  /* choosing a wilaya offers that wilaya's communes and nobody else's */
+  const target = list.find(x => (book[x.code] || []).length > 2);
+  wilaya.value = target.name;
+  wilaya.dispatchEvent(new w.Event('change', { bubbles: true }));
+  return waitFor(w, () => place.options.length > 1)
+    .catch(() => errors.push('[wilaya] choosing a wilaya left the communes empty'))
+    .then(() => {
+      const offered = [...place.options].map(o => o.value).filter(Boolean);
+      const expected = book[target.code];
+      if (offered.length !== expected.length) {
+        errors.push('[wilaya] ' + target.name + ' should offer ' + expected.length + ' communes, offered ' + offered.length);
+      }
+      const stray = offered.filter(n => expected.indexOf(n) === -1);
+      if (stray.length) errors.push('[wilaya] communes from another wilaya are on offer: ' + stray.join('، '));
+      /* a commune chosen under the old wilaya must not follow the person over */
+      place.value = expected[0];
+      const other = list.find(x => x.code !== target.code);
+      wilaya.value = other.name;
+      wilaya.dispatchEvent(new w.Event('change', { bubbles: true }));
+      return waitFor(w, () => place.options.length > 1 && place.value === '').then(() => {
+        const after = [...place.options].map(o => o.value).filter(Boolean);
+        const crossed = after.filter(n => expected.indexOf(n) !== -1);
+        if (crossed.length) {
+          errors.push('[wilaya] a commune from ' + target.name + ' survived the move to ' + other.name);
+        }
+      });
+    });
+});
+
+/* ---- 16) a saved draft comes back in the right order ----
+   The wilaya decides the communes, so restoring the commune before the wilaya
+   would leave it on an empty list. */
+tasks.push(() => {
+  const book = JSON.parse(COMMUNES);
+  const list = JSON.parse(ALGERIA.slice(ALGERIA.indexOf('=') + 1, ALGERIA.lastIndexOf(';')));
+  const target = list.find(x => (book[x.code] || []).length > 2);
+  const commune = book[target.code][1];
+  const w = boot(JSON.stringify({ first_name_ar: 'أمين', wilaya: target.name, birth_place: commune }));
+  return waitFor(w, () => w.document.getElementById('birth_place').value === commune)
+    .catch(() => errors.push('[wilaya] a saved draft lost its commune on the way back: '
+      + w.document.getElementById('birth_place').value))
+    .then(() => {
+      if (w.document.getElementById('wilaya').value !== target.name) {
+        errors.push('[wilaya] a saved draft lost its wilaya');
+      }
+    });
+});
+
+/* ---- 17) a wilaya the list does not carry is kept, not dropped ----
+   A draft saved before the reform may name a district that has since become a
+   wilaya of its own. Clearing the field silently would change the record the
+   person is about to send. */
+tasks.push(() => {
+  const w = boot(JSON.stringify({ wilaya: 'وادي مرة', birth_place: 'أحمد راشدي' }));
+  return waitFor(w, () => w.document.getElementById('wilaya').value === 'وادي مرة')
+    .catch(() => errors.push('[wilaya] a wilaya outside the list was thrown away'))
+    .then(() => {
+      const place = w.document.getElementById('birth_place');
+      if (place.tagName !== 'SELECT' || place.options.length > 1) {
+        errors.push('[wilaya] a wilaya with no communes of its own left the birthplace stuck');
+      }
+    });
+});
+
+/* ---- 18) a form that cannot load the lists still sends ---- */
+tasks.push(() => {
+  const list = JSON.parse(ALGERIA.slice(ALGERIA.indexOf('=') + 1, ALGERIA.lastIndexOf(';')));
+  const w = boot();
+  w.__communesFail = true;
+  const wilaya = w.document.getElementById('wilaya');
+  const other = list.find(x => x.code !== '47');
+  wilaya.value = other.name;
+  wilaya.dispatchEvent(new w.Event('change', { bubbles: true }));
+  const wait = () => waitFor(w, () => w.document.getElementById('birth_place').tagName === 'INPUT');
+  return wait()
+    .catch(() => errors.push('[wilaya] when the commune list will not load, the field is left unusable'))
+    .then(() => {
+      const place = w.document.getElementById('birth_place');
+      if (place.name !== 'birth_place') {
+        errors.push('[wilaya] the replacement box lost its name, so the value would not be sent');
+      }
+      fill(w, 'adult');
+      place.value = 'بئر قاصد';
+      w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+      return waitFor(w, () => w.__calls.some(c => c.method === 'POST'))
+        .catch(() => errors.push('[wilaya] the form would not send once the lists were gone'))
+        .then(() => {
+          const post = w.__calls.filter(c => c.method === 'POST' && /\/api\/applications$/.test(c.url))[0];
+          if (!post) return;
+          if (JSON.parse(post.body).birth_place !== 'بئر قاصد') {
+            errors.push('[wilaya] the typed birthplace did not reach the request');
+          }
+        });
+    });
+});
+
+/* ---- 19) the medical section is gone from the page ---- */
+{
+  if (/الفحص الطبي/.test(HTML)) errors.push('[page] the medical section is still on the form');
+  const steps = [...HTML.matchAll(/class="step-no">([^<]+)</g)].map(m => m[1]);
+  if (steps.join('|') !== '١|٢|٣|٤|٥') {
+    errors.push('[page] the steps are numbered ' + steps.join(' ') + ' after the medical section was removed');
+  }
+}
 
 /* ---- run the settling checks in order ---- */
 tasks.reduce((chain, task) => chain.then(task), Promise.resolve()).then(() => {

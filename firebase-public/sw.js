@@ -1,16 +1,26 @@
 /* ==========================================================
    عامل الخدمة — يخزّن الصدفة ليعمل المسح والاستمارة بلا إنترنت
    ========================================================== */
-const CACHE = 'sadara-v2';
+/* Bumped whenever what is cached changes: the activate step deletes every cache
+   under any other name, so a new name is what retires the old one. */
+const CACHE = 'sadara-v3';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/firebase-config.js',
   '/manifest.webmanifest', '/assets/logo.png', '/assets/form-registration-01.jpg',
   '/assets/internal-regulations.jpg', '/assets/registration-card.jpg'];
 
 /* The public registration page is a second entry point in its own folder. Its
    shell is cached on its own so the form still opens on a weak connection at the
-   club; the POST always goes to the network, like every other /api call. */
+   club; the POST always goes to the network, like every other /api call.
+
+   algeria.js and communes.json belong here, not in the page: the form asks the
+   first for its 69 wilayas before it can paint a single one, and the second for
+   the communes of whichever wilaya was picked. Without them the form still opens
+   and still sends -- the fields fall back to free text -- but at the club, on a
+   weak connection, every person would end up typing what a list could have given
+   them. */
 const FORM_SHELL = ['/istimara/', '/istimara/index.html', '/istimara/istimara.css',
-  '/istimara/istimara.js', '/istimara/print.js'];
+  '/istimara/istimara.js', '/istimara/print.js', '/istimara/algeria.js',
+  '/istimara/communes.json'];
 
 /* The scans are the only files big enough to be worth serving from the cache on
    sight; they are also the ones the printed form is measured against. */

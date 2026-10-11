@@ -495,7 +495,12 @@
         const list = plans.length ? plans : DEFAULT_PLANS;
         const applicationNo = body.application_no
           || ('APP-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.random().toString(16).slice(2, 6).toUpperCase());
-        const record = { ...body, application_no: applicationNo, status: 'pending', expected_amount: amountFor(body, list, extras), created_at: firebase.firestore.FieldValue.serverTimestamp() };
+        /* Which kind of file this is. The deployed rules require the field, and
+           a request without it is refused outright -- so the default is set here
+           rather than trusted to every caller. Coach requests carry their own
+           value and pass through untouched. */
+        const applicationType = body.application_type === 'coach' ? 'coach' : 'swimmer';
+        const record = { ...body, application_no: applicationNo, application_type: applicationType, status: 'pending', expected_amount: amountFor(body, list, extras), created_at: firebase.firestore.FieldValue.serverTimestamp() };
         await db.collection('applications').doc(applicationNo).set(record);
         return jsonResponse({ ok: true, application_no: applicationNo, expected_amount: record.expected_amount }, 201);
       }

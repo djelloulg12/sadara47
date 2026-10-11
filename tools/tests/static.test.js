@@ -16,7 +16,7 @@ for (const f of SYNC_FILES) {
 
 // The public registration page is hand-written in istimara/ and copied into the
 // deployable tree by the build, so the same rule applies folder-wide.
-const ISTIMARA = ['index.html', 'istimara.css', 'istimara.js', 'print.js'];
+const ISTIMARA = ['index.html', 'istimara.css', 'istimara.js', 'print.js', 'algeria.js', 'communes.json'];
 for (const f of ISTIMARA) {
   const src = path.join(ROOT, 'istimara', f);
   const dst = path.join(PUBLIC, 'istimara', f);
@@ -27,10 +27,43 @@ for (const f of ISTIMARA) {
   }
 }
 
-// 2. assets referenced by markup must exist in the deployable copy
+// 2. every file a published page actually loads must be there to load.
+// Walked the way a browser walks it: relative to the page that asks for it, and
+// a directory meaning the index.html inside it. A <script src> that 404s is a
+// page that loads and then quietly does nothing, which is why the form went on
+// answering "you do not have permission" with no error anywhere to be seen.
+const PUBLISHED_PAGES = [
+  { file: path.join(PUBLIC, 'index.html'), base: '/' },
+  { file: path.join(PUBLIC, 'istimara', 'index.html'), base: '/istimara/' }
+];
+for (const page of PUBLISHED_PAGES) {
+  const html = fs.readFileSync(page.file, 'utf8');
+  const here = page.base;
+  for (const m of html.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)\s*=\s*"([^"]+)"/g)) {
+    const ref = m[1];
+    if (/^(https?:)?\/\//.test(ref) || ref.startsWith('data:')) continue;
+    const dir = here.endsWith('/') ? here : here.replace(/[^/]*$/, '');
+    let target = new URL(ref, 'https://x' + dir).pathname;
+    const candidates = [target, target.replace(/\/$/, '') + '/index.html', target + 'index.html'];
+    if (!candidates.some(c => fs.existsSync(path.join(PUBLIC, c.replace(/^\//, ''))))) {
+      problems.push(`BROKEN: ${here} loads ${ref}, which is not in firebase-public`);
+    }
+  }
+}
+
+// 3. the service worker must not promise a file the site does not have
+const swSource = fs.readFileSync(path.join(PUBLIC, 'sw.js'), 'utf8');
+for (const m of swSource.matchAll(/'(\/[^']*\.(?:js|css|json|png|jpg|webp|html|webmanifest))'/g)) {
+  const ref = m[1];
+  const candidates = [ref, ref.replace(/\/$/, '') + '/index.html'];
+  if (!candidates.some(c => fs.existsSync(path.join(PUBLIC, c.replace(/^\//, ''))))) {
+    problems.push(`BROKEN: sw.js caches ${ref}, which is not in firebase-public`);
+  }
+}
+
+// 4. assets referenced by markup must exist in the deployable copy
 const css = fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8');
-const js = fs.readFileSync(path.join(PUBLIC, 'app.js'), 'utf8');
-const assetRefs = new Set();
+const js = fs.readFileSync(path.join(PUBLIC, 'app.js'), 'utf8');const assetRefs = new Set();
 for (const m of js.matchAll(/['"](assets\/[^'"]+?)['"]/g)) assetRefs.add(m[1]);
 for (const m of js.matchAll(/href=\\?"([a-z0-9-]+\.(?:jpg|png))\\?"/g)) assetRefs.add('assets/' + m[1]);
 for (const m of css.matchAll(/url\(['"]?([^)'"]+?)['"]?\)/g)) if (!/^data:/.test(m[1])) assetRefs.add(m[1]);
