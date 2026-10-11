@@ -243,6 +243,17 @@ action=async function(a,el){
     try{
       const res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({email,password})});
       data=await res.json().catch(()=>({}));
+      /* Where the person's request stands decides whether they come in at all.
+         A request still being read has not been refused, and a refusal is only
+         fair if it says why -- so the two are answered differently, and neither
+         is answered with "wrong password" for a password that was right. */
+      const gate=data.gate||{};
+      if(gate.gate==='pending'){
+        authMessage('طلبك قيد الدراسة. سيُعلمك النادي بالنتيجة عند إقفال الطلب.','');return}
+      if(gate.gate==='rejected'){
+        authMessage('لم يُقبل طلب التسجيل. السبب: '+(gate.reason||gate.message||'غير مذكور'),'error');return}
+      if(gate.gate==='unknown'){
+        authMessage('حالة الطلب غير معروفة. تواصل مع إدارة النادي. ('+gate.message+')','error');return}
       if(!res.ok){authMessage(loginFailure(data),'error');return}
     }catch(_){
       authMessage('تعذّر الاتصال بالخادم. تحقّق من الإنترنت ثم أعد المحاولة.','error');return;
@@ -535,14 +546,20 @@ function pageApplications(){
     +'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button>'
     +'</div></div>';
   const body='<section class="panel table-panel"><div class="panel-head"><div><h3>طلبات التسجيل والمدربين</h3><p>'+rows.length+' من '+list.length+' طلب — ملف المدربين لا يفتحه إلا رئيس النادي</p></div></div>'
-    +'<div class="table-scroll"><table><thead><tr><th>رقم الطلب</th><th>المتقدم</th><th>النوع</th><th>الاشتراك</th><th>المبلغ</th><th>الوثائق</th><th>الحالة</th><th>القرار</th><th></th></tr></thead><tbody>'
+    +'<div class="table-scroll"><table><thead><tr><th>رقم الطلب</th><th>رقم التسجيل</th><th>المتقدم</th><th>النوع</th><th>الاشتراك</th><th>المبلغ</th><th>الوثائق</th><th>الحالة</th><th>القرار</th><th></th></tr></thead><tbody>'
     +(rows.length?rows.map(a=>'<tr><td dir="ltr">'+esc(a.application_no||a.id)+'</td>'
+      /* The number the club reads off the card and the applicant is told at the
+         counter. Beside the request number rather than instead of it: one is what
+         the platform filed, the other is what the member is. */
+      +'<td dir="ltr">'+(a.registration_id?'<b>'+esc(a.registration_id)+'</b>':'<small>—</small>')+'</td>'
       +'<td><b>'+esc(appName(a))+'</b><br><small dir="ltr">'+esc(appContact(a)||'—')+'</small></td>'
       +'<td>'+esc(catLabel(a.application_type==='coach'?'coach':a.category))+'</td>'
       +'<td>'+esc(a.application_type==='coach'?'—':planName(a.subscription_code))+'<br><small>'+(a.transport?'النقل ':'')+(a.uniform?'البدلة':'')+'</small></td>'
       +'<td>'+esc(a.application_type==='coach'?'—':money(a.expected_amount))+'</td>'
       +'<td>'+(a.documents&&a.documents.path?'<button class="check-btn" data-action="open-coach-doc" data-path="'+esc(a.documents.path)+'">فتح PDF</button>':(a.documents&&a.documents.url?'<a class="link" href="'+esc(a.documents.url)+'" target="_blank" rel="noopener">PDF</a>':'—'))+'</td>'
-      +'<td><span class="status '+((a.status||'pending')==='approved'?'success':(a.status||'pending')==='rejected'?'rejected':'pending')+'">'+esc(stateLabel(a.status))+'</span>'+(a.decision_reason?'<br><small>'+esc(a.decision_reason)+'</small>':'')+'</td>'
+      /* The club's own words, so what the applicant is shown at the door and what
+         the manager reads here are the same sentence. */
+      +'<td><span class="status '+((a.status||'pending')==='approved'?'success':(a.status||'pending')==='rejected'?'rejected':'pending')+'">'+esc(stateLabel(a.status))+'</span>'+((a.rejection_reason||a.decision_reason)?'<br><small>'+esc(a.rejection_reason||a.decision_reason)+'</small>':'')+'</td>'
       +'<td>'+((a.status||'pending')==='pending'?'<button class="check-btn ok" data-action="approve-app" data-id="'+esc(a.id)+'">موافقة</button> <button class="check-btn no" data-action="reject-app" data-id="'+esc(a.id)+'">رفض</button>':'<small>تم القرار</small>')+'</td>'
       +'<td><button class="row-more" data-action="edit-app" data-id="'+esc(a.id)+'">•••</button></td>'
       +'</tr>').join(''):emptyRow(9,'لا توجد طلبات مطابقة. ستظهر هنا طلبات التسجيل القادمة.'))
@@ -3062,12 +3079,20 @@ action=async function(a,el){
   if(a==='reject-app'){
     const app=(state.applications||[]).find(x=>String(x.id)===String(el.dataset.id));
     confirmDialog('رفض الطلب «' + appName(app||{}) + '»؟', 'رفض الطلب', async () => {
-      const reason = window.prompt('سبب الرفض (اختياري):', 'الوثائق ناقصة');
-      if (reason === null) return;
+      /* The reason is not optional and it is not ours to invent. A refusal with no
+         reason is one the applicant cannot act on and one the club fields the
+         same question about at the counter, so it is asked for until it is given. */
+      let reason = '';
+      while (!reason) {
+        const asked = window.prompt('سبب الرفض — سيُقرأ بالضبط على حساب صاحب الطلب:\n(مثال: لا توجد شهادة سباحة سارية)', '');
+        if (asked === null) return;
+        reason = String(asked).trim();
+        if (!reason) showToast('اكتب سبب الرفض. الطلب لن يُرفض بدونه.', 'error');
+      }
       try{
-        await api('/api/applications/'+encodeURIComponent(el.dataset.id),'PATCH',{status:'rejected',decision_reason:reason});
+        await api('/api/applications/'+encodeURIComponent(el.dataset.id),'PATCH',{status:'rejected',rejection_reason:reason});
         logDecision('رفض طلب','application',el.dataset.id,{reason:reason});
-        showToast('تم رفض الطلب.');
+        showToast('تم رفض الطلب. سيقرأ صاحب الطلب السبب عند محاولته الدخول.');
         await syncApi(); render();
       }catch(e){showToast(e.message,'error')}
     });

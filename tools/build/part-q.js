@@ -20,12 +20,20 @@ action=async function(a,el){
   if(a==='reject-app'){
     const app=(state.applications||[]).find(x=>String(x.id)===String(el.dataset.id));
     confirmDialog('رفض الطلب «' + appName(app||{}) + '»؟', 'رفض الطلب', async () => {
-      const reason = window.prompt('سبب الرفض (اختياري):', 'الوثائق ناقصة');
-      if (reason === null) return;
+      /* The reason is not optional and it is not ours to invent. A refusal with no
+         reason is one the applicant cannot act on and one the club fields the
+         same question about at the counter, so it is asked for until it is given. */
+      let reason = '';
+      while (!reason) {
+        const asked = window.prompt('سبب الرفض — سيُقرأ بالضبط على حساب صاحب الطلب:\n(مثال: لا توجد شهادة سباحة سارية)', '');
+        if (asked === null) return;
+        reason = String(asked).trim();
+        if (!reason) showToast('اكتب سبب الرفض. الطلب لن يُرفض بدونه.', 'error');
+      }
       try{
-        await api('/api/applications/'+encodeURIComponent(el.dataset.id),'PATCH',{status:'rejected',decision_reason:reason});
+        await api('/api/applications/'+encodeURIComponent(el.dataset.id),'PATCH',{status:'rejected',rejection_reason:reason});
         logDecision('رفض طلب','application',el.dataset.id,{reason:reason});
-        showToast('تم رفض الطلب.');
+        showToast('تم رفض الطلب. سيقرأ صاحب الطلب السبب عند محاولته الدخول.');
         await syncApi(); render();
       }catch(e){showToast(e.message,'error')}
     });

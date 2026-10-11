@@ -50,10 +50,49 @@
       role: owns ? 'admin' : (profile.role || 'member'),
       owner: owns,
       email: user.email || '',
+      username: profile.username || '',
       phone: profile.phone || user.phoneNumber || '',
       member_no: profile.member_no || '',
-      group_name: profile.group_name || ''
+      registration_id: profile.registration_id || '',
+      group_name: profile.group_name || '',
+      /* Where the person's request stands. An account with no status at all is
+         one that predates this field -- the club owner and the first coaches --
+         and is let through: reading "no answer" as "not allowed" would lock the
+         people who run the club out of their own club. */
+      status: profile.status || '',
+      rejection_reason: profile.rejection_reason || ''
     };
+  };
+
+  /* ---------------- what the state of a request means at the door ----------------
+     A pending request has not been refused, so the account exists but the club
+     has not said yes yet; it is answered with the waiting message rather than
+     with an error. A refused request carries the reason the club gave, which is
+     shown as it is written rather than as a general refusal. */
+  const ACCEPTED = ['accepted', 'approved', 'مقبول', 'مقبولة'];
+  const REJECTED = ['rejected', 'refused', 'مرفوض', 'مرفوضة'];
+  const PENDING = ['pending', 'قيد المعالجة', 'قيد الدراسة', 'قيد الانتظار'];
+
+  const loginGate = profile => {
+    const status = String((profile && profile.status) || '').trim();
+    if (!status) return { gate: 'open', message: '' };
+    if (ACCEPTED.indexOf(status.toLowerCase()) !== -1) return { gate: 'open', message: '' };
+    if (PENDING.indexOf(status.toLowerCase()) !== -1) {
+      return { gate: 'pending', message: 'طلبك قيد الدراسة.' };
+    }
+    if (REJECTED.indexOf(status.toLowerCase()) !== -1) {
+      const why = String((profile && profile.rejection_reason) || '').trim();
+      return {
+        gate: 'rejected',
+        message: why || 'رُفض طلب التسجيل.',
+        /* The club's own words, kept apart from the sentence around them so the
+           reason is never trimmed into something that reads differently. */
+        reason: why
+      };
+    }
+    /* A status nobody wrote a meaning for is not a door to be shut on somebody
+       over a spelling. It is reported instead. */
+    return { gate: 'unknown', message: 'حالة الطلب غير معروفة: ' + status };
   };
   const managerView = async (message) => {
     const user = await currentUser();
@@ -85,6 +124,165 @@
 
   const rows = async name => (await db.collection(name).limit(ROW_LIMIT).get())
     .docs.map(d => ({ id: d.id, ...d.data() }));
+  /* ---------------- names that may only be taken once ----------------
+     Firestore has no unique constraint, so a name is made unique by claiming it:
+     a document whose id is the name, written once and never changed. The rules
+     refuse updates and deletes on claims, so the second person to ask for a name
+     that is taken is turned away by the database rather than by a check that ran
+     a moment earlier.
+
+     A query alone would not do. It says "nobody has this name" and then somebody
+     else takes it, and two people registering at the same moment both pass. */
+  const CLAIM_KINDS = ['email', 'username', 'national_id', 'minor_key', 'registration_id'];
+
+  /* Document ids cannot hold every character a name can, and the id is the name,
+     so what cannot be written is written as its code. Deterministic either way:
+     the same name always produces the same id, which is the whole point. */
+  const claimId = (kind, key) => kind + '_' + String(key)
+    .replace(/[^A-Za-z0-9_.@-]/g, c => '_' + c.charCodeAt(0).toString(16));
+
+  /* Whether the database actually enforces a claimed name, asked once.
+     The rules that make a claim un-takeable live with the database, and a
+     project whose rules predate them refuses every claim -- which is the same
+     error as a name that is taken, and would answer "already registered" to
+     everybody. So the question is asked rather than assumed: read one claim, and
+     if the rules are not there, fall back to the query and say so on the record.
+     The weaker answer is written down rather than passed off as the stronger one. */
+  let claimsChecked = null;
+  const claimsAvailable = async () => {
+    if (claimsChecked === null) {
+      try {
+        await db.collection('claims').doc('_probe').get();
+        claimsChecked = true;
+      } catch (error) {
+        claimsChecked = false;
+        console.warn('this project has no rules for claimed names; a name is checked by query only', error);
+      }
+    }
+    return claimsChecked;
+  };
+
+  /* Writes the claim, or reports that the name is already taken.
+     A permission error here means the document already exists -- that is the
+     answer, not a fault. Anything else is a fault and is passed on. */
+  const claimName = async (kind, key, uid) => {
+    if (CLAIM_KINDS.indexOf(kind) === -1) throw new Error('unknown claim kind: ' + kind);
+    const id = claimId(kind, key);
+    try {
+      await db.collection('claims').doc(id).set({
+        kind, key: id, owner: uid, claimed_at: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      return true;
+    } catch (error) {
+      if (error && (error.code === 'permission-denied' || /PERMISSION_DENIED/i.test(error.message || ''))) {
+        return false;
+      }
+      throw error;
+    }
+  };
+
+  /* A name is compared the way a person writes it, not the way a keyboard typed
+     it: the same national number written with spaces, with dashes or in capitals
+     is the same person. Without this, one member becomes three. */
+  const normId = value => String(value === undefined || value === null ? '' : value)
+    .normalize('NFKC')
+    .replace(/[\s  \-_.]/g, '')
+    .toUpperCase();
+
+  /* Which name says "this person, already", and of what kind.
+     An adult is identified by the national identity number. A child has no
+     national number of their own, so they are identified by the three things the
+     club has for them: the birth certificate number, the year they were born,
+     and the commune they were born in. */
+  const identityKeyOf = d => {
+    const nid = normId(d && d.national_id);
+    if (feeCategory(d) === 'minor') {
+      const cert = normId(d && d.birth_certificate_no);
+      const year = String((d && d.birth_date) || '').slice(0, 4);
+      const place = normId(d && d.birth_place);
+      if (!cert || !year || !place) return null;
+      return { kind: 'minor_key', key: [cert, year, place].join('|') };
+    }
+    if (!nid) return null;
+    return { kind: 'national_id', key: nid };
+  };
+
+  /* Somebody already on the books under the same name. Looked for among the
+     requests and among the members: a person who applied twice has two requests,
+     and a person who applied and was accepted has a request and a member, and
+     both are a reason to stop. */
+  const findByKey = async (field, value) => {
+    try {
+      const snap = await db.collection('applications').where(field, '==', value).limit(1).get();
+      if (!snap.empty) return { where: 'applications', id: snap.docs[0].id, data: snap.docs[0].data() };
+    } catch (_) { /* a collection without the field simply has no match */ }
+    try {
+      const snap = await db.collection('swimmers').where(field, '==', value).limit(1).get();
+      if (!snap.empty) return { where: 'swimmers', id: snap.docs[0].id, data: snap.docs[0].data() };
+    } catch (_) { /* likewise */ }
+    return null;
+  };
+
+  const DUPLICATE_MESSAGE = 'هذا المشترك مسجل مسبقاً.';
+
+  const findDuplicate = async d => {
+    const key = identityKeyOf(d);
+    if (!key) return null;
+    /* The field each kind is stored under, so the lookup is an equality and not
+       a scan: national_id for an adult, and the three parts of the child's key
+       carried as one joined string. */
+    const field = key.kind === 'minor_key' ? 'duplicate_key' : 'national_id_key';
+    const found = await findByKey(field, key.key);
+    return found ? { key, found } : null;
+  };
+
+  /* ---------------- the registration number ----------------
+     E202610001 is a swimmer registered in 2026 at the first pool, the first of
+     that year and that pool: a letter for the kind of account, the year, the
+     number of the pool, then four digits that run on.
+
+     The four digits come from a counter raised inside a transaction, so two
+     people registering at the same moment get two different numbers rather than
+     the same one twice. */
+  const ID_LETTER = { swimmer: 'E', coach: 'C', admin: 'A' };
+  const idLetter = kind => ID_LETTER[kind] || ID_LETTER.swimmer;
+
+  /* The pool's number, as the club counts its pools.
+
+     It is the pool's rank among the pools rather than whatever number it carries,
+     because the two machines that hold these records do not agree on whether the
+     first pool is 0 or 1 -- the club's own list and the local server's seed each
+     start where they please. Ranking answers 1, 2, 3 either way; reading the
+     stored number answers "two pools are the first pool" on one of them, and two
+     pools sharing a counter is two people handed the same registration number. */
+  const poolNumberOf = (facilityId, pools) => {
+    const list = (pools || []).slice().sort((a, b) => {
+      const x = Number(a.order), y = Number(b.order);
+      const ax = Number.isFinite(x) && x >= 0, by = Number.isFinite(y) && y >= 0;
+      if (ax && by && x !== y) return x - y;
+      if (ax !== by) return ax ? -1 : 1;
+      return 0;
+    });
+    const wanted = String(facilityId || '').trim();
+    const at = list.findIndex(p => String(p.id || '') === wanted || String(p.name || '') === wanted);
+    return at === -1 ? 0 : at + 1;
+  };
+
+  const yearOf = () => new Date().getFullYear();
+
+  const nextRegistrationId = async (kind, poolNo) => {
+    const year = yearOf();
+    const pool = Math.max(0, Math.min(99, Number(poolNo) || 0));
+    const counter = db.collection('counters').doc('registration_' + year + '_' + pool);
+    const seq = await counter.runTransaction(async tx => {
+      const snap = await tx.get(counter);
+      const next = (snap.exists ? Number(snap.data().value) || 0 : 0) + 1;
+      tx.set(counter, { value: next, year, pool, kind: idLetter(kind), updated_at: firebase.firestore.FieldValue.serverTimestamp() });
+      return next;
+    });
+    return idLetter(kind) + year + String(pool) + String(seq).padStart(4, '0');
+  };
+
   const extrasDoc = () => db.collection('fee_settings').doc('extras');
   const readExtras = async () => {
     try { const snap = await extrasDoc().get(); return snap.exists ? (snap.data() || {}) : {}; }
@@ -172,12 +370,20 @@
       /* ---------------- session ---------------- */
       if (path === '/api/login' && method === 'POST') {
         const credential = await auth.signInWithEmailAndPassword(body.email, body.password);
-        return jsonResponse({ user: await userView(credential.user) });
+        const user = await userView(credential.user);
+        const gate = loginGate(user);
+        /* The account is signed in either way -- the club has to be able to see
+           who it is -- but the answer says whether this person may be let in, and
+           why not if not. The page asks the question; this answers it in one
+           place, from the same fields the rules read. */
+        return jsonResponse({ user, gate }, gate.gate === 'open' ? 200 : 403);
       }
       if (path === '/api/logout' && method === 'POST') { await auth.signOut(); return jsonResponse({ ok: true }); }
       if (path === '/api/session' && method === 'GET') {
         const user = await currentUser();
-        return user ? jsonResponse({ user: await userView(user) }) : jsonResponse({ error: 'يرجى تسجيل الدخول' }, 401);
+        if (!user) return jsonResponse({ error: 'يرجى تسجيل الدخول' }, 401);
+        const profile = await userView(user);
+        return jsonResponse({ user: profile, gate: loginGate(profile) });
       }
 
       /* ---------------- plans & extras ---------------- */
@@ -491,7 +697,7 @@
         return jsonResponse(await rows('applications'));
       }
       if (path === '/api/applications' && method === 'POST') {
-        const [plans, extras] = await Promise.all([rows('subscription_plans'), readExtras()]);
+        const [plans, extras, pools] = await Promise.all([rows('subscription_plans'), readExtras(), rows('facilities')]);
         const list = plans.length ? plans : DEFAULT_PLANS;
         const applicationNo = body.application_no
           || ('APP-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.random().toString(16).slice(2, 6).toUpperCase());
@@ -500,9 +706,85 @@
            rather than trusted to every caller. Coach requests carry their own
            value and pass through untouched. */
         const applicationType = body.application_type === 'coach' ? 'coach' : 'swimmer';
-        const record = { ...body, application_no: applicationNo, application_type: applicationType, status: 'pending', expected_amount: amountFor(body, list, extras), created_at: firebase.firestore.FieldValue.serverTimestamp() };
+
+        /* Nobody is registered twice.
+           An adult is the holder of a national identity number; a child, who has
+           none of their own, is the birth certificate number with the year and
+           the commune of birth. Either way the name is looked for before anything
+           is written, and the answer is the club's own words rather than a refusal
+           with nothing behind it. */
+        const duplicate = await findDuplicate(body);
+        if (duplicate) {
+          return jsonResponse({
+            error: DUPLICATE_MESSAGE,
+            duplicate: true,
+            /* Enough for the club to see who it is, and no more: this is the
+               applicant's own identity number coming back to them. */
+            existing: {
+              where: duplicate.found.where,
+              reference: duplicate.found.data.application_no || duplicate.found.data.membership_no || duplicate.found.id,
+              status: duplicate.found.data.status || ''
+            }
+          }, 409);
+        }
+        /* The name that says "this person, already", kept on the record so the
+           next request for the same person is found by an equality rather than by
+           reading every record the club has. */
+        const identity = identityKeyOf(body);
+        const record = {
+          ...body,
+          application_no: applicationNo,
+          application_type: applicationType,
+          status: 'pending',
+          expected_amount: amountFor(body, list, extras),
+          ...(identity ? { [identity.kind === 'minor_key' ? 'duplicate_key' : 'national_id_key']: identity.key } : {}),
+          created_at: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        /* The registration number is raised before the record is written, so the
+           number and the record are written together. */
+        let registrationId = body.registration_id || '';
+        if (!registrationId) {
+          const poolNo = poolNumberOf(body.facility_id || body.facility, pools.length ? pools : DEFAULT_FACILITIES);
+          registrationId = await nextRegistrationId(applicationType === 'coach' ? 'coach' : 'swimmer', poolNo);
+          record.registration_id = registrationId;
+          record.pool_number = poolNo;
+        }
+
+        /* The claims are written last, and they are what makes the answer certain.
+           A query said this person was not on the books a moment ago; if one of
+           these names turns out to be taken, the record is not written at all --
+           the applicant was the second one, and a half-written request would still
+           be sitting on the manager's list. */
+        const uid = currentUserUid();
+        const enforcing = await claimsAvailable();
+        const claims = [];
+        if (enforcing && uid && body.email) claims.push(['email', normId(body.email)]);
+        if (enforcing && uid && body.username) claims.push(['username', normId(body.username)]);
+        if (enforcing && identity) claims.push([identity.kind, identity.key]);
+        /* Which of the two answers was used is written on the record, so the club
+           can see at the counter whether a name that was allowed through was
+           allowed by the database or by a check that ran a moment earlier. */
+        record.uniqueness = enforcing ? 'claimed' : 'query-only';
+        for (const [kind, key] of claims) {
+          if (!key) continue;
+          if (await claimName(kind, key, uid)) {
+            record.claims = (record.claims || []).concat([kind]);
+            continue;
+          }
+          /* Nothing is written. The claim that is already there belongs to the
+             person who got there first, so there is nothing of this applicant's
+             to take back -- only the name, which was never theirs to have. */
+          return jsonResponse({ error: DUPLICATE_MESSAGE, duplicate: true }, 409);
+        }
+
         await db.collection('applications').doc(applicationNo).set(record);
-        return jsonResponse({ ok: true, application_no: applicationNo, expected_amount: record.expected_amount }, 201);
+        return jsonResponse({
+          ok: true,
+          application_no: applicationNo,
+          registration_id: registrationId,
+          expected_amount: record.expected_amount
+        }, 201);
       }
       const appMatch = path.match(/^\/api\/applications\/([^/]+)$/);
       if (appMatch && method === 'PATCH') {
@@ -544,7 +826,8 @@
           const src = (await db.collection('applications').doc(no).get()).data() || {};
           if (src.application_type !== 'coach') {
             await db.collection('swimmers').doc(no).set({
-              membership_no: src.membership_no || no,
+              membership_no: src.membership_no || src.registration_id || no,
+              registration_id: src.registration_id || '',
               name: [src.first_name_ar, src.last_name_ar].filter(Boolean).join(' '),
               first_name_ar: src.first_name_ar || '', last_name_ar: src.last_name_ar || '',
               birth_date: src.birth_date || '', phone: src.phone || '',
@@ -554,6 +837,37 @@
               national_id: src.national_id || '',
               status: 'active', from_application: no,
               created_at: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+          }
+          /* The account the applicant created on the way here is now let in, and
+             carries the number they were given. Without this the member would be
+             a swimmer at the pool and somebody whose request still reads "under
+             study" at their own front door. */
+          if (src.applicant_uid) {
+            await db.collection('users').doc(src.applicant_uid).set({
+              status: 'accepted',
+              registration_id: src.registration_id || '',
+              member_no: src.registration_id || '',
+              rejection_reason: firebase.firestore.FieldValue.delete(),
+              decided_at: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+          }
+        }
+        /* A refusal is only fair if it says why. The reason is written where the
+           applicant will read it on their next sign-in attempt, and a refusal
+           without one is refused: a bare "no" is not a decision anybody can act
+           on, and the club would field the same question at the counter. */
+        if (patch.status === 'rejected') {
+          const stored = (await db.collection('applications').doc(appMatch[1]).get()).data() || {};
+          const why = String(patch.rejection_reason || stored.rejection_reason || '').trim();
+          if (!why) {
+            return jsonResponse({ error: 'اكتب سبب الرفض قبل رفض الطلب —Applicantd يقرأه عند محاولته الدخول.' }, 400);
+          }
+          if (stored.applicant_uid) {
+            await db.collection('users').doc(stored.applicant_uid).set({
+              status: 'rejected',
+              rejection_reason: why,
+              decided_at: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
           }
         }

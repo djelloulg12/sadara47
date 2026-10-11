@@ -293,7 +293,8 @@
      the person is walked to the first one that is missing. */
   function validate() {
     var missing = [];
-    var required = ['first_name_ar', 'last_name_ar', 'birth_date', 'phone', 'address'];
+    var required = ['first_name_ar', 'last_name_ar', 'birth_date', 'phone', 'address',
+                    'email', 'username', 'password', 'password_confirm'];
     if (category() === 'minor') required = required.concat(GUARDIAN_FIELDS);
 
     required.forEach(function (id) { if (!val(id)) missing.push(id); });
@@ -301,6 +302,14 @@
     if (!val('birth_date')) missing.push('birth_date');
     var phone = val('phone');
     if (phone && phone.replace(/[\s.\-()]/g, '').length < 9) missing.push('phone');
+    /* The shape of an address is checked here rather than being left to the mail
+       provider, so a typo is caught before a request is written rather than after
+       somebody has tried to sign in with something that was never an address. */
+    if (val('email') && !EMAIL_RE.test(val('email').trim())) missing.push('email');
+    if (val('username') && !USERNAME_RE.test(val('username').trim())) missing.push('username');
+    if (val('password') && val('password').length < 8) missing.push('password');
+    /* Typed twice so nobody is locked out by a character nobody can see. */
+    if (val('password') && val('password') !== val('password_confirm')) missing.push('password_confirm');
     if (!el('terms').checked) missing.push('terms');
     if (category() === 'minor' && !el('guardian_consent').checked) missing.push('guardian_consent');
 
@@ -313,6 +322,10 @@
     birth_date: 'اختر تاريخ الميلاد.',
     phone: 'اكتب رقم هاتف صحيح.',
     address: 'اكتب العنوان.',
+    email: 'اكتب بريدًا إلكترونيًا صحيحًا — مثال: name@example.com',
+    username: 'اسم المستخدم: حروف لاتينية وأرقام و . _ - فقط، من 3 إلى 32 خانة.',
+    password: 'كلمة المرور ثماني خانات على الأقل.',
+    password_confirm: 'كلمتا المرور غير متطابقتين. أعد كتابة كلمة المرور.',
     guardian_first_name: 'اكتب اسم الولي.',
     guardian_last_name: 'اكتب لقب الولي.',
     guardian_national_id: 'اكتب رقم تعريف الولي.',
@@ -332,6 +345,13 @@
     var out = {};
     Array.prototype.forEach.call(form.elements, function (node) {
       if (!node.name || node.type === 'file') return;
+      /* A password never goes into the draft. The draft is a convenience -- it is
+         there so nothing typed is lost when a send fails -- and a draft that holds
+         a password is a password left lying on the device, readable by the next
+         person to pick up the phone and by anything that reads the page's
+         storage. The account fields are typed again instead; everything else is
+         restored. */
+      if (node.type === 'password') return;
       if (node.type === 'radio' || node.type === 'checkbox') out[node.name] = node.checked;
       else if (node.type !== 'submit') out[node.name] = node.value;
     });
@@ -419,6 +439,11 @@
       subscription_code: val('subscription_code'),
       plan_name: plan.name,
       facility: val('facility'),
+      /* The account the request is filed under. The password is not among them
+         and never is: Firebase hashed it before it was ever written anywhere, and
+         this request carries the name, not the secret. */
+      email: val('email'),
+      username: val('username'),
       transport: checked('transport'),
       uniform: checked('uniform'),
       transport_amount: Number(extras.transport) || 0,
@@ -431,41 +456,118 @@
     };
   }
 
+  /* ---------------- the account ---------------- */
+
+  /* Checked here as well as by the mail provider, so a typo is caught before a
+     request is written rather than after somebody has tried to sign in with an
+     address that was never an address. */
+  var EMAIL_RE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
+  var USERNAME_RE = /^[A-Za-z0-9._-]{3,32}$/;
+
+  var ACCOUNT_FIELDS = ['email', 'username', 'password', 'password_confirm'];
+
+  /* Firebase keeps the password and hands back nothing: it is hashed there and is
+     never readable, by us or by anybody. It is offered to the provider and to
+     nobody else -- not to the request, not to the draft, not to the console. */
+  function createAccount(credentials) {
+    if (!(window.firebase && firebase.auth)) {
+      return Promise.resolve({ uid: '', skipped: true });
+    }
+    return firebase.auth().createUserWithEmailAndPassword(credentials.email, credentials.password)
+      .then(function (credential) { return { uid: credential.user.uid }; })
+      .catch(function (error) {
+        var code = String((error && error.code) || '');
+        if (code === 'auth/email-already-in-use') {
+          var e = new Error('هذا البريد الإلكتروني مسجّل مسبقًا. سجّل الدخول أو استعمل «نسيت كلمة المرور؟».');
+          e.duplicate = true;
+          throw e;
+        }
+        if (code === 'auth/weak-password') {
+          throw new Error('كلمة المرور ضعيفة. اختر ثماني خانات على الأقل.');
+        }
+        throw new Error((error && error.message) || 'تعذّر إنشاء الحساب.');
+      });
+  }
+
+  /* The account stands at the door until the club answers, and the reason for a
+     refusal is written where the person reads it when they try again. */
+  function openAccount(uid, record) {
+    if (!uid || !(window.firebase && firebase.firestore)) return Promise.resolve();
+    try {
+      return firebase.firestore().collection('users').doc(uid).set({
+        name: [record.first_name_ar, record.last_name_ar].filter(Boolean).join(' '),
+        email: record.email,
+        username: record.username,
+        role: 'member',
+        /* The club's own wording for the three states, so the page and the
+           database never disagree about what a status means. */
+        request_status: 'pending',
+        phone: record.phone || '',
+        birth_date: record.birth_date || '',
+        created_at: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(function () {
+        /* The account exists either way. Failing to write the profile must not
+           lose the registration that was accepted a moment ago. */
+      });
+    } catch (_) { return Promise.resolve(); }
+  }
+
   function send() {
     var button = el('submit');
     button.disabled = true;
-    button.textContent = 'جارٍ الإرسال…';
+    button.textContent = 'جارٍ الإنشاء…';
 
     var body = payload();
-    /* Firestore refuses a document over 1 MiB, and the photo travels inside it.
-       A photo heavy enough to tip the record over would cost the whole
-       registration, not just the picture, so the size is checked here and the
-       photo is left out rather than losing the names with it. */
-    var dropped = false;
-    if (state.photo && payloadBytes(body) > DOC_MAX_BYTES) {
-      dropped = true;
-      body.photo = '';
-      body.photo_omitted = true;
-    }
-
-    return fetch('/api/applications', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (data) {
-        if (!r.ok) throw new Error(data.error || 'تعذّر إرسال الطلب. تحقّق من الاتصال وحاول مجدداً.');
-        return data;
+    var credentials = {
+      email: val('email'),
+      password: val('password'),
+      username: val('username')
+    };
+    /* The account is made first: it is what the request is filed under, and a
+       request with no account behind it is a request the person can never follow
+       up on. */
+    return createAccount(credentials).then(function (account) {
+      button.textContent = 'جارٍ الإرسال…';
+      if (account.uid) body.applicant_uid = account.uid;
+      /* Firestore refuses a document over 1 MiB, and the photo travels inside it.
+         A photo heavy enough to tip the record over would cost the whole
+         registration, not just the picture, so the size is checked here and the
+         photo is left out rather than losing the names with it. */
+      if (state.photo && payloadBytes(body) > DOC_MAX_BYTES) {
+        body.photo = '';
+        body.photo_omitted = true;
+      }
+      return fetch('/api/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (data) {
+          if (!r.ok) {
+            var err = new Error(data.error || 'تعذّر إرسال الطلب. تحقّق من الاتصال وحاول مجدداً.');
+            err.duplicate = !!data.duplicate;
+            throw err;
+          }
+          return { data: data, account: account };
+        });
       });
-    }).then(function (data) {
+    }).then(function (out) {
       /* The printed form shows what was actually stored, not what was typed,
          so the two can never disagree on paper. */
       state.sent = Object.assign(body, {
-        application_no: data.application_no,
-        expected_amount: data.expected_amount
+        application_no: out.data.application_no,
+        registration_id: out.data.registration_id,
+        expected_amount: out.data.expected_amount
       });
-      clearDraft();
-      showDone();
+      return openAccount(out.account.uid, body).then(function () {
+        clearDraft();
+        /* The password is not kept anywhere on this device, not even in the
+           draft: a draft is a convenience and a draft that holds a password is a
+           password left on a phone. */
+        el('password').value = '';
+        el('password_confirm').value = '';
+        showDone();
+      });
     }).catch(function (e) {
       /* The draft is deliberately kept: nothing the person typed is lost when
          a send fails, so they can try again on the same phone. */

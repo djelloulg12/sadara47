@@ -49,8 +49,20 @@ const isAmount = (text, want) => digits(text).indexOf(String(want)) !== -1;
      but it must not pull in the platform shell, which needs a session. */
   if (!/src="\/firebase-adapter\.js"/.test(HTML)) errors.push('[tree] the page bypasses the shared adapter');
   if (/src="app\.js"/.test(HTML)) errors.push('[tree] the page loads the platform shell');
-  if (/\bsignIn|createUserWith|onAuthStateChanged/.test(PAGE)) {
-    errors.push('[tree] the page asks for an account, so it is not public');
+  /* The page opens an account for the person filling it in -- that is what the
+     club asked for, and the request is filed under it. What it must never do is
+     read a session that belongs to somebody else: this is a public page, and a
+     page that picked up a stranger's session would show it to them. */
+  if (/onAuthStateChanged|currentUser|signInWith/.test(PAGE)) {
+    errors.push('[tree] the public page reads a session, and must never');
+  }
+  if (!/createUserWithEmailAndPassword/.test(PAGE)) {
+    errors.push('[tree] the page asks for a password and never makes an account of it');
+  }
+  /* A password is offered to the provider and to nobody else: not to the
+     request, and not to the draft kept on the device. */
+  if (/password[^\n]*:\s*val\(/i.test(PAGE) && !/node\.type === 'password'\) return/.test(PAGE)) {
+    errors.push('[tree] the saved draft would keep the password');
   }
   /* Relative links break the moment the page is opened from another path, and a
      root-absolute one has to exist in the deployable tree too. */
@@ -251,6 +263,12 @@ function fill(w, category) {
   set('birth_date', '1994-05-04');
   set('phone', '0661000001');
   set('address', 'حي الثنية');
+  /* The account fields, because a form that asks for a password does not send
+     without one -- and every send check below goes through this. */
+  set('email', 'swimmer@example.com');
+  set('username', 'swimmer.test');
+  set('password', 'correct-horse');
+  set('password_confirm', 'correct-horse');
   const radio = w.document.querySelector('input[name="category"][value="' + category + '"]');
   radio.checked = true;
   w.document.getElementById('terms').checked = true;
@@ -448,7 +466,14 @@ tasks.push(() => {
     }
     if (body.status !== 'pending') errors.push('[send] a public sign-up must arrive pending');
     if ('reviewed_by' in body) errors.push('[send] the payload claims a review nobody did');
-    if ('applicant_uid' in body) errors.push('[send] the payload ties itself to an account, so it is not public');
+    /* It is filed under the account it opened, so the person can follow it up.
+       What it must not carry is the password: Firebase hashed it before it was
+       ever written anywhere, and this request carries the name, not the secret. */
+    if (body.email !== 'swimmer@example.com') errors.push('[send] the request does not name the account it belongs to');
+    if (body.username !== 'swimmer.test') errors.push('[send] the request does not carry the chosen user name');
+    if ('password' in body || 'password_confirm' in body) {
+      errors.push('[send] the password travelled with the request');
+    }
     if (body.sport !== 'السباحة') errors.push('[send] the sport is not the swimming branch');
     /* firestore.rules is what actually lets this through, anonymously. */
     if (!/match \/applications\/\{id\}/.test(RULES)) errors.push('[rules] no applications collection');
@@ -830,7 +855,7 @@ tasks.push(() => {
 {
   if (/الفحص الطبي/.test(HTML)) errors.push('[page] the medical section is still on the form');
   const steps = [...HTML.matchAll(/class="step-no">([^<]+)</g)].map(m => m[1]);
-  if (steps.join('|') !== '١|٢|٣|٤|٥') {
+  if (steps.join('|') !== '١|٢|٣|٤|٥|٦') {
     errors.push('[page] the steps are numbered ' + steps.join(' ') + ' after the medical section was removed');
   }
 }

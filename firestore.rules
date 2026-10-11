@@ -43,6 +43,41 @@ service cloud.firestore {
       allow delete: if manager();
     }
 
+    /* Registration numbers are counted here.
+       A number is a letter for the kind of account, the year, the number of the
+       pool, and four digits that run on. Those four digits have to be consecutive
+       under two people registering at once, which is what a document that is only
+       ever raised inside a transaction is for. */
+    match /counters/{id} {
+      allow read: if signedIn();
+      allow write: if manager();
+    }
+
+    /* Claims are how a name is made unique on a database that has no unique
+       constraint. The document's id IS the name being claimed: an address, a
+       username, a national identity number, the three-part key that identifies a
+       minor.
+
+       It is here because a query is not enough. A query says "nobody has this
+       name" and then, a moment later, somebody else takes it, and two people
+       registering at the same moment both pass. A claim is written once and never
+       changed, and updates and deletes are refused outright, so the database
+       itself turns the second one away rather than a check that ran a moment
+       earlier.
+
+       Only the person the name is being claimed for may claim it. That is what
+       stops a second applicant taking the first one's identity number out from
+       under them by writing the document first. */
+    match /claims/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.kind in
+             ['email', 'username', 'national_id', 'minor_key', 'registration_id']
+        && request.resource.data.key == id
+        && (request.resource.data.owner == request.auth.uid || ownerEmail());
+      allow update, delete: if false;
+    }
+
     // Prices are public so the sign-up page can show them.
     match /subscription_plans/{id} {
       allow read: if true;

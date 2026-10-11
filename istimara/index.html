@@ -306,6 +306,45 @@
         </label>
       </fieldset>
 
+      <!-- ---------- 6. the account ---------- -->
+      <fieldset class="card">
+        <legend><span class="step-no">٦</span> حسابك في النادي</legend>
+        <p class="card-note">
+          به تفتح طلبك، وترى مصيرَه، وتطبع استمارتك في أي وقت.
+          لا تُحفظ كلمة المرور في قاعدة بياناتنا — يحفظها
+          <b>Firebase</b> مُشفّرة، ولا يطّلع عليها أحد.
+        </p>
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">البريد الإلكتروني *</span>
+            <input id="email" name="email" type="email" required dir="ltr"
+                   autocomplete="email" maxlength="120" placeholder="name@example.com" />
+            <small class="hint">يُستعمل لتسجيل الدخول ولاستعادة كلمة المرور.</small>
+          </label>
+          <label class="f">
+            <span class="lbl">اسم المستخدم *</span>
+            <input id="username" name="username" type="text" required dir="ltr"
+                   autocomplete="username" maxlength="32" pattern="[A-Za-z0-9._-]{3,32}"
+                   placeholder="messaoud.belkacem" />
+            <small class="hint">حروف لاتينية وأرقام و . _ - — من ٣ إلى ٣٢ خانة، ولا يُستعمل مرّتين.</small>
+          </label>
+        </div>
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">كلمة المرور *</span>
+            <input id="password" name="password" type="password" required dir="ltr"
+                   autocomplete="new-password" minlength="8" maxlength="72" />
+            <small class="hint">ثماني خانات على الأقل.</small>
+          </label>
+          <label class="f">
+            <span class="lbl">تأكيد كلمة المرور *</span>
+            <input id="password_confirm" name="password_confirm" type="password" required dir="ltr"
+                   autocomplete="new-password" minlength="8" maxlength="72" />
+            <small class="hint">أعد كتابتها للتأكد من عدم وجود خطأ.</small>
+          </label>
+        </div>
+      </fieldset>
+
       <div class="form-msg" id="form-msg" role="alert" hidden></div>
 
       <div class="action-bar">

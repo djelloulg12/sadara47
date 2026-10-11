@@ -1,4 +1,4 @@
-import base64, hashlib, hmac, json, os, re, secrets, sqlite3, time
+import base64, hashlib, hmac, json, os, re, secrets, sqlite3, time, unicodedata
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 from datetime import date
@@ -66,6 +66,124 @@ def subscription_default(extras):
         return int(value) if value else 600
     except (TypeError, ValueError):
         return 600
+
+
+# ---------------- names that may only be taken once ----------------
+# The same three questions the live adapter asks, asked here so that an answer is
+# the same answer on either machine. SQLite can enforce the uniqueness itself --
+# PRIMARY KEY on claims is exactly the constraint Firestore rules cannot express --
+# so the local answer is the stricter of the two, and the code above it does not
+# have to be trusted to notice a second one.
+DUPLICATE_MESSAGE = 'هذا المشترك مسجل مسبقاً.'
+
+
+def norm_id(value):
+    """A name is compared the way a person writes it, not the way a keyboard
+    typed it: the same national number written with spaces, with dashes or in
+    capitals is the same person. Without this one member becomes three."""
+    text = '' if value is None else str(value)
+    text = unicodedata.normalize('NFKC', text)
+    return re.sub(r'[\s  \-_.]', '', text).upper()
+
+
+def identity_key(d):
+    """Which name says "this person, already", and of what kind.
+
+    An adult is the holder of a national identity number. A child has none of
+    their own, so they are the birth certificate number with the year and the
+    commune of birth -- all three, because any one of them on its own is shared
+    by more than one child."""
+    minor = str((d or {}).get('category') or 'adult').lower() == 'minor'
+    if minor:
+        cert = norm_id(d.get('birth_certificate_no'))
+        year = str(d.get('birth_date') or '')[:4]
+        place = norm_id(d.get('birth_place'))
+        if not (cert and year and place):
+            return None
+        return ('duplicate_key', '|'.join([cert, year, place]))
+    nid = norm_id(d.get('national_id'))
+    return ('national_id_key', nid) if nid else None
+
+
+def claim_id(kind, key):
+    """Document ids cannot hold every character a name can, and the id is the
+    name, so what cannot be written is written as its code."""
+    out = []
+    for ch in str(key):
+        if ch.isalnum() and ord(ch) < 128 or ch in '_.-@':
+            out.append(ch)
+        else:
+            out.append('_%x' % ord(ch))
+    return kind + '_' + ''.join(out)
+
+
+def claim_name(c, kind, key, owner):
+    """Writes the claim, or reports that the name is taken."""
+    cid = claim_id(kind, key)
+    try:
+        c.execute('INSERT INTO claims(id,kind,key,owner,claimed_at) VALUES(?,?,?,?,?)',
+                  (cid, kind, cid, owner or '', date.today().isoformat()))
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+
+def find_duplicate(c, key):
+    if not key:
+        return None
+    field, value = key
+    row = c.execute('SELECT application_no,status FROM applications WHERE %s=? LIMIT 1' % field,
+                    (value,)).fetchone()
+    if row:
+        return {'where': 'applications', 'reference': row['application_no'], 'status': row['status']}
+    row = c.execute('SELECT membership_no FROM swimmers WHERE %s=? LIMIT 1' % field, (value,)).fetchone()
+    if row:
+        return {'where': 'swimmers', 'reference': row['membership_no'], 'status': 'active'}
+    return None
+
+
+# ---------------- the registration number ----------------
+# E202610001 is a swimmer registered in 2026 at the first pool, the first of that
+# year and that pool: a letter for the kind of account, the year, the number of
+# the pool, then four digits that run on.
+ID_LETTER = {'swimmer': 'E', 'coach': 'C', 'admin': 'A'}
+
+
+def pool_number_of(pool, pools):
+    """The pool's number, as the club counts its pools.
+
+    It is the pool's rank among the pools rather than whatever number it carries,
+    because the two machines that hold these records do not agree on whether the
+    first pool is 0 or 1 -- the club's own list and this file's seed each start
+    where they please. Ranking answers 1, 2, 3 either way; reading the stored
+    number answers "two pools are the first pool" on one of them, and two pools
+    sharing a counter is two people handed the same registration number."""
+    def sort_key(p):
+        try:
+            return (0, int(p.get('order') or 0))
+        except (TypeError, ValueError):
+            return (1, 0)
+    ordered = sorted(pools or [], key=sort_key)
+    wanted = str(pool or '').strip()
+    for at, p in enumerate(ordered):
+        if str(p.get('id', '')) == wanted or str(p.get('name', '')) == wanted:
+            return at + 1
+    return 0
+
+
+def next_registration_id(c, kind, pool_no):
+    """The four running digits, raised together with the read that decides them so
+    two people registering at the same moment cannot both be handed the same
+    number. SQLite writes are serialised, so the transaction is what holds."""
+    year = date.today().year
+    pool = max(0, min(99, int(pool_no or 0)))
+    cid = 'registration_%d_%d' % (year, pool)
+    c.execute('INSERT OR IGNORE INTO counters(id,value,year,pool) VALUES(?,0,?,?)', (cid, year, pool))
+    row = c.execute('SELECT value FROM counters WHERE id=?', (cid,)).fetchone()
+    nxt = (row['value'] if row else 0) + 1
+    c.execute('UPDATE counters SET value=? WHERE id=?', (nxt, cid))
+    return (ID_LETTER.get(kind) or ID_LETTER['swimmer']) + str(year) + str(pool) + str(nxt).zfill(4)
+
 
 def read_extras(c):
     values = {r['key']: r['value'] for r in c.execute('SELECT key,value FROM fee_settings')}
@@ -144,6 +262,24 @@ def init_db():
         'payment_status': "TEXT NOT NULL DEFAULT 'unpaid'", 'cashier_name': 'TEXT',
         'paid_at': 'TEXT', 'scan_path': 'TEXT', 'scan_name': 'TEXT',
         'scan_size': 'INTEGER', 'scan_note': 'TEXT'})
+    ensure_columns(c, 'applications', {
+        'registration_id': 'TEXT', 'pool_number': 'INTEGER',
+        'username': 'TEXT', 'national_id_key': 'TEXT', 'duplicate_key': 'TEXT',
+        'rejection_reason': 'TEXT'})
+    ensure_columns(c, 'users', {
+        'username': 'TEXT', 'registration_id': 'TEXT', 'request_status': 'TEXT',
+        'rejection_reason': 'TEXT'})
+    ensure_columns(c, 'swimmers', {
+        'national_id_key': 'TEXT', 'duplicate_key': 'TEXT'})
+    # A name that may only be taken once, and the counter a registration number
+    # runs on. Both mirror what the Firestore rules enforce on the live project,
+    # so an answer is the same answer on either machine.
+    c.execute('''CREATE TABLE IF NOT EXISTS claims(
+                     id TEXT PRIMARY KEY, kind TEXT NOT NULL, key TEXT NOT NULL,
+                     owner TEXT NOT NULL, claimed_at TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS counters(
+                     id TEXT PRIMARY KEY, value INTEGER NOT NULL DEFAULT 0,
+                     year INTEGER, pool INTEGER)''')
     # Production-safe account bootstrap: credentials are supplied only through
     # environment variables and are never stored in the public source tree.
     accounts = [
@@ -248,9 +384,42 @@ class App(SimpleHTTPRequestHandler):
         n=int(self.headers.get('Content-Length','0'))
         return json.loads(self.rfile.read(n) or b'{}')
     def session_user(self, row):
+        keys = row.keys()
+        def col(name): return (row[name] or '') if name in keys else ''
         return {'id': row['id'], 'name': row['first_name'] + ' ' + row['last_name'], 'role': row['role'],
                 'email': row['email'], 'phone': row['phone'] or '',
-                'member_no': row['member_no'] or '', 'group_name': row['group_name'] or ''}
+                'member_no': row['member_no'] or '', 'group_name': row['group_name'] or '',
+                'username': col('username'), 'registration_id': col('registration_id'),
+                # Where the person's *request* stands. Not the account's own
+                # status, which is whether the account may be used at all -- two
+                # different questions, and one column cannot answer both.
+                'status': col('request_status'), 'rejection_reason': col('rejection_reason')}
+
+    def login_gate(self, user):
+        """Where the person's request stands, answered in one place.
+
+        A pending request has not been refused, so the account exists but the club
+        has not said yes yet; it is answered with the waiting message rather than
+        with an error. A refused request carries the reason the club gave, shown as
+        it is written.
+
+        An account with no status at all is one that predates the field, and is let
+        through: reading "no answer" as "not allowed" would lock the people who run
+        the club out of their own club. Mirrors the adapter."""
+        status = str((user or {}).get('status') or '').strip()
+        if not status:
+            return {'gate': 'open', 'message': ''}
+        low = status.lower()
+        if low in ('accepted', 'approved', 'مقبول', 'مقبولة'):
+            return {'gate': 'open', 'message': ''}
+        if low in ('pending', 'قيد المعالجة', 'قيد الدراسة', 'قيد الانتظار'):
+            return {'gate': 'pending', 'message': 'طلبك قيد الدراسة.'}
+        if low in ('rejected', 'refused', 'مرفوض', 'مرفوضة'):
+            why = str((user or {}).get('rejection_reason') or '').strip()
+            return {'gate': 'rejected',
+                    'message': why or 'رُفض طلب التسجيل.',
+                    'reason': why}
+        return {'gate': 'unknown', 'message': 'حالة الطلب غير معروفة: ' + status}
     def current_user(self):
         token=self.headers.get('Cookie','').replace('sadara_session=','').split(';')[0]
         return SESSIONS.get(token)
@@ -365,8 +534,14 @@ class App(SimpleHTTPRequestHandler):
         if path == '/api/login':
             c=connect(); row=c.execute("SELECT * FROM users WHERE email=? AND status='active'",(data.get('email',''),)).fetchone(); c.close()
             if not row or not password_ok(data.get('password',''),row['password_hash']): self.send_json({'error':'البريد الإلكتروني أو كلمة المرور غير صحيحة'},401); return
-            token=secrets.token_urlsafe(32); user=self.session_user(row); SESSIONS[token]=user
-            self.send_json({'user':user},extra={'Set-Cookie':f'sadara_session={token}; HttpOnly; SameSite=Lax; Path=/' }); return
+            user=self.session_user(row); gate=self.login_gate(user)
+            if gate['gate']!='open':
+                # signed out again: the account exists, but the club has not let
+                # this person in, and leaving the session open would be the one
+                # way round the door that is not the door
+                self.send_json({'user':user,'gate':gate,'error':gate['message']},403); return
+            token=secrets.token_urlsafe(32); SESSIONS[token]=user
+            self.send_json({'user':user,'gate':gate},extra={'Set-Cookie':f'sadara_session={token}; HttpOnly; SameSite=Lax; Path=/' }); return
         if path == '/api/visit':
             c=connect()
             try:
@@ -384,6 +559,14 @@ class App(SimpleHTTPRequestHandler):
             c=connect()
             try:
                 d=data; category=d.get('category','adult'); minor=category=='minor'
+
+                # Nobody is registered twice: the name is looked for before
+                # anything is written, and the club's own words come back.
+                key=identity_key(d)
+                found=find_duplicate(c,key)
+                if found:
+                    self.send_json({'error':DUPLICATE_MESSAGE,'duplicate':True,'existing':found},409); return
+
                 extras=read_extras(c)
                 plan=c.execute('SELECT amount FROM subscription_plans WHERE code=? AND active=1',(d.get('subscription_code','quarter'),)).fetchone()
                 amount=(plan['amount'] if plan else subscription_default(extras))+ (extras_for(extras,d)['transport'] if d.get('transport') else 0)+ (extras_for(extras,d)['uniform'] if d.get('uniform') else 0)
@@ -405,13 +588,34 @@ class App(SimpleHTTPRequestHandler):
                     'facility':d.get('facility','المسبح الأولمبي'),
                     'subscription_code':d.get('subscription_code','quarter'),
                     'transport':int(bool(d.get('transport'))),'uniform':int(bool(d.get('uniform'))),
-                    'payment_method':d.get('payment_method','cash'),'expected_amount':amount}
+                    'payment_method':d.get('payment_method','cash'),'expected_amount':amount,
+                    'username':d.get('username',''),
+                    'registration_id':d.get('registration_id',''),
+                    'pool_number':0,
+                    'national_id_key':key[1] if key and key[0]=='national_id_key' else '',
+                    'duplicate_key':key[1] if key and key[0]=='duplicate_key' else ''}
+                # The registration number is raised before the record is written,
+                # so the number and the record go in together.
+                pools=[{'id':r['id'],'name':r['name'],'order':r['position']} for r in c.execute('SELECT id,name,position FROM facilities ORDER BY position,id')]
+                pool_no=pool_number_of(d.get('facility_id') or d.get('facility'),pools)
+                record['pool_number']=pool_no
+                if not record['registration_id']:
+                    record['registration_id']=next_registration_id(c,'coach' if record['application_type']=='coach' else 'swimmer',pool_no)
+                # The claims are what make the answer certain. SQLite enforces the
+                # uniqueness itself, so nothing half-written is left behind.
+                claims=[('username',norm_id(d.get('username')))]
+                if key: claims.append(key)
+                for kind,value in claims:
+                    if not value: continue
+                    if not claim_name(c,kind,value,d.get('applicant_uid','')):
+                        c.rollback()
+                        self.send_json({'error':DUPLICATE_MESSAGE,'duplicate':True},409); return
                 cur=c.execute('INSERT INTO applications('+','.join(record)+') VALUES('+','.join('?'*len(record))+')',tuple(record.values()))
                 app_id=cur.lastrowid
                 if minor and d.get('guardian_first_name'):
                     c.execute('INSERT INTO guardians(application_id,first_name,last_name,relation,national_id,phone,whatsapp,address,consent) VALUES(?,?,?,?,?,?,?,?,?)',(app_id,d.get('guardian_first_name'),d.get('guardian_last_name',''),d.get('guardian_relation','ولي'),d.get('guardian_national_id',''),d.get('guardian_phone',''),d.get('guardian_whatsapp',''),d.get('guardian_address',''),int(bool(d.get('guardian_consent')))))
                 c.execute('INSERT INTO payments(application_id,amount,method) VALUES(?,?,?)',(app_id,amount,d.get('payment_method','cash')))
-                c.commit(); self.send_json({'ok':True,'application_no':no,'expected_amount':amount},201)
+                c.commit(); self.send_json({'ok':True,'application_no':no,'registration_id':record['registration_id'],'expected_amount':amount},201)
             except sqlite3.IntegrityError as e: self.send_json({'error':str(e)},400)
             finally: c.close()
             return
