@@ -62,6 +62,22 @@
     msg.textContent = text;
     msg.className = 'form-msg ' + (kind || 'error');
     msg.hidden = false;
+    saidKind = kind || 'error';
+  }
+  var saidKind = '';
+
+  /* An error stops being true the moment the person starts fixing what it was
+     about, and leaving it on screen says the request is still refused when it is
+     not. Only a complaint is taken back this way: the note that a draft came back
+     is still true, and "please wait" would be worse than saying nothing. */
+  function clearComplaintOnEdit() {
+    if (saidKind === 'error' && !msg.hidden) {
+      msg.hidden = true;
+      saidKind = '';
+      Array.prototype.forEach.call(form.querySelectorAll('.bad'), function (n) {
+        n.classList.remove('bad');
+      });
+    }
   }
 
   function val(id) {
@@ -192,6 +208,8 @@
          the same folding puts it in the shape a typed one would be in. */
       node.addEventListener('paste', function () { window.setTimeout(relayout, 0); });
     });
+    form.addEventListener('input', clearComplaintOnEdit);
+    form.addEventListener('change', clearComplaintOnEdit);
   }
 
   function checked(id) { var n = el(id); return !!(n && n.checked); }
