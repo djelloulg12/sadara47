@@ -791,6 +791,16 @@
   var EMAIL_RE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
   var USERNAME_RE = /^[A-Za-z0-9._-]{3,32}$/;
 
+  /* What the provider says, in the club's words. Shared by both doors -- making an
+     account and returning to one -- because a message that is right on one and
+     missing on the other is how the same failure reads in two languages. */
+  var SADARA_AUTH_SAYS = {
+    'auth/network-request-failed': 'تعذّر الاتصال. تحقّق من الإنترنت ثم أعد المحاولة — ما كتبته محفوظ.',
+    'auth/too-many-requests': 'محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.',
+    'auth/operation-not-allowed': 'تسجيل الحسابات معطّل على هذه المنصة. اتصل بالنادي.',
+    'auth/unauthorized-domain': 'هذه الصفحة غير مصرّح لها بالتسجيل. اتصل بالنادي.'
+  };
+
   var ACCOUNT_FIELDS = ['email', 'username', 'password', 'password_confirm'];
 
   /* Which account this is: one being made, or one already held. Read from the
@@ -876,6 +886,10 @@
         if (code === 'auth/weak-password') {
           throw new Error('كلمة المرور ضعيفة. اختر ثماني خانات على الأقل.');
         }
+        /* The club fills this in on a phone, often on a weak connection, and a
+           provider's own wording at the end of it is not what makes somebody
+           press the button again. */
+        if (SADARA_AUTH_SAYS[code]) throw new Error(SADARA_AUTH_SAYS[code]);
         throw new Error((error && error.message) || 'تعذّر إنشاء الحساب.');
       });
   }
@@ -924,14 +938,16 @@
       })
       .catch(function (error) {
         var code = String((error && error.code) || '');
-        var known = {
+        /* The two failures that are about this person and not the provider:
+           a wrong password and an address with no account. They send somebody to
+           two different places, so each says which. */
+        var mine = {
           'auth/wrong-password': 'كلمة المرور غير صحيحة.',
           'auth/invalid-credential': 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
-          'auth/user-not-found': 'لا يوجد حساب بهذا البريد الإلكتروني. اختر «حساب جديد».',
-          'auth/too-many-requests': 'محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.',
-          'auth/network-request-failed': 'تعذّر الاتصال. تحقّق من الإنترنت ثم أعد المحاولة.'
+          'auth/user-not-found': 'لا يوجد حساب بهذا البريد الإلكتروني. اختر «حساب جديد».'
         };
-        throw new Error(known[code] || ((error && error.message) || 'تعذّر تسجيل الدخول.'));
+        throw new Error(mine[code] || SADARA_AUTH_SAYS[code]
+          || ((error && error.message) || 'تعذّر تسجيل الدخول.'));
       });
   }
 
