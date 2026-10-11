@@ -34,7 +34,7 @@ jobs:
           # istimara/ is hand-written and copied into firebase-public by the
           # build. A folder that exists only in one of the two places means the
           # live form is either missing or serving yesterday's copy.
-          for f in index.html istimara.css istimara.js print.js; do
+          for f in index.html istimara.css istimara.js print.js algeria.js communes.json; do
             if [ ! -f "firebase-public/istimara/$f" ]; then
               echo "::error file=istimara/$f::missing from firebase-public, /istimara/ would 404"
               exit 1
@@ -101,6 +101,21 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
         run: |
           npx --yes firebase-tools@latest deploy --only firestore:rules,storage --project "${{ steps.config.outputs.id }}" --non-interactive
+        # Held back on purpose.
+        #
+        # The rules running on the project are NOT the copy in this repository.
+        # They are stricter: they refuse a registration that does not name its
+        # application_type, and they refuse any field that is not on a list. This
+        # file does not. It was found the hard way -- the public form was answering
+        # every registration with "you do not have permission", which turned out to
+        # be this difference and nothing else.
+        #
+        # So publishing this file would not be a no-op: it would widen what is
+        # allowed, on a live database, without anyone having read what it replaces.
+        # That has to be a decision somebody makes, not a side effect of adding a
+        # service account. Until then the form is fixed to satisfy the rules that
+        # are actually in force, and this copy stays the one nobody deploys.
+        if: ${{ secrets.DEPLOY_FIRESTORE_RULES == 'true' }}
 
       - name: Deploy Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
