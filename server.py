@@ -265,7 +265,8 @@ def init_db():
     ensure_columns(c, 'applications', {
         'registration_id': 'TEXT', 'pool_number': 'INTEGER',
         'username': 'TEXT', 'national_id_key': 'TEXT', 'duplicate_key': 'TEXT',
-        'rejection_reason': 'TEXT'})
+        'rejection_reason': 'TEXT', 'claim_only': 'INTEGER NOT NULL DEFAULT 0',
+        'filed_under': "TEXT NOT NULL DEFAULT 'reference'"})
     ensure_columns(c, 'users', {
         'username': 'TEXT', 'registration_id': 'TEXT', 'request_status': 'TEXT',
         'rejection_reason': 'TEXT'})
@@ -601,20 +602,36 @@ class App(SimpleHTTPRequestHandler):
                 record['pool_number']=pool_no
                 if not record['registration_id']:
                     record['registration_id']=next_registration_id(c,'coach' if record['application_type']=='coach' else 'swimmer',pool_no)
-                # The claims are what make the answer certain. SQLite enforces the
-                # uniqueness itself, so nothing half-written is left behind.
-                claims=[('username',norm_id(d.get('username')))]
-                if key: claims.append(key)
-                for kind,value in claims:
-                    if not value: continue
-                    if not claim_name(c,kind,value,d.get('applicant_uid','')):
-                        c.rollback()
-                        self.send_json({'error':DUPLICATE_MESSAGE,'duplicate':True},409); return
+                # Nobody is registered twice, enforced where the write happens.
+                # An adult is the holder of a national identity number. A child has
+                # none of their own, so they are the birth certificate number with
+                # the year and the commune of birth -- all three, because any one
+                # of them alone is shared by more than one child.
+                #
+                # SQLite refuses the second insert outright -- a primary key is
+                # exactly the constraint Firestore rules cannot express -- so the two
+                # machines do not merely behave alike, they are stopped in the same
+                # place. The claim is written just before the insert, so a refusal
+                # leaves nothing behind.
+                record['filed_under']='identity' if key else 'reference'
+                if key and not claim_name(c,key[0],key[1],d.get('applicant_uid','')):
+                    c.rollback()
+                    self.send_json({'error':DUPLICATE_MESSAGE,'duplicate':True},409); return
                 cur=c.execute('INSERT INTO applications('+','.join(record)+') VALUES('+','.join('?'*len(record))+')',tuple(record.values()))
                 app_id=cur.lastrowid
                 if minor and d.get('guardian_first_name'):
                     c.execute('INSERT INTO guardians(application_id,first_name,last_name,relation,national_id,phone,whatsapp,address,consent) VALUES(?,?,?,?,?,?,?,?,?)',(app_id,d.get('guardian_first_name'),d.get('guardian_last_name',''),d.get('guardian_relation','ولي'),d.get('guardian_national_id',''),d.get('guardian_phone',''),d.get('guardian_whatsapp',''),d.get('guardian_address',''),int(bool(d.get('guardian_consent')))))
                 c.execute('INSERT INTO payments(application_id,amount,method) VALUES(?,?,?)',(app_id,amount,d.get('payment_method','cash')))
+                # The chosen user name is held after the request, for the same
+                # reason the live adapter does it in that order: a person already on
+                # the books is the common case and has to be told the truth about
+                # it. The request is already on file by then, so the refusal says
+                # so rather than leaving the person to find it at the counter.
+                if key and d.get('username') and not claim_name(c,'username',norm_id(d.get('username')),d.get('applicant_uid','')):
+                    c.commit()
+                    self.send_json({'error':'طلبك مسجّل، لكن اسم المستخدم «%s» مستعمل من قبل. '
+                                             'ستتصل بك إدارة النادي لترتيبه.' % d.get('username'),
+                                    'duplicate':True,'field':'username','filed':True},409); return
                 c.commit(); self.send_json({'ok':True,'application_no':no,'registration_id':record['registration_id'],'expected_amount':amount},201)
             except sqlite3.IntegrityError as e: self.send_json({'error':str(e)},400)
             finally: c.close()

@@ -128,49 +128,65 @@
 
   const rows = async name => (await db.collection(name).limit(ROW_LIMIT).get())
     .docs.map(d => ({ id: d.id, ...d.data() }));
-  /* ---------------- names that may only be taken once ----------------
-     Firestore has no unique constraint, so a name is made unique by claiming it:
-     a document whose id is the name, written once and never changed. The rules
-     refuse updates and deletes on claims, so the second person to ask for a name
-     that is taken is turned away by the database rather than by a check that ran
-     a moment earlier.
+  /* ---------------- a name that may only be taken once ----------------
+     Firestore has no unique constraint and cannot be given one. What a database
+     can be given is a collection whose rules let a document be created and refuse
+     to let it be written a second time -- and the requests are already exactly
+     that collection. A request may be created here and may not be created again.
 
-     A query alone would not do. It says "nobody has this name" and then somebody
-     else takes it, and two people registering at the same moment both pass. */
-  const CLAIM_KINDS = ['email', 'username', 'national_id', 'minor_key', 'registration_id'];
+     So a request is filed under a name that says who it is: the national
+     identity number of an adult, and the birth certificate number with the year
+     and the commune for a child. The reference number the club reads is a field
+     of the document rather than its name, so nothing is lost by the document
+     being named after the person instead of after the day it was filed.
+
+     A query would not have done. It says "nobody has this name" and then, a
+     moment later, somebody else takes it, and two people registering at the same
+     moment both pass. Here the second one is turned away by the database itself,
+     with no window between the check and the write. */
+  const CLAIM_KIND_U = 'U';
 
   /* Document ids cannot hold every character a name can, and the id is the name,
      so what cannot be written is written as its code. Deterministic either way:
      the same name always produces the same id, which is the whole point. */
-  const claimId = (kind, key) => kind + '_' + String(key)
-    .replace(/[^A-Za-z0-9_.@-]/g, c => '_' + c.charCodeAt(0).toString(16));
+  const safeId = value => String(value).replace(/[^A-Za-z0-9_.@-]/g, c => '_' + c.charCodeAt(0).toString(16));
 
-  /* Whether the database actually enforces a claimed name, asked once.
-     The rules that make a claim un-takeable live with the database, and a
-     project whose rules predate them refuses every claim -- which is the same
-     error as a name that is taken, and would answer "already registered" to
-     everybody. So the question is asked rather than assumed: read one claim, and
-     if the rules are not there, fall back to the query and say so on the record.
-     The weaker answer is written down rather than passed off as the stronger one. */
-  let claimsChecked = null;
-  const claimsAvailable = async () => {
-    if (claimsChecked === null) {
-      try {
-        await db.collection('claims').doc('_probe').get();
-        claimsChecked = true;
-      } catch (error) {
-        claimsChecked = false;
-        console.warn('this project has no rules for claimed names; a name is checked by query only', error);
-      }
+  /* Where a person's request is filed. Empty when there is nothing that says who
+     they are, and then the request is filed under its reference number as before
+     and gets no protection -- which is said out loud below rather than left to be
+     discovered. */
+  const identityDocId = identity => identity
+    ? 'APP-' + (identity.kind === 'minor_key' ? 'M' : 'N') + '-' + safeId(identity.key)
+    : '';
+
+  /* Where a chosen user name is held. Its own document rather than a field on the
+     request, because the name has to survive the request being refused: two
+     people, two requests, one user name. */
+  const usernameDocId = name => 'APP-' + CLAIM_KIND_U + '-' + safeId(normId(name));
+
+  /* Writes a document once, or reports that the name is taken.
+     A permission error on a document that already exists IS the answer -- the
+     rules refuse the second write to it -- so it is returned as an answer rather
+     than thrown. Anything else is a fault and is passed on. */
+  const writeOnce = async (docId, record) => {
+    try {
+      await db.collection('applications').doc(docId).set(record);
+      return true;
+    } catch (error) {
+      const denied = String((error && error.code) || '').includes('permission-denied')
+        || /PERMISSION_DENIED/i.test(error.message || '');
+      if (denied) return false;
+      throw error;
     }
-    return claimsChecked;
   };
 
   /* Whether the requests can be read by whoever is registering.
-     The duplicate check is a lookup among the requests, and the requests are the
-     club's own business -- readable by management, not by somebody standing at a
-     form. So on a project whose rules keep it that way the check cannot run, and
-     a check that cannot run must not be reported as one that passed. */
+     The lookup is what lets a refusal name the request already on file, and it is
+     the club's own business -- readable by management, not by somebody standing at
+     a form. So on a project whose rules keep it that way the lookup cannot run.
+     It is not missed, because the refusal does not depend on it: the document
+     name carries the duplicate away whether or not anybody could have read the
+     list. */
   let lookupChecked = null;
   const duplicateLookupAvailable = async () => {
     if (lookupChecked === null) {
@@ -179,7 +195,7 @@
         lookupChecked = true;
       } catch (error) {
         lookupChecked = false;
-        console.warn('this project does not let a registration read the requests; duplicates are not checked', error);
+        console.warn('this project does not let a registration read the requests; a refusal cannot name one', error);
       }
     }
     return lookupChecked;
@@ -200,25 +216,6 @@
       }
     }
     return countersChecked;
-  };
-
-  /* Writes the claim, or reports that the name is already taken.
-     A permission error here means the document already exists -- that is the
-     answer, not a fault. Anything else is a fault and is passed on. */
-  const claimName = async (kind, key, uid) => {
-    if (CLAIM_KINDS.indexOf(kind) === -1) throw new Error('unknown claim kind: ' + kind);
-    const id = claimId(kind, key);
-    try {
-      await db.collection('claims').doc(id).set({
-        kind, key: id, owner: uid, claimed_at: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      return true;
-    } catch (error) {
-      if (error && (error.code === 'permission-denied' || /PERMISSION_DENIED/i.test(error.message || ''))) {
-        return false;
-      }
-      throw error;
-    }
   };
 
   /* A name is compared the way a person writes it, not the way a keyboard typed
@@ -738,7 +735,9 @@
       if (path === '/api/applications' && method === 'GET') {
         const gate = await managerView('صلاحية رئيس النادي مطلوبة');
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
-        return jsonResponse(await rows('applications'));
+        /* A document that holds a name rather than a person waiting is not a
+           request, and the manager's list is a list of people. */
+        return jsonResponse((await rows('applications')).filter(row => !row.claim_only));
       }
       if (path === '/api/applications' && method === 'POST') {
         const [plans, extras, pools] = await Promise.all([rows('subscription_plans'), readExtras(), rows('facilities')]);
@@ -758,11 +757,11 @@
            is written, and the answer is the club's own words rather than a refusal
            with nothing behind it.
 
-           Whether that lookup can run at all is asked first: the requests are the
-           club's own business and a project whose rules keep them that way will
-           not let a visitor read them. A check that cannot run is not reported as
-           one that passed -- it is reported as not run. */
+           The lookup is a courtesy, not the guarantee: it lets the refusal name
+           the request already on file. The guarantee is below, in the name the
+           document is filed under. */
         const checked = await duplicateLookupAvailable();
+        const identity = identityKeyOf(body);
         const duplicate = checked ? await findDuplicate(body) : null;
         if (duplicate) {
           return jsonResponse({
@@ -777,10 +776,9 @@
             }
           }, 409);
         }
-        /* The name that says "this person, already", kept on the record so the
-           next request for the same person is found by an equality rather than by
-           reading every record the club has. */
-        const identity = identityKeyOf(body);
+
+        /* The name that says "this person, already", kept on the record as well so
+           the club can search for it without knowing how the document is filed. */
         const record = {
           ...body,
           application_no: applicationNo,
@@ -801,36 +799,54 @@
           record.pool_number = poolNo;
         }
 
-        /* The claims are written last, and they are what makes the answer certain.
-           A query said this person was not on the books a moment ago; if one of
-           these names turns out to be taken, the record is not written at all --
-           the applicant was the second one, and a half-written request would still
-           be sitting on the manager's list. */
-        const uid = currentUserUid();
-        const enforcing = await claimsAvailable();
-        const claims = [];
-        if (enforcing && uid && body.email) claims.push(['email', normId(body.email)]);
-        if (enforcing && uid && body.username) claims.push(['username', normId(body.username)]);
-        if (enforcing && identity) claims.push([identity.kind, identity.key]);
-        /* Which of the three answers was used is written on the record, so the
-           club can see at the counter whether a name that was allowed through was
-           allowed by the database or by a check that ran a moment earlier. */
-        record.uniqueness = !enforcing ? 'query-only'
-          : (!checked ? 'not-checked' : 'claimed');
-        if (!checked) record.duplicate_check = 'could-not-run';
-        for (const [kind, key] of claims) {
-          if (!key) continue;
-          if (await claimName(kind, key, uid)) {
-            record.claims = (record.claims || []).concat([kind]);
-            continue;
-          }
-          /* Nothing is written. The claim that is already there belongs to the
-             person who got there first, so there is nothing of this applicant's
-             to take back -- only the name, which was never theirs to have. */
+        /* Filed under the name that says who this is.
+           The rules allow a request to be created here and refuse to let it be
+           created a second time, so a person who is already on the books is turned
+           away by the database -- with no gap between the check and the write, and
+           whatever the rules happen to let a visitor read. A request with nothing
+           that says who it is is filed under its reference number and gets no such
+           protection, which is recorded on it rather than left to be assumed. */
+        const docId = identityDocId(identity) || applicationNo;
+        record.filed_under = identity ? 'identity' : 'reference';
+        if (!checked && identity) record.duplicate_check = 'could-not-name-one';
+        if (!await writeOnce(docId, record)) {
           return jsonResponse({ error: DUPLICATE_MESSAGE, duplicate: true }, 409);
         }
 
-        await db.collection('applications').doc(applicationNo).set(record);
+        /* The chosen user name is held after the request, not before.
+           A person who is already on the books is the common case, and it has to
+           be told the truth about it -- "already registered", not "that user name
+           is taken" -- so the identity is spoken for first.
+
+           The cost falls in the rare case: a name that is genuinely taken leaves a
+           legitimate request on file, because it cannot be taken back off. That is
+           said plainly rather than discovered at the counter. */
+        const username = String(body.username || '').trim();
+        if (username && identity) {
+          const held = await writeOnce(usernameDocId(username), {
+            application_type: applicationType,
+            status: 'pending',
+            /* Marks the document as a name held rather than a person waiting, so
+               it is kept out of the manager's list and out of anything printed. */
+            claim_only: true,
+            username: normId(username),
+            application_no: applicationNo,
+            claimed_at: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          if (!held) {
+            return jsonResponse({
+              error: 'طلبك مسجّل، لكن اسم المستخدم «' + username + '» مستعمل من قبل. '
+                + 'ستتصل بك إدارة النادي لترتيبه.',
+              duplicate: true, field: 'username', filed: true
+            }, 409);
+          }
+          /* Written after the fact rather than folded into the request, because a
+             request may not be written a second time and this had to be known
+             after it. */
+          await db.collection('applications').doc(docId)
+            .set({ username_claimed: true }, { merge: true }).catch(() => {});
+        }
+
         return jsonResponse({
           ok: true,
           application_no: applicationNo,
@@ -871,10 +887,14 @@
 
         /* Accepting a request used to change the request's status and stop
            there, so nobody became a swimmer and the club had to add them again by
-           hand. The swimmer is written under the application number, which makes
+           hand. The swimmer is written under the request's own name, which makes
            approving twice update one person rather than create two. */
         if (patch.status === 'approved') {
-          const no = patch.application_no || appMatch[1];
+          /* The document's own name, not the reference number inside it: a request
+             is filed under the name that says who it is, and the reference number
+             is a field the club reads. Looking it up by that field would find
+             nothing at all now. */
+          const no = appMatch[1];
           const src = (await db.collection('applications').doc(no).get()).data() || {};
 
           /* The number is raised here when it could not be raised when the request
@@ -897,7 +917,11 @@
 
           if (src.application_type !== 'coach') {
             await db.collection('swimmers').doc(no).set({
-              membership_no: src.membership_no || registrationId || no,
+              /* The number the club reads off the card: the registration number
+                 first, then the request's own reference. Never the document's
+                 name, which says who the person is and is not a number anybody
+                 reads aloud at the counter. */
+              membership_no: src.membership_no || registrationId || src.application_no || no,
               registration_id: registrationId,
               name: [src.first_name_ar, src.last_name_ar].filter(Boolean).join(' '),
               first_name_ar: src.first_name_ar || '', last_name_ar: src.last_name_ar || '',

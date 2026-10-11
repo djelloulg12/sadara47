@@ -19,9 +19,10 @@ const DATA = {
      to exist, and a mock that named everybody an owner would pass every check
      for the wrong reason. payments is written to when a request is settled. */
   config: { owners: { emails: [] } }, payments: {}, audit_logs: {},
-  /* Where a registration number's four running digits are counted, and where a
-     name is claimed once so it cannot be taken twice. */
-  counters: {}, claims: {},
+  /* Where a registration number's four running digits are counted. A user name is
+     held in the requests too, under a name of its own, because that is a
+     collection whose rules refuse a second write. */
+  counters: {},
   /* The public read asks for the pools alongside the plans, because the fee
      depends on which pool the swimmer is going to. Two of them, so a pool's
      number in a registration number is a position and not always 1. */
@@ -45,8 +46,9 @@ const DATA = {
      transactions read and write. A mock that hands back a fixed number never
                   runs two, so a number that is supposed to be consecutive cannot
                   be seen to be.
-     claims       refuse to be written twice, which is the whole mechanism by
-                  which a name is made unique. A mock that overwrites silently
+     the second   writing a document that is already there is refused, which is
+                  write            the whole mechanism by which a request is filed
+                               once per person. A mock that overwrites silently
                   would make uniqueness untestable and untrue. */
 function makeFirestore() {
   const denied = code => { const e = new Error('Missing or insufficient permissions.'); e.code = 'permission-denied'; return e; };
@@ -66,11 +68,10 @@ function makeFirestore() {
                handed a reference and still find the document it names. */
             _name: name,
             set: async (value, opts) => {
-              /* A claim is written once. Writing it again is what the rules turn
-                 away, and that refusal IS the uniqueness check -- so the mock
-                 refuses it too, or nothing here would be able to tell a name that
-                 is free from one that is taken. */
-              if (name === 'claims' && DATA.claims[id] && !(opts && opts.merge)) throw denied();
+              /* A request may be created once and not created a second time: that
+                 refusal IS how a name is made unique, and a mock that overwrote
+                 silently would make uniqueness untestable and untrue. */
+              if (name === 'applications' && DATA[name][id] && !(opts && opts.merge)) throw denied();
               calls.push(['set', name, id, value]);
               DATA[name][id] = opts && opts.merge ? Object.assign({}, DATA[name][id], value) : value;
             },
@@ -537,10 +538,10 @@ test('a registration number is a letter, a year, a pool and a running count', as
   }
 });
 
-test('a name already claimed cannot be taken again', async () => {
-  /* The claim is what makes the answer certain: a query says "nobody has this
-     name" and then somebody else takes it. The claim is written once and the
-     database turns the second one away. */
+test('a chosen user name cannot be taken twice', async () => {
+  /* A user name is a name in its own right: two people, two requests, one name.
+     Nothing about the person is shared here -- the second has another identity
+     number entirely -- so only the name itself can turn this away. */
   const first = boot(asUser('u1'));
   const a = await call(first, '/api/applications', 'POST', {
     application_no: 'APP-CLAIM-1', category: 'adult', first_name_ar: 'x', last_name_ar: 'y',
@@ -548,39 +549,46 @@ test('a name already claimed cannot be taken again', async () => {
     username: 'belkacem', email: 'belkacem@x.dz', subscription_code: 'quarter'
   });
   if (!a.ok) { errors.push('the first registration was refused: ' + JSON.stringify(a.data).slice(0, 140)); return; }
-  const claims = Object.keys(DATA.claims).filter(id => DATA.claims[id].owner === 'u1');
-  if (claims.length < 3) {
-    errors.push('a name was not claimed at all -- ' + claims.length + ' claim(s) for a name, an email and a username');
+
+  /* The name is held in a document of its own, so it survives the request being
+     refused -- which is the whole point of holding it separately. */
+  const held = Object.keys(DATA.applications).filter(id => /^APP-U-/.test(id));
+  if (held.length !== 1) {
+    errors.push('the user name was not held in a document of its own: ' + held.join(', '));
     return;
   }
-  /* A second person, with a different national number so the duplicate check
-     passes, but the same username. Nothing in the query can catch this: it is
-     only the claim that can. */
+  /* And the manager's list is a list of people, so the document that holds a name
+     must not be in it. */
+  const listed = (await call(first, '/api/applications')).data.map(r => r.id);
+  if (listed.some(id => /^APP-U-/.test(id))) {
+    errors.push('the document holding a name appears in the manager list of people');
+  }
+
   const second = boot(asUser('u1'));
   const b = await call(second, '/api/applications', 'POST', {
     application_no: 'APP-CLAIM-2', category: 'adult', first_name_ar: 'z', last_name_ar: 'w',
     birth_date: '1991-01-01', phone: '07', address: 'b', national_id: 'ID-OTHER',
     username: 'BELKACEM', subscription_code: 'quarter'
   });
-  if (b.status !== 409) {
-    errors.push('a username already in use was accepted: ' + b.status + ' ' + JSON.stringify(b.data).slice(0, 140));
+  if (b.status !== 409 || !/اسم المستخدم/.test(b.data.error || '')) {
+    errors.push('a user name already in use was accepted: ' + b.status + ' ' + JSON.stringify(b.data).slice(0, 140));
   }
-  if (DATA.applications['APP-CLAIM-2']) {
-    errors.push('the refused registration was written to the database anyway');
+  /* The second person is a different person, so their request is legitimate and
+     is on file. What is refused is the name. Saying so plainly matters more than
+     leaving them to find it at the counter. */
+  if (!b.data.filed || !/طلبك مسجّل/.test(b.data.error || '')) {
+    errors.push('a taken user name did not say the request itself is filed: ' + JSON.stringify(b.data).slice(0, 140));
   }
 });
 
-test('a project whose rules predate claimed names still registers people', async () => {
-  /* The rules that make a name un-takeable live with the database. A project
-     that has not got them refuses every claim -- which is the same error as a
-     name that is taken, and would answer "already registered" to everybody.
+test('a person is turned away even when nobody can read the list', async () => {
+  /* The lookup among the requests is a courtesy: it lets a refusal name the
+     request already on file. The guarantee is the name the document is filed
+     under, and it must hold when the rules keep the requests unreadable to a
+     visitor -- which is how this project is set.
 
-     So the question is asked rather than assumed, and when the answer is no the
-     weaker check is used and written on the record. A name that was let through
-     has to say whether the database allowed it or a check that ran a moment
-     earlier did. */
-  const reads = () => { throw denied(); };
-  const before = new Set(Object.keys(DATA.claims));
+     Checked on a project where the read is refused, because a check that only
+     works where the list can be read is a check that does not work here. */
   const w = boot(asUser('u1'));
   const original = w.firebase.firestore;
   const stubbed = Object.assign(() => {
@@ -588,12 +596,13 @@ test('a project whose rules predate claimed names still registers people', async
     const realCollection = real.collection.bind(real);
     real.collection = (name) => {
       const api = realCollection(name);
-      if (name === 'claims') {
-        const realDoc = api.doc.bind(api);
-        api.doc = (id) => {
-          const ref = realDoc(id);
-          return id === '_probe' ? Object.assign({}, ref, { get: reads }) : ref;
+      if (name === 'applications') {
+        api.get = () => {
+          const e = new Error('Missing or insufficient permissions.');
+          e.code = 'permission-denied';
+          return Promise.reject(e);
         };
+        api.where = () => api;
       }
       return api;
     };
@@ -602,25 +611,51 @@ test('a project whose rules predate claimed names still registers people', async
   w.firebase.firestore = stubbed;
   w.eval(ADAPTER);
 
+  const base = {
+    category: 'adult', first_name_ar: 'x', last_name_ar: 'y', birth_date: '1990-01-01',
+    phone: '06', address: 'a', subscription_code: 'quarter', username: 'nobody.two'
+  };
+  const first = await call(w, '/api/applications', 'POST', Object.assign({}, base, {
+    application_no: 'APP-DARK-1', national_id: 'DARK-1'
+  }));
+  if (!first.ok) { errors.push('the first registration was refused: ' + JSON.stringify(first.data).slice(0, 140)); return; }
+  const record = Object.values(DATA.applications)
+    .find(r => r.application_no === 'APP-DARK-1' && !r.claim_only);
+  if (!record || record.filed_under !== 'identity') {
+    errors.push('the request was not filed under a name that says who it is');
+  }
+  if (record && !record.duplicate_check) {
+    errors.push('the record does not say that a refusal could not name a request');
+  }
+
+  /* The same person again, on a project where the list cannot be read. The
+     document name is the same, and the rules refuse the second write to it. */
+  const again = await call(w, '/api/applications', 'POST', Object.assign({}, base, {
+    application_no: 'APP-DARK-2', national_id: 'DARK-1'
+  }));
+  if (again.status !== 409 || !/مسجل مسبقاً/.test(again.data.error || '')) {
+    errors.push('a person already on the books was registered again where the list cannot be read: '
+      + again.status + ' ' + JSON.stringify(again.data).slice(0, 140));
+  }
+});
+
+test('a request with nothing that says who it is says so on its own face', async () => {
+  /* A coach file, or a desk registration with no national number: there is no
+     name that says who the person is, so the request is filed under its reference
+     number and gets no protection against being filed twice. That is recorded on
+     the request rather than left for the club to assume. */
+  const w = boot(asUser('u1'));
   const res = await call(w, '/api/applications', 'POST', {
-    application_no: 'APP-NORULES', category: 'adult', first_name_ar: 'x', last_name_ar: 'y',
-    birth_date: '1990-01-01', phone: '06', address: 'a', national_id: 'NO-RULES-1',
-    username: 'someone', email: 'someone@x.dz', subscription_code: 'quarter'
+    application_no: 'APP-NOIDENT', application_type: 'coach', coach_name: 'SLIM',
+    coach_phone: '06', coach_specialty: 'S', coach_experience: '6'
   });
-  if (!res.ok) {
-    errors.push('a project with no rules for claimed names refused a registration: '
-      + res.status + ' ' + JSON.stringify(res.data).slice(0, 140));
-    return;
+  if (!res.ok) { errors.push('a coach file was refused: ' + JSON.stringify(res.data).slice(0, 140)); return; }
+  const record = DATA.applications['APP-NOIDENT'];
+  if (!record) { errors.push('the coach file was not written under its reference number'); return; }
+  if (record.filed_under !== 'reference') {
+    errors.push('a request with no identity claims to be protected: ' + record.filed_under);
   }
-  const record = DATA.applications['APP-NORULES'];
-  if (!record || record.uniqueness !== 'query-only') {
-    errors.push('the record does not say it was checked by query only: '
-      + JSON.stringify(record && record.uniqueness));
-  }
-  if (Object.keys(DATA.claims).some(id => !before.has(id))) {
-    errors.push('a name was claimed on a project that cannot hold claims: '
-      + Object.keys(DATA.claims).filter(id => !before.has(id)).join(', '));
-  }
+  if (record.claim_only) errors.push('a coach file is a person waiting and must not be marked as a name held');
 });
 
 (async () => {
