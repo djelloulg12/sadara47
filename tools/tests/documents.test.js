@@ -36,7 +36,24 @@ w.HTMLElement.prototype.scrollIntoView = function () {};
 w.eval(APP + '\n;window.__t={get state(){return state},render:render,action:action,buildQRCodes:buildQRCodes,overlaySheet:overlaySheet,officialFormCSS:officialFormCSS,luxuryCard:luxuryCard};');
 w.__t.state.user = { id: 1, name: 'رئيس', role: 'admin' };
 
+
+/* What the club writes a number as. Built from the number rather than typed out:
+   three sets of digits that all look the same is how an expectation ends up the
+   wrong length and the check blames the sheet. */
+function arabicOf(v) {
+  return Array.from(String(v)).map(c =>
+    (c >= '0' && c <= '9') ? String.fromCodePoint(0x0660 + Number(c)) : c).join('');
+}
+
 const errors = [];
+/* What the club writes a number as. Built from the number rather than typed out:
+   three sets of digits that all look the same is how an expectation ends up the
+   wrong length and the check blames the sheet. */
+function arabicOf(v) {
+  return Array.from(String(v)).map(c =>
+    (c >= '0' && c <= '9') ? String.fromCodePoint(0x0660 + Number(c)) : c).join('');
+}
+
 
 // 1 + 2. the official form is an overlay on the club's own image
 {
@@ -71,8 +88,9 @@ const errors = [];
   const serial = byId.registration;
   const pool = byId.facility;
   if (!serial) errors.push('no spot for the registration number');
-  else if (serial.text !== applicant.application_no) {
-    errors.push('the registration number is not printed whole: ' + JSON.stringify(serial.text));
+  else if (serial.text !== arabicOf(applicant.application_no)) {
+    errors.push('the registration number is not printed whole in the club\'s digits: '
+      + JSON.stringify(serial.text));
   } else {
     /* Far left of the top line: the box stops just short of the printed label
        and starts at the page's edge. */
@@ -125,11 +143,16 @@ const errors = [];
   if (/17\/04\/2012/.test(printed)) {
     errors.push('a date is still printed day-first');
   }
-  /* The reference number is checked the other way round already: the serial above
-     must equal the applicant's request number exactly, which is only true while
-     the sheet is still printing it in Latin digits. */
-  if (!serial || serial.text !== applicant.application_no) {
-    errors.push('the registration number is no longer printed in the digits it is quoted in');
+  /* The serial on the sheet must be the applicant's request number and nothing
+     else -- whole, in the club's digits, with its letters and punctuation left
+     alone. A number cut short is a number the club cannot look up. */
+  if (!serial || serial.text !== arabicOf(applicant.application_no)) {
+    errors.push('the registration number on the sheet is not the request number in the club\'s digits: '
+      + JSON.stringify(serial && serial.text));
+  }
+  /* And nothing anywhere on the sheet is left in Latin digits but its letters. */
+  if (/[0-9]/.test(printed.replace(/\d+(\.\d+)?mm/g, '').replace(/style="[^"]*"/g, ''))) {
+    errors.push('a Latin digit is still printed on a sheet');
   }
 
   /* The card keeps a photograph, the season it was issued for, and the number,
@@ -148,8 +171,8 @@ const errors = [];
   if (!card.includes(SEASON_AR)) {
     errors.push('the card does not carry the season in Arabic digits, later year first');
   }
-  if (!card.includes('SDR-0042')) {
-    errors.push('the card number is no longer printed in the digits it is quoted in');
+  if (!card.includes('SDR-٠٠٤٢')) {
+    errors.push('the card number is not printed in the club\'s digits');
   }
   if (!APP.includes('2027 / 2026')) {
     errors.push('the club season is not 2027/2026 -- Arabic reads a season from the later year');

@@ -23,6 +23,7 @@ const SUITES = [
   ['roles', 'roles.test.js', 'roles agree across tools, page and rules'],
   ['modifications', 'modifications.test.js', 'roster, cards, timetable, roles'],
   ['documents', 'documents.test.js', 'every generated document'],
+  ['search-digits', 'search-digits.test.js', 'a number typed in either script finds the same record'],
   ['smoke', 'smoke.js', 'every page, every control, every role'],
   ['adapter', 'adapter.test.js', 'Firestore adapter authorisation and limits']
 ];

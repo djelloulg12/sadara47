@@ -112,7 +112,7 @@ function luxuryCard(p, kind){
   const roleLabel = coach ? 'مدرب' : 'سباح';
   const name = p.coach_name || p.name || '';
   const fr = p.first_name_fr ? (p.first_name_fr + ' ' + (p.last_name_fr || '')).trim() : '';
-  const no = p.membership_no || p.id || '';
+  const no = arDigits(p.membership_no || p.id || '');
   const photo = (p.photo && /^(data:|https?:)/.test(p.photo)) ? p.photo : '';
   const phone = p.phone || CLUB.phone;
   const rows = coach

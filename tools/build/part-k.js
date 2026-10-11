@@ -81,7 +81,7 @@ function formValues(a){
     /* A registration number is the club's own until one is issued; before that
        it is the number of the request. The last eight characters of a request
        number were never a number anyone could look up. */
-    registration: v('membership_no') || v('application_no'),
+    registration: arDigits(v('membership_no') || v('application_no')),
     first_name: v('first_name_ar'),
     last_name: v('last_name_ar'),
     birth_date: slashDate(a && a.birth_date),

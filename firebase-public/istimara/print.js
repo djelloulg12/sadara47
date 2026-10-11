@@ -127,7 +127,7 @@
     facility: v('facility'),
     /* A registration number is the club's own until one is issued; before that
        it is the number of the request. */
-    registration: v('membership_no') || v('application_no'),
+    registration: ar(v('membership_no') || v('application_no')),
       first_name: v('first_name_ar'),
       last_name: v('last_name_ar'),
       birth_date: slashDate(rec.birth_date),
@@ -322,7 +322,7 @@
       +   '<div class="s-photo">'
       +     (photo ? '<img src="' + esc(photo) + '" alt="صورة المنخرط">' : '<span>لا توجد صورة</span>')
       +   '</div>'
-      +   '<div class="s-no"><span>رقم الطلب</span><b dir="ltr">' + esc(rec.application_no || '—') + '</b>'
+      +   '<div class="s-no"><span>رقم الطلب</span><b>' + esc(ar(rec.application_no || '—')) + '</b>'
       /* The season belongs under the request number: on a sheet that may be read
          again next season, the two are what say which one it is. It is set larger
          than the number above it because the number is a reference to be
@@ -504,7 +504,7 @@
       '<div class="f-hint"><b>استمارة مكتملة.</b> '
       + 'الصفحة الأولى استمارة النادي الرسمية، والثانية ملخّص البيانات، والثالثة النظام الداخلي. '
       + 'وقّع الاستمارة ثم أحضرها إلى النادي. '
-      + '<span dir="ltr">' + esc(rec && rec.application_no ? rec.application_no : '') + '</span></div>';
+      + '<span>' + esc(ar(rec && rec.application_no ? rec.application_no : '')) + '</span></div>';
     return '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">'
       + '<meta name="viewport" content="width=device-width,initial-scale=1">'
       + '<title>' + esc(title) + '</title>'

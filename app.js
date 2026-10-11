@@ -537,7 +537,13 @@ function pageApplications(){
   const rows=list.filter(a=>{
     if(f!=='all'&&(a.status||'pending')!==f)return false;
     if(!q)return true;
-    return (appName(a)+' '+(a.application_no||'')+' '+(appContact(a)||'')).includes(q);
+    /* Folded on both sides, so a number read off a printed sheet -- which is in
+       the club's digits -- finds the record it names, and a number pasted in from
+       a spreadsheet finds it too. Both are written to the database in one form, so
+       this is the only place the two have to meet. */
+    const needle=latinDigits(q).toUpperCase();
+    const hay=latinDigits(appName(a)+' '+(a.application_no||'')+' '+(a.registration_id||'')+' '+(appContact(a)||'')).toUpperCase();
+    return hay.includes(needle);
   });
   const head='<div class="toolbar"><div class="search">⌕<input placeholder="ابحث بالاسم أو رقم الطلب..." id="app-search" value="'+esc(q)+'"></div>'
     +'<div class="toolbar-group">'
@@ -1908,7 +1914,7 @@ function formValues(a){
     /* A registration number is the club's own until one is issued; before that
        it is the number of the request. The last eight characters of a request
        number were never a number anyone could look up. */
-    registration: v('membership_no') || v('application_no'),
+    registration: arDigits(v('membership_no') || v('application_no')),
     first_name: v('first_name_ar'),
     last_name: v('last_name_ar'),
     birth_date: slashDate(a && a.birth_date),
@@ -2153,7 +2159,7 @@ function luxuryCard(p, kind){
   const roleLabel = coach ? 'مدرب' : 'سباح';
   const name = p.coach_name || p.name || '';
   const fr = p.first_name_fr ? (p.first_name_fr + ' ' + (p.last_name_fr || '')).trim() : '';
-  const no = p.membership_no || p.id || '';
+  const no = arDigits(p.membership_no || p.id || '');
   const photo = (p.photo && /^(data:|https?:)/.test(p.photo)) ? p.photo : '';
   const phone = p.phone || CLUB.phone;
   const rows = coach
@@ -2610,7 +2616,7 @@ function packetDocument(app, what) {
       : only === 'regs' ? '\u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u062f\u0627\u062e\u0644\u064a.'
         : '\u0627\u0644\u0627\u0633\u062a\u0645\u0627\u0631\u0629 \u0627\u0644\u0631\u0633\u0645\u064a\u0629.';
   return '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">' +
-    '<title>\u062d\u0632\u0645\u0629 \u062a\u0633\u062c\u064a\u0644 \u2014 ' + esc(CLUB_AR) + ' \u2014 ' + esc(app.application_no || '') + '</title>' +
+    '<title>\u062d\u0632\u0645\u0629 \u062a\u0633\u062c\u064a\u0644 \u2014 ' + esc(CLUB_AR) + ' \u2014 ' + esc(arDigits(app.application_no || '')) + '</title>' +
     '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
     '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=block" rel="stylesheet">' +
     '<style>' + packetCSS() + '</style></head><body>' +

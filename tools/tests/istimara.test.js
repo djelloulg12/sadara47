@@ -18,6 +18,14 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const PUB = path.join(ROOT, 'firebase-public');
 const FOLDER = path.join(PUB, 'istimara');
 const errors = [];
+/* What the club writes a number as. Built from the number rather than typed out:
+   three sets of digits that all look the same is how an expectation ends up the
+   wrong length and the check blames the sheet. */
+function arabicOf(v) {
+  return Array.from(String(v)).map(c =>
+    (c >= '0' && c <= '9') ? String.fromCodePoint(0x0660 + Number(c)) : c).join('');
+}
+
 /* Checks that need the page to settle run in order at the end, so none of them
    is skipped by an earlier one returning. */
 const tasks = [];
@@ -432,7 +440,7 @@ function fill(w, category) {
   const summary = F.summarySheet(rec);
   /* everything the applicant typed has to be readable on paper */
   for (const [key, what] of [
-    ['APP-20260101-AB12', 'رقم الطلب'], ['جلول', 'الاسم'], ['قندوز', 'اللقب'],
+    [arabicOf('APP-20260101-AB12'), 'رقم الطلب'], ['جلول', 'الاسم'], ['قندوز', 'اللقب'],
     ['\u0662\u0660\u0661\u0662/\u0660\u0664/\u0661\u0667', 'تاريخ الميلاد'], ['حي الثنية', 'العنوان'], ['O+', 'فصيلة الدم'],
     ['٠٦٦١٠٠٠٠٠١', 'الهاتف'], ['٠٦٦١٠٠٠٠٠٢', 'الواتساب'], ['ذكر', 'الجنس'],
     ['حرة، ظهر', 'نمط السباحة'], ['٢٠١٢٠٤١٧٨٨٧', 'رقم التعريف'], ['المسبح الاختيارمبي', 'المسبح'],
@@ -1081,12 +1089,16 @@ tasks.push(() => {
   else {
     /* Directly under it, and in Arabic-Indic digits with the later year first --
        the way a season is read and written in Arabic. */
-    if (!/رقم الطلب[\s\S]*APP-20261011-33A7[\s\S]*الموسم الرياضي[\s\S]*٢٠٢٧ \/ ٢٠٢٦/.test(no[1])) {
+    const wanted = 'رقم الطلب' + '[\\s\\S]*' + arabicOf('APP-20261011-33A7')
+      + '[\\s\\S]*' + 'الموسم الرياضي' + '[\\s\\S]*' + '٢٠٢٧ \\/ ٢٠٢٦';
+    if (!(new RegExp(wanted)).test(no[1])) {
       errors.push('[season] the summary does not carry the season under the request number');
     }
-    /* The request number itself stays in the digits it is quoted in. */
-    if (/[٠-٩]/.test(no[1].replace(/٢٠٢٧ \/ ٢٠٢٦/g, ''))) {
-      errors.push('[season] something on the request number is in Arabic digits');
+    /* And nothing on that block is left in Latin digits but its letters and its
+       punctuation -- those are not digits and were never the club's to change. */
+    if (/[0-9]/.test(no[1])) {
+      errors.push('[season] a Latin digit is left on the request number block: '
+        + JSON.stringify(no[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()));
     }
   }
   /* Set larger than the number above it: the number is matched, the season is
@@ -1130,9 +1142,15 @@ tasks.push(() => {
   ]) {
     if (got !== want) errors.push('[digits] ' + what + ' prints as ' + got + ', not ' + want);
   }
-  /* And the one thing that must not: a number the person has to read back. */
-  if (vals.registration !== 'APP-20261011-33A7') {
-    errors.push('[digits] the request number was converted, and then cannot be looked up: ' + vals.registration);
+  /* The request number too: written the way the club writes every number, with
+     its letters and punctuation left alone. It is still looked up by what it
+     says -- the platform's search folds digits on both sides -- but what the
+     person reads off the sheet is in the club's digits. */
+  if (vals.registration !== arabicOf('APP-20261011-33A7')) {
+    errors.push('[digits] the request number is not written in the club\'s digits: ' + vals.registration);
+  }
+  if (/[^\u0660-\u0669A-Za-z-]/.test(vals.registration.replace(/-/g, ''))) {
+    errors.push('[digits] the request number carries something that is not a digit: ' + vals.registration);
   }
   /* The thousands separator is whatever locale gives -- a narrow no-break space
      here, an ordinary one elsewhere -- so every run of blanks is collapsed to one

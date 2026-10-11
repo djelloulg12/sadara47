@@ -543,7 +543,13 @@ function pageApplications(){
   const rows=list.filter(a=>{
     if(f!=='all'&&(a.status||'pending')!==f)return false;
     if(!q)return true;
-    return (appName(a)+' '+(a.application_no||'')+' '+(appContact(a)||'')).includes(q);
+    /* Folded on both sides, so a number read off a printed sheet -- which is in
+       the club's digits -- finds the record it names, and a number pasted in from
+       a spreadsheet finds it too. Both are written to the database in one form, so
+       this is the only place the two have to meet. */
+    const needle=latinDigits(q).toUpperCase();
+    const hay=latinDigits(appName(a)+' '+(a.application_no||'')+' '+(a.registration_id||'')+' '+(appContact(a)||'')).toUpperCase();
+    return hay.includes(needle);
   });
   const head='<div class="toolbar"><div class="search">⌕<input placeholder="ابحث بالاسم أو رقم الطلب..." id="app-search" value="'+esc(q)+'"></div>'
     +'<div class="toolbar-group">'

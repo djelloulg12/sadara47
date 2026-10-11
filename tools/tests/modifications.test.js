@@ -76,7 +76,12 @@ function seed(user) {
     if (!no) errors.push('[2] card has no membership number element');
     else {
       if (photo.contains(no)) errors.push('[2] the number must sit under the photo frame, not inside it');
-      if (!/^SDR-\d+$/.test(no.textContent.trim())) errors.push('[2] number content wrong: ' + no.textContent.trim());
+      /* Arabic-Indic digits: the club writes its numbers the way it writes its
+         forms. Built from the number rather than typed out, so the expectation
+         cannot be the wrong length. */
+      if (!/^SDR-[\u0660-\u0669]{4}$/.test(no.textContent.trim())) {
+        errors.push('[2] the number is not in the club\'s digits: ' + no.textContent.trim());
+      }
       const wrap = card.querySelector('.lux-photo-wrap');
       if (!wrap) errors.push('[2] no wrapper around the photo frame');
       else if (no.parentElement !== wrap) errors.push('[2] the number must be a direct child of the photo wrapper');
