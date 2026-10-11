@@ -1874,7 +1874,11 @@ const FORM_SPOTS = [
   { id: 'blood_group',        y: 114.45, x0: 62.1,  colon: 178.3 },
   { id: 'phone',              y: 124.25, x0: 62.3,  colon: 178.3 },
   { id: 'parent_name',        y: 208.78, x0: 102.4, colon: 152.9 },
-  { id: 'parent_birth',       y: 208.78, x0: 32.9,  colon: 71.9 },
+  { id: 'child_birth_date',  y: 208.78, x0: 32.9,  colon: 71.9 },
+    /* The `ب:` on the declaration line. That line reads
+     `المولود (٥) بتاريخ: ___ ب: ___` -- the child, on this date, at this place --
+     so this box is where the swimmer was born. */
+  { id: 'birth_place',        y: 208.78, x0: 4.2,   colon: 33.1 },
   { id: 'parent_id',          y: 217.70, x0: 106.0, colon: 149.4 },
   { id: 'card_issued_at',     y: 217.70, x0: 40.0,  colon: 73.3 },
   { id: 'card_place',         y: 217.70, x0: 4.2,   colon: 31.5 },
@@ -1883,7 +1887,12 @@ const FORM_SPOTS = [
 const SPOT_GAP = 1.6;    // mm of clear paper between the colon and the value
 const SPOT_CLEAR = 0.4;  // mm of clear paper between the value and the rule
 
-const GUARDIAN_SPOT = /^(parent_|card_|authorised_for$)/;
+const /* The declaration is a guardian's line: `أنا المصغي` names the person signing
+     for a child, and `المولود (٥) بتاريخ:` and `ب:` are that child. An adult signs
+     for nobody, so the whole line stays empty. Those two are named here rather
+     than caught by a prefix: they carry the swimmer's own date and place, and a
+     prefix cannot tell them from the adult's date in the block above. */
+ GUARDIAN_SPOT = /^(parent_|card_|child_birth_date$|birth_place$|authorised_for$)/;
 
 /* An adult is not a minor: the guardian block belongs to another person and has
    to stay empty on their form. */
@@ -1933,9 +1942,14 @@ function formValues(a){
        name where the person expects to read a date. */
     parent_name: [v('guardian_first_name'), v('guardian_last_name')]
       .filter(Boolean).join(' '),
-    parent_birth: slashDate(v('guardian_birth_date')),
+    /* `المولود (٥) بتاريخ:` -- the swimmer, not the guardian. */
+    child_birth_date: slashDate(v('birth_date')),
+    /* `ب: ___` -- where the swimmer was born. */
+    birth_place: v('birth_place'),
     parent_id: clubDigits(v('guardian_national_id')),
-    card_issued_at: slashDate(v('card_issue_date')),
+    /* The declaration is the guardian's, so the card on it is
+       the guardian's, and the day it was issued is the day they gave. */
+    card_issued_at: slashDate(v('guardian_card_issued') || v('card_issue_date')),
     card_place: v('card_issue_place'),
     authorised_for: v('guardian_child')
   };

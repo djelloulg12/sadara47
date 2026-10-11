@@ -18,7 +18,7 @@ function boot(seed) {
   w.scrollTo = () => {}; w.HTMLElement.prototype.scrollIntoView = function () {};
   w.__calls = [];
   w.fetch = function (u, i) { w.__calls.push({ url: String(u), method: (i && i.method || 'GET').toUpperCase() }); return Promise.resolve({ ok: true, json: async () => ({ ok: true, profile: {} }) }); };
-  try { w.eval(APP + '\n;window.__t={get state(){return state},render:render,action:action,PHOTO_BOX:PHOTO_BOX,officialFormCSS:officialFormCSS,overlaySheet:overlaySheet,formValues:formValues,FORM_SPOTS:FORM_SPOTS,FORM_BG:FORM_BG};'); }
+  try { w.eval(APP + '\n;window.__t={get state(){return state},render:render,action:action,PHOTO_BOX:PHOTO_BOX,officialFormCSS:officialFormCSS,overlaySheet:overlaySheet,formValues:formValues,FORM_SPOTS:FORM_SPOTS,GUARDIAN_SPOT:GUARDIAN_SPOT,FORM_BG:FORM_BG};'); }
   catch (e) { errors.push('load: ' + e.message); }
   if (seed && seed.user) w.__t.state.user = seed.user;
   return w;
@@ -200,7 +200,7 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
   const adult = {
     category: 'adult', first_name_ar: 'أمين', last_name_ar: 'بلعيد',
     birth_date: '1994-05-04', address: 'غرداية', blood_group: 'O+', phone: '0661000001',
-    national_id: '19940504887', membership_no: 'M-0042',
+    national_id: '199405048', membership_no: 'M-0042',
     guardian_first_name: 'كريم', guardian_last_name: 'بلعيد',
     guardian_national_id: '1234567890', guardian_child: 'أمين'
   };
@@ -208,7 +208,9 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
   for (const leaked of ['كريم', '1234567890', 'يجب ألا يطبع']) {
     if (sheet.includes(leaked)) errors.push('[adults] a guardian value reached the printed form: ' + leaked);
   }
-  const guardians = w.__t.FORM_SPOTS.filter(s => /^(parent_|card_|authorised_for$)/.test(s.id));
+  /* Asked of the print engine rather than restated here: a second copy of the
+     rule is a rule that can disagree with the first one. */
+  const guardians = w.__t.FORM_SPOTS.filter(s => w.__t.GUARDIAN_SPOT.test(s.id));
   const boxes = (sheet.match(/class="f-spot"/g) || []).length;
   if (boxes !== w.__t.FORM_SPOTS.length - guardians.length) {
     errors.push('[adults] printed ' + boxes + ' boxes, expected ' + (w.__t.FORM_SPOTS.length - guardians.length));
@@ -243,7 +245,7 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
   /* The third box on the declaration line is left for the club to fill by hand.
      Nothing is written into it, which is the point: the surname used to land
      there, and it is not a name box. */
-  const stray = w.__t.FORM_SPOTS.filter(s => s.y === 208.78 && s.id !== 'parent_name' && s.id !== 'parent_birth');
+  const stray = w.__t.FORM_SPOTS.filter(s => s.y === 208.78 && s.id !== 'parent_name' && s.id !== 'child_birth_date');
   for (const s of stray) {
     if (vals[s.id] !== undefined && String(vals[s.id]).trim()) {
       errors.push('[form] something is still written into the third box of the declaration: ' + s.id);

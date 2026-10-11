@@ -66,6 +66,80 @@
   }
   var saidKind = '';
 
+  /* What a notification looks like: one kind of glyph, one kind of strip, and a
+     second line only when there is something else worth saying. */
+  var NOTIFY_GLYPH = { ok: '✓', error: '!', info: 'i' };
+  /* How long a notice stays. Good news goes by itself; bad news waits, because the
+     person comes back to this screen to find out why nothing happened, and a
+     message that has already gone answers nothing. */
+  var NOTIFY_MS = { ok: 6500, info: 6500, error: 0 };
+
+  var tray = el('toasts');
+
+  function notify(text, kind, more) {
+    if (!tray || !text) return null;
+    var tone = kind || 'info';
+    var card = document.createElement('div');
+    card.className = 'toast ' + tone;
+
+    var ic = document.createElement('span');
+    ic.className = 'toast-ic';
+    ic.setAttribute('aria-hidden', 'true');
+    ic.textContent = NOTIFY_GLYPH[tone] || NOTIFY_GLYPH.info;
+
+    var body = document.createElement('div');
+    body.className = 'toast-body';
+    var line = document.createElement('p');
+    /* Not a heading: a screen reader announcing "تمّ — the request arrived" says
+       the same thing twice, and the sentence is what carries the meaning. */
+    line.textContent = text;
+    body.appendChild(line);
+    if (more) {
+      var second = document.createElement('p');
+      second.textContent = more;
+      body.appendChild(second);
+    }
+
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'toast-x';
+    close.setAttribute('aria-label', 'إغلاق التنبيه');
+    close.textContent = '×';
+
+    card.appendChild(ic);
+    card.appendChild(body);
+    card.appendChild(close);
+    tray.insertBefore(card, tray.firstChild);
+
+    /* No more than three at once: a fourth pushes the first off the top, and the
+       oldest is the one somebody is most likely to still be reading. */
+    while (tray.children.length > 3) tray.removeChild(tray.lastChild);
+
+    var timer = null;
+    function dismiss() {
+      if (!card.parentNode) return;
+      if (timer) { clearTimeout(timer); timer = null; }
+      var gone = function () { if (card.parentNode) card.parentNode.removeChild(card); };
+      var still = window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (still) { gone(); return; }
+      card.classList.add('leaving');
+      /* Removed once the animation has run. Without the wait the card would be
+         cut off mid-slide; with it, on a machine that has asked for no motion,
+         it is cut off immediately -- which is what that machine asked for. */
+      setTimeout(gone, 240);
+    }
+    close.addEventListener('click', dismiss);
+
+    var ms = NOTIFY_MS[tone];
+    if (ms) timer = setTimeout(dismiss, ms);
+    return dismiss;
+  }
+
+  /* On the same object the print helpers are on, so the checks can raise one the
+     way the page does rather than reaching past the front door. */
+  F.notify = notify;
+
   /* An error stops being true the moment the person starts fixing what it was
      about, and leaving it on screen says the request is still refused when it is
      not. Only a complaint is taken back this way: the note that a draft came back
@@ -157,7 +231,20 @@
     'national_id', 'birth_certificate_no', 'membership_no',
     'phone', 'whatsapp', 'guardian_phone', 'guardian_national_id'
   ];
-  var DATE_FIELDS = ['birth_date', 'guardian_birth_date'];
+  var DATE_FIELDS = [
+    'birth_date', 'guardian_birth_date',
+    'national_id_expiry', 'guardian_national_id_expiry', 'guardian_card_issued'
+  ];
+
+  /* A national identity card number is nine digits. Checked here rather than left
+     to the eye at the counter, because this is the number the club looks a member
+     up by: one written with eight is not the same member as one written with ten,
+     and it is also what the duplicate check compares -- a number written wrongly
+     here is how one person ends up on the list twice. */
+  var CARD_DIGITS = 9;
+  var cardNumberError = function (who) {
+    return who + ' يجب أن يكون ' + CARD_DIGITS + ' أرقام، كما هو مكتوب على البطاقة.';
+  };
 
   /* What a number field gives up: the digits as they were typed, in either set. */
   function valNumber(id) {
@@ -447,11 +534,44 @@
      the person is walked to the first one that is missing. */
   function validate() {
     var missing = [];
-    var required = ['first_name_ar', 'last_name_ar', 'birth_date', 'phone', 'address',
+    var required = ['first_name_ar', 'last_name_ar', 'birth_date',
+                    'phone', 'address',
                     'email', 'username', 'password', 'password_confirm'];
-    if (category() === 'minor') required = required.concat(GUARDIAN_FIELDS);
+    if (category() === 'minor') {
+      /* The place of birth, for a minor: it is one of the three things that say a
+         child is who they are -- two children born the same year in the same
+         place are two children -- and it is written on the club's own form after
+         the `ب:` on the declaration. An adult has no declaration, so an adult is
+         not stopped by a field nothing would print. */
+      required = required.concat(GUARDIAN_FIELDS).concat(['birth_place']);
+    }
 
     required.forEach(function (id) { if (!val(id)) missing.push(id); });
+
+    /* Which of the account step's fields are asked for depends on which face is
+       showing, and this runs after the walk above because `missing` is what the
+       walk fills -- asked for too early, it would take from a list nothing has
+       been read into yet, and the guardian with an account already open would be
+       stopped by a field they were never shown. */
+    if (sessionIsOpen()) {
+      /* Everything the step asks for is already held by the browser: the name is
+         on the account, the address is signed in, and the password is the one
+         this device opened the session with. Nothing here should stand between a
+         guardian and a second child. */
+      var held = ['username', 'password_confirm', 'password'];
+      for (var h = 0; h < held.length; h++) {
+        var atHeld = missing.indexOf(held[h]);
+        if (atHeld !== -1) missing.splice(atHeld, 1);
+      }
+    } else if (accountMode() === 'returning') {
+      /* The name is the account's and is read from it; the confirmation catches a
+         typing slip in a password being set, and no password is being set. */
+      var drop = ['username', 'password_confirm'];
+      for (var k = 0; k < drop.length; k++) {
+        var at = missing.indexOf(drop[k]);
+        if (at !== -1) missing.splice(at, 1);
+      }
+    }
 
     if (!val('birth_date')) missing.push('birth_date');
     /* A date that is present but is not one is not a date. It is caught here
@@ -466,6 +586,35 @@
     /* The shape of an address is checked here rather than being left to the mail
        provider, so a typo is caught before a request is written rather than after
        somebody has tried to sign in with something that was never an address. */
+    /* The card, for whoever holds one: an adult, and the guardian of a minor. A
+       child holds no card, so nothing is asked of one. */
+    if (category() === 'adult') {
+      if (!val('national_id')) missing.push('national_id');
+      else if (latinDigits(val('national_id')).length !== CARD_DIGITS) missing.push('national_id');
+      if (!val('national_id_expiry')) missing.push('national_id_expiry');
+      else if (!isoDate(val('national_id_expiry'))) missing.push('national_id_expiry');
+    }
+    if (category() === 'minor') {
+      if (!val('guardian_national_id')) missing.push('guardian_national_id');
+      else if (latinDigits(val('guardian_national_id')).length !== CARD_DIGITS) {
+        missing.push('guardian_national_id');
+      }
+      if (!val('guardian_national_id_expiry')) missing.push('guardian_national_id_expiry');
+      else if (!isoDate(val('guardian_national_id_expiry'))) {
+        missing.push('guardian_national_id_expiry');
+      }
+      if (val('guardian_card_issued') && !isoDate(val('guardian_card_issued'))) {
+        missing.push('guardian_card_issued');
+      }
+    }
+    /* And the reverse: a child holds no card, so nothing is asked of one. An adult
+       is otherwise stopped by the card fields they never see. */
+    if (category() === 'minor') {
+      ['national_id', 'national_id_expiry'].forEach(function (id) {
+        var i = missing.indexOf(id);
+        if (i !== -1) missing.splice(i, 1);
+      });
+    }
     if (val('email') && !EMAIL_RE.test(val('email').trim())) missing.push('email');
     if (val('username') && !USERNAME_RE.test(val('username').trim())) missing.push('username');
     if (val('password') && val('password').length < 8) missing.push('password');
@@ -485,11 +634,16 @@
     address: 'اكتب العنوان.',
     email: 'اكتب بريدًا إلكترونيًا صحيحًا — مثال: name@example.com',
     username: 'اسم المستخدم: حروف لاتينية وأرقام و . _ - فقط، من 3 إلى 32 خانة.',
+    national_id: cardNumberError('رقم بطاقتك'),
+    national_id_expiry: 'اكتب تاريخ انتهاء البطاقة بصيغة سنة/شهر/يوم — 2031/04/17.',
+    guardian_national_id: cardNumberError('رقم بطاقة الولي'),
+    guardian_national_id_expiry: 'اكتب تاريخ انتهاء بطاقة الولي بصيغة سنة/شهر/يوم — 2031/06/02.',
+    guardian_card_issued: 'اكتب تاريخ إصدار بطاقة الولي بصيغة سنة/شهر/يوم — 2021/06/02.',
+    birth_place: 'اختر بلدية الميلاد من القائمة -- تُكتب في استمارة النادي بعد «ب:».',
     password: 'كلمة المرور ثماني خانات على الأقل.',
     password_confirm: 'كلمتا المرور غير متطابقتين. أعد كتابة كلمة المرور.',
     guardian_first_name: 'اكتب اسم الولي.',
     guardian_last_name: 'اكتب لقب الولي.',
-    guardian_national_id: 'اكتب رقم تعريف الولي.',
     guardian_birth_date: 'اكتب تاريخ ميلاد الولي بصيغة سنة/شهر/يوم — 1975/06/02.',
     guardian_consent: 'التصريح بإذن التدريب ضروري للأصاغر.',
     terms: 'يجب الموافقة على النظام الداخلي قبل الإرسال.'
@@ -581,7 +735,9 @@
       last_name_ar: val('last_name_ar'),
       first_name_fr: val('first_name_fr'),
       last_name_fr: val('last_name_fr'),
+      /* The card and the day it runs out. */
       national_id: valNumber('national_id'),
+      national_id_expiry: valDate('national_id_expiry'),
       birth_certificate_no: valNumber('birth_certificate_no'),
       birth_place: val('birth_place'),
       wilaya: val('wilaya'),
@@ -603,6 +759,8 @@
       guardian_relation: val('guardian_relation'),
       guardian_phone: valNumber('guardian_phone'),
       guardian_national_id: valNumber('guardian_national_id'),
+      guardian_national_id_expiry: valDate('guardian_national_id_expiry'),
+      guardian_card_issued: valDate('guardian_card_issued'),
       guardian_consent: checked('guardian_consent'),
       guardian_child: (val('first_name_ar') + ' ' + val('last_name_ar')).trim(),
       subscription_code: val('subscription_code'),
@@ -635,6 +793,70 @@
 
   var ACCOUNT_FIELDS = ['email', 'username', 'password', 'password_confirm'];
 
+  /* Which account this is: one being made, or one already held. Read from the
+     buttons rather than remembered, so what is on the screen and what is on the
+     way cannot disagree. */
+  function accountMode() {
+    var back = el('acct-returning');
+    return back && back.classList.contains('is-on') ? 'returning' : 'new';
+  }
+
+  /* A session this page already holds. Somebody who has not been asked a question
+     must not be stopped by a password they were not asked for. */
+  function sessionIsOpen() {
+    return accountMode() === 'returning' && !!openAccountFor(val('email'));
+  }
+
+  function setAccountMode(mode) {
+    var returning = mode === 'returning';
+    var pair = [['acct-new', 'new'], ['acct-returning', 'returning']];
+    pair.forEach(function (p) {
+      var b = el(p[0]);
+      if (!b) return;
+      var on = p[1] === mode;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    /* The user name belongs to the account, so somebody signing in to an account
+       they already hold does not choose one -- it is read from their profile. And
+       the confirmation exists to catch a typing slip in a password being set,
+       which is not happening here. Both say where they went; a field that simply
+       is not on the page reads as a field that was lost. */
+    var userField = el('acct-username-field');
+    var confirmField = el('acct-confirm-field');
+    if (userField) userField.hidden = returning;
+    if (confirmField) confirmField.hidden = returning;
+    var hint = el('acct-hint');
+    if (hint) hint.hidden = !returning;
+    var pass = el('password');
+    if (pass) pass.setAttribute('autocomplete', returning ? 'current-password' : 'new-password');
+    clearComplaintOnEdit();
+  }
+
+  el('acct-new').addEventListener('click', function () { setAccountMode('new'); });
+  el('acct-returning').addEventListener('click', function () { setAccountMode('returning'); });
+
+  /* The address decides, and only the address. An account this browser already
+     holds for exactly the address in the box is the same person -- there is no
+     second one -- so the step turns itself rather than asking for a password
+     that is already held, which is the last thing between a guardian and a second
+     registration. Typed one character at a time, so it says it once: the moment
+     the address matches, and never again while it keeps matching. */
+  function recogniseOpenSession() {
+    if (accountMode() === 'returning') return;
+    if (!openAccountFor(val('email'))) return;
+    setAccountMode('returning');
+    var hint = el('acct-hint');
+    if (hint) {
+      hint.textContent = 'هذا الحساب مفتوح على هذا الجهاز. تكتب بيانات السبّاح فقط، '
+        + 'وتسجيل كل أبناءك واحدًا بعد الآخر بالحساب نفسه.';
+    }
+    notify('حسابك مفتوح على هذا الجهاز.', 'info',
+      'تسجيل سبّاح آخر لن يطلب منك كلمة مرور من جديد.');
+  }
+  el('email').addEventListener('input', recogniseOpenSession);
+  el('email').addEventListener('change', recogniseOpenSession);
+
   /* Firebase keeps the password and hands back nothing: it is hashed there and is
      never readable, by us or by anybody. It is offered to the provider and to
      nobody else -- not to the request, not to the draft, not to the console. */
@@ -658,12 +880,84 @@
       });
   }
 
+  /* The name an account chose for itself. Read, never asked: a person signing in
+     to an account they hold is not choosing a name again, and a name chosen again
+     is a name somebody else could have taken in between.
+
+     A failure here is not worth stopping for. The request can be filed without
+     the name on it -- the club's screen asks a member by other means -- and a
+     profile that cannot be read is not a reason to turn away a child whose
+     registration is otherwise complete. */
+  function accountUsername(uid) {
+    if (!uid || !(window.firebase && firebase.firestore)) return Promise.resolve('');
+    try {
+      return firebase.firestore().collection('users').doc(uid).get()
+        .then(function (snap) {
+          var data = snap && snap.data ? snap.data() : null;
+          return (data && data.username) || '';
+        })
+        .catch(function () { return ''; });
+    } catch (_) { return Promise.resolve(''); }
+  }
+
+  /* Which account this request belongs to, worked out from what the browser is
+     actually signed in with. Never from the form: a field saying which account to
+     use is a field anybody can set. */
+  function openAccountFor(email) {
+    if (!(window.firebase && firebase.auth)) return null;
+    try {
+      var user = firebase.auth().currentUser;
+      if (!user) return null;
+      var at = String(email || '').trim().toLowerCase();
+      var mine = String(user.email || '').toLowerCase();
+      return at && mine && at !== mine ? null : user;
+    } catch (_) { return null; }
+  }
+
+  /* Signing in to an account that already exists. Every way this can go wrong has
+     its own sentence, because "wrong password" and "no such account" send a person
+     to two different places. */
+  function signInAccount(email, password) {
+    return firebase.auth().signInWithEmailAndPassword(email, password)
+      .then(function (credential) {
+        return { uid: credential.user.uid, returning: true };
+      })
+      .catch(function (error) {
+        var code = String((error && error.code) || '');
+        var known = {
+          'auth/wrong-password': 'كلمة المرور غير صحيحة.',
+          'auth/invalid-credential': 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+          'auth/user-not-found': 'لا يوجد حساب بهذا البريد الإلكتروني. اختر «حساب جديد».',
+          'auth/too-many-requests': 'محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.',
+          'auth/network-request-failed': 'تعذّر الاتصال. تحقّق من الإنترنت ثم أعد المحاولة.'
+        };
+        throw new Error(known[code] || ((error && error.message) || 'تعذّر تسجيل الدخول.'));
+      });
+  }
+
   /* The account stands at the door until the club answers, and the reason for a
      refusal is written where the person reads it when they try again. */
-  function openAccount(uid, record) {
+  function openAccount(uid, record, returning) {
     if (!uid || !(window.firebase && firebase.firestore)) return Promise.resolve();
+    var users = firebase.firestore().collection('users').doc(uid);
+    /* A profile that already exists belongs to the person, not to the request that
+       happens to be in front of it. Writing it again for a second child would
+       rename the guardian's account after the child, and put an account the club
+       has already answered back behind the door asking to be answered again. So:
+       written once when it is made, and afterwards only where something is
+       missing. */
+    if (returning) {
+      return users.get().then(function (snap) {
+        var already = snap && snap.exists ? (snap.data() || {}) : {};
+        var gaps = {};
+        if (!already.username && record.username) gaps.username = record.username;
+        if (!already.name && !already.first_name) gaps.name = record.first_name_ar || '';
+        if (!Object.keys(gaps).length) return null;
+        return users.set(gaps, { merge: true });
+      }).catch(function () { return null; });
+    }
     try {
-      return firebase.firestore().collection('users').doc(uid).set({
+      return users.set({
         name: [record.first_name_ar, record.last_name_ar].filter(Boolean).join(' '),
         email: record.email,
         username: record.username,
@@ -696,10 +990,45 @@
     };
     /* The account is made first: it is what the request is filed under, and a
        request with no account behind it is a request the person can never follow
-       up on. */
-    return createAccount(credentials).then(function (account) {
+       up on. For a guardian coming back for their second child there is nothing
+       to make, so this is the order of preference rather than a sequence. */
+    var already = openAccountFor(credentials.email);
+    var account$;
+    if (already) {
+      /* A session this page opened earlier -- the second child, on the same
+         phone. Asking for the password again would be asking for a thing the
+         browser already holds, and refusing on the strength of it would refuse a
+         child for a reason that has nothing to do with the child. */
+      account$ = Promise.resolve({ uid: already.uid, returning: true });
+    } else if (accountMode() === 'returning') {
+      account$ = signInAccount(credentials.email, credentials.password);
+    } else {
+      account$ = createAccount(credentials);
+    }
+
+    return account$.then(function (account) {
+      if (account.returning) {
+        /* The name comes from the account, so a family that comes back cannot be
+           refused by their own first registration. */
+        return accountUsername(account.uid).then(function (own) {
+          if (own) {
+            var box = el('username');
+            if (box) box.value = own;
+            body.username = own;
+            state.accountName = own;
+          }
+          return account;
+        });
+      }
+      return account;
+    }).then(function (account) {
       button.textContent = 'جارٍ الإرسال…';
       if (account.uid) body.applicant_uid = account.uid;
+      /* Says plainly to the server that this is the same person coming back. It
+         carries no right of its own -- the server decides from the account this
+         page is signed in with, not from this -- but without it a second request
+         from one account would be treated as a stranger's. */
+      if (account.returning) body.returning_account = true;
       /* Firestore refuses a document over 1 MiB, and the photo travels inside it.
          A photo heavy enough to tip the record over would cost the whole
          registration, not just the picture, so the size is checked here and the
@@ -730,7 +1059,7 @@
         registration_id: out.data.registration_id,
         expected_amount: out.data.expected_amount
       });
-      return openAccount(out.account.uid, body).then(function () {
+      return openAccount(out.account.uid, body, out.account.returning).then(function () {
         clearDraft();
         /* The password is not kept anywhere on this device, not even in the
            draft: a draft is a convenience and a draft that holds a password is a
@@ -738,11 +1067,16 @@
         el('password').value = '';
         el('password_confirm').value = '';
         showDone();
+        notify('تم استلام طلبك.', 'ok',
+          'رقم الطلب ' + clubDigits(out.data.application_no || '')
+          + ' — اطبع الاستمارة، وقّعها، ثم أحضرها إلى النادي.');
       });
     }).catch(function (e) {
       /* The draft is deliberately kept: nothing the person typed is lost when
          a send fails, so they can try again on the same phone. */
       say(e.message || 'تعذّر إرسال الطلب.', 'error');
+      notify('تعذّر إرسال الطلب.', 'error',
+        'لم يُفقد ما كتبته. أعد المحاولة من نفس الهاتف.');
       button.disabled = false;
       button.textContent = 'إرسال الاستمارة';
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -753,22 +1087,31 @@
 
   var SUMMARY_LABELS = {
     first_name_ar: 'الاسم', last_name_ar: 'اللقب', birth_date: 'تاريخ الميلاد',
-    gender: 'الجنس', blood_group: 'فصيلة الدم', national_id: 'رقم التعريف',
+    gender: 'الجنس', blood_group: 'فصيلة الدم',
+    national_id: 'رقم بطاقة التعريف', national_id_expiry: 'انتهاء البطاقة',
     phone: 'الهاتف', whatsapp: 'الواتساب', address: 'العنوان',
     birth_place: 'مكان الميلاد', wilaya: 'الولاية', level: 'المستوى',
     swimming_strokes: 'نمط السباحة', facility: 'المنشأة',
     guardian_first_name: 'اسم الولي', guardian_last_name: 'لقب الولي',
     guardian_relation: 'القرابة', guardian_phone: 'هاتف الولي',
-    guardian_national_id: 'تعريف الولي', notes: 'ملاحظة'
+    guardian_national_id: 'بطاقة الولي',
+    guardian_national_id_expiry: 'انتهاء بطاقة الولي',
+    guardian_card_issued: 'إصدار بطاقة الولي', notes: 'ملاحظة'
   };
 
   var PAYMENTS = { cash: 'نقدًا', postal_check: 'صك بريدي', postal_transfer: 'حوالة بريدية' };
   var GENDERS = { male: 'ذكر', female: 'أنثى' };
 
+  /* The offer appears when there is an account to come back to, and says what
+     it will keep -- somebody about to clear a screen needs to know it is the
+     child's answers that go and not the first registration. */
   function showDone() {
     var rec = state.sent;
     form.hidden = true;
     done.hidden = false;
+
+    var sibling = el('done-sibling');
+    if (sibling) sibling.hidden = !(rec && rec.applicant_uid);
 
     el('done-no').textContent = clubDigits(rec.application_no || '\u2014');
     el('done-amount').textContent = clubDigits(
@@ -959,6 +1302,7 @@
   el('save-draft').addEventListener('click', function () {
     saveDraft();
     say('حُفظت مسودة على هذا الجهاز. ستعود تلقائياً في المرة القادمة.', 'ok');
+    notify('حُفظت المسودة.', 'ok', 'ستعود تلقائياً في المرة القادمة على هذا الجهاز.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
@@ -987,6 +1331,41 @@
     saveDraft();
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
+
+  /* The swimmer's own answers, by name. Written out rather than worked out from
+     what is on the screen, because the fields that must survive are the ones that
+     are not the child's, and guessing which is which from a list of everything
+     else is how a request goes out with no parent on it. */
+  var SWIMMER_FIELDS = [
+    'first_name_ar', 'last_name_ar', 'first_name_fr', 'last_name_fr',
+    'birth_date', 'birth_place', 'blood_group', 'gender', 'notes', 'photo'
+  ];
+
+  function anotherSwimmer() {
+    done.hidden = true;
+    form.hidden = false;
+    state.sent = null;
+    SWIMMER_FIELDS.forEach(function (id) {
+      var n = el(id);
+      if (!n) return;
+      n.value = '';
+      n.classList.remove('bad');
+      n.setAttribute('aria-invalid', 'false');
+    });
+    state.photo = '';
+    paintPhoto();
+    /* The account is open on this device, so the other face of the step is the
+       right one and no password is asked for. */
+    setAccountMode('returning');
+    syncCategory();
+    updateTotal();
+    saveDraft();
+    say('');
+    notify('حقلت استمارة سبّاح جديد.', 'info',
+      'بيانات الولي كما هي، والحساب مفتوح — لا تكتب كلمة المرور من جديد.');
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  el('another').addEventListener('click', anotherSwimmer);
 
   el('new-form').addEventListener('click', function () {
     if (!window.confirm('هل تريد تسجيل شخص آخر؟ ستمسح الاستمارة الحالية من الشاشة.')) return;
@@ -1019,6 +1398,7 @@
 
   if (applyDraft(readDraft())) {
     say('استعدنا مسودة حفظتها على هذا الجهاز. راجعها ثم أرسل.', 'ok');
+    notify('استُعيدت مسودة من هذا الجهاز.', 'info', 'راجعها ثم أرسل.');
   }
   loadPlans();
   loadFacilities();

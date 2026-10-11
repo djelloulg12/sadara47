@@ -186,6 +186,92 @@ input.bad, select.bad, textarea.bad { border-color: var(--danger); background: #
 .form-msg.error { background: #fdecea; color: var(--danger); border-color: #f3c4c0; }
 .form-msg.ok { background: #e7f6ee; color: var(--ok); border-color: #b6e0c9; }
 
+/* ---------------- one step, two arrangements ---------------- */
+/* The switch between "a new account" and "an account I already have". It is a
+   pair of buttons rather than a checkbox because it is a choice between two whole
+   arrangements of the step, not a thing to tick -- and because the one who has an
+   account is the one who must not have to hunt for it. */
+.seg {
+  display: inline-flex; gap: 4px; margin: 0 0 10px; padding: 4px;
+  background: #eef4f6; border: 1px solid var(--line); border-radius: 12px;
+}
+.seg-btn {
+  font: inherit; font-weight: 700; font-size: 14px;
+  padding: 8px 16px; min-height: 40px; border: 0; border-radius: 9px;
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.seg-btn:hover { color: var(--teal-dark); }
+.seg-btn.is-on { background: #fff; color: var(--teal-dark); box-shadow: 0 1px 3px rgba(16, 42, 67, .12); }
+.seg-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.acct-hint { display: block; margin: -4px 0 12px; max-width: 62ch; }
+
+.done-sibling {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 12px; margin: 16px 0 4px; padding: 14px 16px;
+  background: var(--teal-soft); border: 1px solid #bfe0e4; border-radius: 14px;
+}
+.done-sibling-text { display: flex; flex-direction: column; gap: 3px; }
+.done-sibling-text b { color: var(--teal-dark); font-size: 15px; }
+.done-sibling-text span { color: var(--muted); font-size: 13.5px; }
+.done-sibling .btn { flex: 0 0 auto; }
+
+/* ---------------- notifications ---------------- */
+/* One tray for the page. It is fixed to the top so a message reaches the eye
+   whatever part of the form the visitor is at -- the form is five screens long,
+   and the last one is where the button is. */
+.toasts {
+  position: fixed; inset-block-start: 0; inset-inline: 0; z-index: 90;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 14px 12px 0; pointer-events: none;
+}
+.toast {
+  pointer-events: auto; position: relative;
+  width: min(560px, 100%);
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 13px 14px 13px 12px;
+  background: #fff; border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(16, 42, 67, .16), 0 2px 6px rgba(16, 42, 67, .08);
+  font-size: 14.5px; font-weight: 600; color: var(--ink);
+  animation: toast-in .28s cubic-bezier(.2, .8, .3, 1) both;
+  overflow: hidden;
+}
+/* The colour bar is on the right: that is where this page starts. */
+.toast::before {
+  content: ""; position: absolute; inset-block: 0; inset-inline-end: 0;
+  width: 6px; background: var(--toast-bar, var(--teal));
+}
+.toast-ic {
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 17px; line-height: 1;
+  background: var(--toast-soft, var(--teal-soft)); color: var(--toast-bar, var(--teal));
+}
+.toast-body { flex: 1 1 auto; padding-block-start: 4px; }
+.toast-body p { margin: 0; font-weight: 500; color: var(--muted); font-size: 13.5px; }
+.toast-body p + p { margin-block-start: 3px; }
+.toast-x {
+  flex: 0 0 auto; width: 28px; height: 28px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted); font-size: 19px; line-height: 1;
+  cursor: pointer; font-family: inherit;
+}
+.toast-x:hover { background: #f1f5f7; color: var(--ink); }
+.toast-x:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+.toast.ok    { --toast-bar: var(--ok);     --toast-soft: #e7f6ee; }
+.toast.error { --toast-bar: var(--danger); --toast-soft: #fdecea; }
+.toast.info  { --toast-bar: var(--teal);   --toast-soft: var(--teal-soft); }
+
+/* Going out is not the same as arriving: it eases, and it is short, because by
+   the time it leaves the visitor has already read it. */
+.toast.leaving { animation: toast-out .22s ease-in forwards; }
+@keyframes toast-in  { from { opacity: 0; transform: translateY(-16px) scale(.98); } }
+@keyframes toast-out { to   { opacity: 0; transform: translateY(-10px) scale(.98); } }
+
+/* Somebody who has asked their machine not to move things has not asked to be
+   shown a card flying at them. It still appears; it just arrives. */
+@media (prefers-reduced-motion: reduce) {
+  .toast, .toast.leaving { animation: none; }
+}
+
 /* ---------------- buttons ---------------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;

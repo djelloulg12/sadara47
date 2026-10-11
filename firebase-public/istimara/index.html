@@ -112,9 +112,13 @@
         <div class="row two">
           <label class="f">
             <span class="lbl">مكان الميلاد</span>
-            <select id="birth_place" name="birth_place">
+            <!-- The place of birth. Chosen from the list rather than typed: it
+                 goes on the club's own form after the `ب:`, and a commune spelled
+                 two ways is a record nobody can look up. -->
+            <select id="birth_place" name="birth_place" required>
               <option value="">--</option>
             </select>
+            <small class="hint">بلدية الميلاد — تُكتب في استمارة النادي بعد «ب:». إجباري للأصغر.</small>
           </label>
           <label class="f">
             <span class="lbl">الولاية</span>
@@ -123,12 +127,27 @@
         </div>
 
         <div class="row two">
-          <!-- An adult holds a national number; a child does not, so the field
-               leaves the form with the minors and the guardian's stays. -->
+          <!-- A national identity card number is nine digits and it expires. Both
+               are the club's business: the card is what is shown at the desk, and
+               a card that ran out last month is a different thing from one that
+               runs out next year. A child holds no card, so the field leaves the
+               form with the minors and the guardian's stays. -->
           <label class="f" data-adult-only>
-            <span class="lbl">رقم التعريف الوطني</span>
-            <input id="national_id" name="national_id" type="text" inputmode="numeric" dir="ltr" maxlength="20" />
+            <span class="lbl">رقم بطاقة التعريف الوطني <i class="req">*</i></span>
+            <input id="national_id" name="national_id" type="text" inputmode="numeric"
+                   dir="ltr" maxlength="9" pattern="[0-9]{9}" placeholder=" 123456789 " />
+            <small class="hint">تسعة أرقام، كما هي على البطاقة.</small>
           </label>
+          <label class="f" data-adult-only>
+            <span class="lbl">تاريخ انتهاء البطاقة <i class="req">*</i></span>
+            <input id="national_id_expiry" name="national_id_expiry" type="text"
+                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2031/04/17"
+                   aria-describedby="national_id_expiry-hint" />
+            <small class="hint" id="national_id_expiry-hint">بصيغة سنة/شهر/يوم — 2031/04/17</small>
+          </label>
+        </div>
+
+        <div class="row two">
           <label class="f">
             <span class="lbl">رقم شهادة الميلاد</span>
             <input id="birth_certificate_no" name="birth_certificate_no" type="text" dir="ltr" maxlength="30" />
@@ -214,8 +233,26 @@
             <input id="guardian_phone" name="guardian_phone" type="tel" inputmode="tel" dir="ltr" maxlength="20" />
           </label>
           <label class="f">
-            <span class="lbl">رقم تعريف الولي <i class="req">*</i></span>
-            <input id="guardian_national_id" name="guardian_national_id" type="text" inputmode="numeric" dir="ltr" maxlength="20" />
+            <span class="lbl">رقم بطاقة الولي <i class="req">*</i></span>
+            <input id="guardian_national_id" name="guardian_national_id" type="text"
+                   inputmode="numeric" dir="ltr" maxlength="9" pattern="[0-9]{9}"
+                   placeholder=" 123456789 " />
+            <small class="hint">تسعة أرقام — وهي التي تُكتب في استمارة النادي.</small>
+          </label>
+        </div>
+
+        <div class="row two">
+          <label class="f">
+            <span class="lbl">تاريخ انتهاء بطاقة الولي <i class="req">*</i></span>
+            <input id="guardian_national_id_expiry" name="guardian_national_id_expiry" type="text"
+                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2031/06/02" />
+            <small class="hint">بصيغة سنة/شهر/يوم — 2031/06/02</small>
+          </label>
+          <label class="f">
+            <span class="lbl">تاريخ إصدار بطاقة الولي</span>
+            <input id="guardian_card_issued" name="guardian_card_issued" type="text"
+                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2021/06/02" />
+            <small class="hint">اختياري — خانة «الصادرة بتاريخ» في استمارة النادي.</small>
           </label>
         </div>
 
@@ -318,11 +355,23 @@
       <!-- ---------- 6. the account ---------- -->
       <fieldset class="card">
         <legend><span class="step-no">٦</span> حسابك في النادي</legend>
-        <p class="card-note">
+        <p class="card-note" id="acct-note">
           به تفتح طلبك، وترى مصيرَه، وتطبع استمارتك في أي وقت.
           لا تُحفظ كلمة المرور في قاعدة بياناتنا — يحفظها
           <b>Firebase</b> مُشفّرة، ولا يطّلع عليها أحد.
         </p>
+
+        <!-- One guardian, several swimmers. A family with three children in the
+             club is not three families, so the second child is registered under
+             the same account rather than refused because the address is taken. -->
+        <div class="seg" id="acct-mode" role="group" aria-label="حساب جديد أم حساب موجود">
+          <button type="button" class="seg-btn is-on" id="acct-new" aria-pressed="true">حساب جديد</button>
+          <button type="button" class="seg-btn" id="acct-returning" aria-pressed="false">لديّ حساب بالفعل</button>
+        </div>
+        <small class="hint acct-hint" id="acct-hint" hidden>
+          سيؤخذ اسم المستخدم من حسابك، وتكتب كلمة المرور فقط. بالولاية نفسها يمكنك
+          تسجيل كل أبنائك واحدًا بعد الآخر.
+        </small>
         <div class="row two">
           <label class="f">
             <span class="lbl">البريد الإلكتروني *</span>
@@ -330,7 +379,7 @@
                    autocomplete="email" maxlength="120" placeholder="name@example.com" />
             <small class="hint">يُستعمل لتسجيل الدخول ولاستعادة كلمة المرور.</small>
           </label>
-          <label class="f">
+          <label class="f" id="acct-username-field">
             <span class="lbl">اسم المستخدم *</span>
             <input id="username" name="username" type="text" required dir="ltr"
                    autocomplete="username" maxlength="32" pattern="[A-Za-z0-9._-]{3,32}"
@@ -340,13 +389,13 @@
         </div>
         <div class="row two">
           <label class="f">
-            <span class="lbl">كلمة المرور *</span>
+            <span class="lbl" id="acct-pass-name">كلمة المرور *</span>
             <input id="password" name="password" type="password" required dir="ltr"
                    autocomplete="new-password" minlength="8" maxlength="72" />
             <small class="hint">ثماني خانات على الأقل.</small>
           </label>
-          <label class="f">
-            <span class="lbl">تأكيد كلمة المرور *</span>
+          <label class="f" id="acct-confirm-field">
+            <span class="lbl" id="acct-pass-label">تأكيد كلمة المرور *</span>
             <input id="password_confirm" name="password_confirm" type="password" required dir="ltr"
                    autocomplete="new-password" minlength="8" maxlength="72" />
             <small class="hint">أعد كتابتها للتأكد من عدم وجود خطأ.</small>
@@ -393,6 +442,15 @@
 
       <p class="done-note" id="done-warning" hidden></p>
 
+      <div class="done-sibling" id="done-sibling" hidden>
+        <div class="done-sibling-text">
+          <b>لهذا الولي أكثر من سبّاح</b>
+          <span>اضغط لتسجيل سبّاح آخر من نفس الحساب. تبقى بيانات الولي كما هي،
+            ولا يُطلب منك اسم مستعمل جديد ولا كلمة مرور جديدة.</span>
+        </div>
+        <button type="button" class="btn btn-outline" id="another">تسجيل سبّاح آخر من نفس الولي</button>
+      </div>
+
       <div class="done-actions">
         <button type="button" class="btn btn-primary" id="print-form">🖨 طباعة الاستمارة</button>
         <button type="button" class="btn btn-outline" id="print-again">طباعة نسخة أخرى</button>
@@ -421,6 +479,10 @@
       </nav>
     </div>
   </footer>
+
+  <!-- The notifications. One tray for the whole page, newest at the top, so two
+       things arriving at once are both readable and neither hides the other. -->
+  <div class="toasts" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>

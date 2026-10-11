@@ -226,6 +226,25 @@
     .replace(/[\s  \-_.]/g, '')
     .toUpperCase();
 
+  /* The account behind a request that says it is a returning one.
+
+     Not taken from the request. Taken from the account this page is actually
+     signed in with, and only when that account is the one the request names --
+     so a request sent from anywhere else cannot put forward somebody else's name
+     by saying it is their own. */
+  const returningAccount = body => {
+    if (!body || !body.returning_account) return null;
+    const uid = String(body.applicant_uid || '').trim();
+    if (!uid) return null;
+    try {
+      const user = auth.currentUser;
+      if (!user || user.uid !== uid) return null;
+      const said = String(body.email || '').trim().toLowerCase();
+      const mine = String(user.email || '').toLowerCase();
+      return said && mine && said !== mine ? null : user;
+    } catch (_) { return null; }
+  };
+
   /* Which name says "this person, already", and of what kind.
      An adult is identified by the national identity number. A child has no
      national number of their own, so they are identified by the three things the
@@ -288,7 +307,9 @@
     'phone', 'whatsapp', 'guardian_phone', 'guardian_national_id'
   ]);
   const DATE_FIELDS = new Set([
-    'birth_date', 'guardian_birth_date', 'card_issue_date'
+    'birth_date', 'guardian_birth_date', 'card_issue_date',
+    /* The national identity card: the day it runs out, and the day it was issued. */
+    'national_id_expiry', 'guardian_national_id_expiry', 'guardian_card_issued'
   ]);
 
   const normaliseIncoming = body => {
@@ -924,8 +945,12 @@
            The cost falls in the rare case: a name that is genuinely taken leaves a
            legitimate request on file, because it cannot be taken back off. That is
            said plainly rather than discovered at the counter. */
+        /* Somebody already on the books. The name is theirs -- it came off their
+           own account -- and claiming it again would be refused by the very rule
+           that keeps names apart, so it is not claimed again. */
+        const mine = returningAccount(body);
         const username = String(body.username || '').trim();
-        if (username && identity) {
+        if (username && identity && !mine) {
           const held = await writeOnce(usernameDocId(username), {
             application_type: applicationType,
             status: 'pending',
@@ -933,6 +958,9 @@
                it is kept out of the manager's list and out of anything printed. */
             claim_only: true,
             username: normId(username),
+            /* Who holds the name, so the club can tell one holder from another
+               without being able to read the claim back itself. */
+            owner_uid: String((mine || {}).uid || body.applicant_uid || ''),
             application_no: applicationNo,
             claimed_at: firebase.firestore.FieldValue.serverTimestamp()
           });
@@ -948,6 +976,12 @@
              after it. */
           await db.collection('applications').doc(docId)
             .set({ username_claimed: true }, { merge: true }).catch(() => {});
+        } else if (username && mine) {
+          /* Said on the record rather than left to be worked out: this request was
+             filed under an account that already holds the name, so nobody
+             afterwards has to wonder why no claim was made. */
+          await db.collection('applications').doc(docId)
+            .set({ username_from_account: true }, { merge: true }).catch(() => {});
         }
 
         return jsonResponse({

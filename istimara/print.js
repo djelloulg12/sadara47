@@ -45,7 +45,11 @@
     { id: 'blood_group',        y: 114.45, x0: 62.1,  colon: 178.3 },
     { id: 'phone',              y: 124.25, x0: 62.3,  colon: 178.3 },
         { id: 'parent_name',        y: 208.78, x0: 102.4, colon: 152.9 },
-    { id: 'parent_birth',       y: 208.78, x0: 32.9,  colon: 71.9 },
+    { id: 'child_birth_date',  y: 208.78, x0: 32.9,  colon: 71.9 },
+    /* The `ب:` on the declaration line. That line reads
+       `المولود (٥) بتاريخ: ___ ب: ___` -- the child, on this date, at this place --
+       so this box is where the swimmer was born. */
+    { id: 'birth_place',        y: 208.78, x0: 4.2,   colon: 33.1 },
     { id: 'parent_id',          y: 217.70, x0: 106.0, colon: 149.4 },
     { id: 'card_issued_at',     y: 217.70, x0: 40.0,  colon: 73.3 },
     { id: 'card_place',         y: 217.70, x0: 4.2,   colon: 31.5 },
@@ -53,7 +57,12 @@
   ];
 
   /* These belong to the guardian declaration, which only a minor has. */
-  var GUARDIAN_SPOT = /^(parent_|card_|authorised_for$)/;
+  var /* The declaration is a guardian's line: `أنا المصغي` names the person signing
+     for a child, and `المولود (٥) بتاريخ:` and `ب:` are that child. An adult signs
+     for nobody, so the whole line stays empty. Those two are named here rather
+     than caught by a prefix: they carry the swimmer's own date and place, and a
+     prefix cannot tell them from the adult's date in the block above. */
+ GUARDIAN_SPOT = /^(parent_|card_|child_birth_date$|birth_place$|authorised_for$)/;
 
   var CLUB = {
     name: 'النادي الرياضي الصدارة',
@@ -156,11 +165,16 @@
          person expects to read a date. */
       parent_name: [v('guardian_first_name'), v('guardian_last_name')]
         .filter(Boolean).join(' '),
-      parent_birth: slashDate(v('guardian_birth_date')),
+      /* `المولود (٥) بتاريخ:` -- the swimmer, not the guardian. */
+      child_birth_date: slashDate(v('birth_date')),
+      /* `ب: ___` -- where the swimmer was born. */
+      birth_place: v('birth_place'),
       parent_id: ar(v('guardian_national_id')),
-      /* The place and the date of issue are the club's to fill in, so a public
-         form leaves them on the blank line the scan already carries. */
-      card_issued_at: '',
+      /* The day the card was issued, which the guardian is asked for and which
+         the club's own form has a box for: `الصادرة بتاريخ`. The place of issue
+         is still nobody's to write but the club's, so it stays on the blank line
+         the scan already carries. */
+      card_issued_at: slashDate(v('guardian_card_issued')),
       card_place: '',
       authorised_for: rec.guardian_child || ((v('first_name_ar') + ' ' + v('last_name_ar')).trim())
     };

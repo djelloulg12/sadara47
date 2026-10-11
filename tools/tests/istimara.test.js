@@ -49,6 +49,14 @@ const RULES = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
 const digits = s => String(s).replace(/[\s\u00a0\u202f\u2009,]/g, '');
 const isAmount = (text, want) => digits(text).indexOf(String(want)) !== -1;
 
+/* The wilaya used wherever a check has to choose a place of birth: the first with
+   any communes at all. The commune itself is always taken from the list the page
+   offers, because a value the list does not carry is silently dropped and the
+   field comes back empty with nothing to say why. */
+const COMMUNES_BY_WILAYA = JSON.parse(COMMUNES);
+const WILAYA_LIST = JSON.parse(ALGERIA.slice(ALGERIA.indexOf('=') + 1, ALGERIA.lastIndexOf(';')));
+const A_WILAYA = WILAYA_LIST.find(x => (COMMUNES_BY_WILAYA[x.code] || []).length > 0);
+
 /* ---- 1) the folder is self-contained ---- */
 {
   for (const f of ['index.html', 'istimara.css', 'istimara.js', 'print.js']) {
@@ -63,10 +71,51 @@ const isAmount = (text, want) => digits(text).indexOf(String(want)) !== -1;
   if (/src="app\.js"/.test(HTML)) errors.push('[tree] the page loads the platform shell');
   /* The page opens an account for the person filling it in -- that is what the
      club asked for, and the request is filed under it. What it must never do is
-     read a session that belongs to somebody else: this is a public page, and a
-     page that picked up a stranger's session would show it to them. */
-  if (/onAuthStateChanged|currentUser|signInWith/.test(PAGE)) {
-    errors.push('[tree] the public page reads a session, and must never');
+     act on a session that belongs to somebody else: this is a public page, and a
+     page that picked up a stranger's session would show it to them.
+
+     A guardian coming back for a second child has to be recognised, so a session
+     is read -- through one door, and only when the account's own address is the
+     one that was typed. That is the guarantee, and it is counted rather than
+     trusted: exactly one place in the page may touch the session at all. */
+  const sessionDoor = PAGE.match(/function openAccountFor\([\s\S]*?\n  \}/);
+  if (!sessionDoor) {
+    errors.push('[tree] the public page has no door a session is read through');
+  } else {
+    if (!/currentUser/.test(sessionDoor[0])) {
+      errors.push('[tree] the door does not look at the session at all');
+    }
+    /* The comparison is the whole point: without it the page is whoever happens
+       to be signed in on this browser, which is the thing being prevented. */
+    if (!/at !== mine|said !== mine/.test(sessionDoor[0])) {
+      errors.push('[tree] the door does not compare the address with the one typed');
+    }
+    const readers = (PAGE.match(/currentUser/g) || []).length;
+    const inDoor = (sessionDoor[0].match(/currentUser/g) || []).length;
+    if (readers !== inDoor) {
+      errors.push('[tree] the page reads a session in ' + (readers - inDoor)
+        + ' place(s) besides the one door, and a public page must not');
+    }
+  }
+  /* Signing in is how a person proves an account is theirs, so it always carries
+     the password they typed. A route into an account without one is the thing to
+     look for. */
+  const signsIn = PAGE.match(/signInWithEmailAndPassword\(([^)]*)\)/g) || [];
+  if (!signsIn.length) {
+    errors.push('[tree] an account cannot be returned to at all');
+  }
+  for (const call of signsIn) {
+    if (!/password/.test(call)) {
+      errors.push('[tree] the page signs in without asking for a password: ' + call);
+    }
+  }
+  /* Nothing on this page listens for the session. The account is opened by the
+     person asking for it, with a password; a page that subscribed would pick up
+     whoever was signed in on this browser, which is the one risk with no visible
+     trace if it happens. What that session's profile carries is checked where it
+     can be seen -- by looking at the page afterwards. */
+  if (/onAuthStateChanged/.test(PAGE)) {
+    errors.push('[tree] the public page listens for a session rather than opening its own');
   }
   if (!/createUserWithEmailAndPassword/.test(PAGE)) {
     errors.push('[tree] the page asks for a password and never makes an account of it');
@@ -290,8 +339,8 @@ tasks.push(() => {
 
   /* Typed either way, it reads as the club writes it. */
   for (const [what, entered, shown] of [
-    ['a national number typed in Latin', '1985010111122', '1985010111122'],
-    ['a national number typed in Arabic-Indic', typed('1985010111122'), '1985010111122'],
+    ['a national number typed in Latin', '198501011', '198501011'],
+    ['a national number typed in Arabic-Indic', typed('198501011'), '198501011'],
     ['a telephone typed in Arabic-Indic', typed('0661 00 00 01'), '0661 00 00 01']
   ]) {
     const into = what.indexOf('national') === 0 ? 'national_id' : 'phone';
@@ -324,7 +373,7 @@ tasks.push(() => {
   /* What goes out is the one form the database holds. */
   fill(w, 'adult');
   type('birth_date', typed('1998/03/07'));
-  type('national_id', typed('1985010111122'));
+  type('national_id', typed('198501011'));
   type('phone', typed('0661000001'));
   field('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   return waitFor(w, () => !field('done').hidden || !!field('form-msg').textContent)
@@ -341,7 +390,7 @@ tasks.push(() => {
       const body = JSON.parse(post[0].body);
       const stored = {
         birth_date: '1998-03-07',
-        national_id: '1985010111122',
+        national_id: '198501011',
         phone: '0661000001'
       };
       for (const [field2, want] of Object.entries(stored)) {
@@ -368,6 +417,17 @@ function fill(w, category) {
   set('birth_date', '1994-05-04');
   set('phone', '0661000001');
   set('address', 'حي الثنية');
+  /* The national identity card. Nine digits, and the day it runs out. Asked of
+     the two people who hold one and of nobody else: an adult, and the guardian
+     of a minor. */
+  if (category === 'adult') {
+    set('national_id', '198501011'.slice(0, 9));
+    set('national_id_expiry', '2031/04/17');
+  } else {
+    set('guardian_national_id', '1978090311');
+    set('guardian_national_id_expiry', '2031/06/02');
+    set('guardian_card_issued', '2021/06/02');
+  }
   /* The account fields, because a form that asks for a password does not send
      without one -- and every send check below goes through this. */
   set('email', 'swimmer@example.com');
@@ -377,6 +437,24 @@ function fill(w, category) {
   const radio = w.document.querySelector('input[name="category"][value="' + category + '"]');
   radio.checked = true;
   w.document.getElementById('terms').checked = true;
+  /* The card fields follow the category, so they are re-synced after it is set. */
+  radio.dispatchEvent(new w.Event('change', { bubbles: true }));
+
+  /* The place of birth is a commune, and a commune is chosen from a wilaya's own
+     list -- so the wilaya goes first and the commune after it. Setting the value
+     directly would silently leave the field empty, because an option that is not
+     on the list cannot be held by it. */
+  const wilaya = w.document.getElementById('wilaya');
+  const place = w.document.getElementById('birth_place');
+  if (wilaya && place) {
+    const book = JSON.parse(COMMUNES);
+    const list = JSON.parse(ALGERIA.slice(ALGERIA.indexOf('=') + 1, ALGERIA.lastIndexOf(';')));
+    const target = list.find(x => (book[x.code] || []).length > 0);
+    wilaya.value = target.name;
+    wilaya.dispatchEvent(new w.Event('change', { bubbles: true }));
+    const commune = book[target.code][0];
+    if (commune) { place.value = commune; place.dispatchEvent(new w.Event('change', { bubbles: true })); }
+  }
   return radio;
 }
 
@@ -1151,7 +1229,9 @@ tasks.push(() => {
   const vals = F.formValues(rec);
   for (const [what, got, want] of [
     ['the birth date', vals.birth_date, '2013/05/09'],
-    ["the guardian's birth date", vals.parent_birth, '1985/02/03'],
+    /* The box after `المولود (٥) بتاريخ:` is the swimmer's date, not the
+       guardian's -- the record carries both, and the guardian's is 1985. */
+    ["the swimmer's date on the declaration", vals.child_birth_date, '2013/05/09'],
     ['the telephone number', vals.phone, '0661234567'],
     ["the guardian's identity number", vals.parent_id, '198502031122334455']
   ]) {
@@ -1177,6 +1257,371 @@ tasks.push(() => {
   }
 }
 
+
+/* ---- the identity card, and the place of birth ---- */
+const card_fields = () => {
+  const book = JSON.parse(COMMUNES);
+  const list = JSON.parse(ALGERIA.slice(ALGERIA.indexOf('=') + 1, ALGERIA.lastIndexOf(';')));
+  const target = list.find(x => (book[x.code] || []).length > 0);
+  const commune = book[target.code][0];
+
+  const w = boot();
+  const id = x => w.document.getElementById(x);
+  const say = () => (id('form-msg').textContent || '').trim();
+
+  /* The wilaya before the communes: the commune list is the wilaya's own, so there
+     is nothing on it until a wilaya is chosen. */
+  const ready = waitFor(w, () => id('wilaya') && id('wilaya').options.length > 1)
+    .then(() => {
+      const radio = w.document.querySelector('input[name="category"][value="minor"]');
+      radio.checked = true;
+      radio.dispatchEvent(new w.Event('change', { bubbles: true }));
+      id('wilaya').value = target.name;
+      id('wilaya').dispatchEvent(new w.Event('change', { bubbles: true }));
+      return waitFor(w, () => id('birth_place').options.length > 1);
+    });
+
+  const fillShared = () => {
+    const set = (f, v) => { const n = id(f); n.value = v; n.dispatchEvent(new w.Event('input', { bubbles: true })); };
+    set('first_name_ar', 'أمين');
+    set('last_name_ar', 'بلعيد');
+    set('birth_date', '2015/04/02');
+    set('phone', '0661000001');
+    set('address', 'حي الثنية');
+    set('guardian_first_name', 'كريم');
+    set('guardian_last_name', 'بلعيد');
+    set('guardian_birth_date', '1978/06/02');
+    set('guardian_phone', '0661000002');
+    id('terms').checked = true;
+    id('guardian_consent').checked = true;
+    set('email', 'probe.card@example.com');
+    set('username', 'probe.card');
+    set('password', 'correct-horse');
+    set('password_confirm', 'correct-horse');
+  };
+
+  const submit = () => id('reg-form').dispatchEvent(
+    new w.Event('submit', { bubbles: true, cancelable: true }));
+
+  const lastBody = () => {
+    const posts = w.__calls.filter(c => c.method === 'POST' && /\/api\/applications$/.test(c.url));
+    return posts.length ? JSON.parse(posts[posts.length - 1].body) : null;
+  };
+
+  return ready.then(() => {
+    fillShared();
+    /* The list is repainted when the wilaya settles, so the value is set inside
+       the wait rather than before it: set once, and set again if the repaint
+       cleared it. Writing it before the list has finished arriving leaves the
+       field empty and the request unsent, with nothing in between to say why. */
+    return waitFor(w, () => {
+      const offered = [...id('birth_place').options].map(o => o.value).filter(Boolean);
+      if (!offered.length) return false;
+      id('birth_place').value = offered[0];
+      id('birth_place').dispatchEvent(new w.Event('change', { bubbles: true }));
+      return !!id('birth_place').value;
+    }).then(() => { if (id('birth_place').value !== commune) return true; });
+
+    /* A card number that is not nine digits is refused before anything is sent. */
+    for (const [what, value] of [['eight digits', '19780903'], ['ten digits', '1978090311']]) {
+      const n = id('guardian_national_id');
+      n.value = value;
+      n.dispatchEvent(new w.Event('input', { bubbles: true }));
+      id('form-msg').hidden = true;
+      submit();
+      return waitFor(w, () => say()).then(() => {
+        if (!/9/.test(say())) {
+          errors.push('[card] a card number of ' + what + ' was not refused: ' + say());
+        }
+      });
+    }
+  }).then(() => {
+    /* And the right one, with an expiry and the issue date for the box the club's
+       own form has. */
+    for (const [f, v] of [['guardian_national_id', '197809031'],
+                          ['guardian_national_id_expiry', '2031/06/02'],
+                          ['guardian_card_issued', '2021/06/02']]) {
+      const n = id(f); n.value = v; n.dispatchEvent(new w.Event('input', { bubbles: true }));
+    }
+    submit();
+    return waitFor(w, () => w.__calls.some(c => c.method === 'POST'))
+      .catch(() => errors.push('[card] a minor with a card was never sent: ' + say()));
+  }).then(() => {
+    const body = lastBody();
+    if (!body) return;
+    const wants = {
+      guardian_national_id: '197809031',
+      guardian_national_id_expiry: '2031-06-02',
+      guardian_card_issued: '2021-06-02',
+      birth_place: commune
+    };
+    for (const [field, want] of Object.entries(wants)) {
+      if (body[field] !== want) {
+        errors.push('[card] a minor\'s request carries ' + field + ' as ' + JSON.stringify(body[field])
+          + ' rather than ' + JSON.stringify(want));
+      }
+    }
+    /* A child holds no card of their own; an adult carries no guardian's. */
+    if (body.national_id) errors.push('[card] a minor was sent with a card of their own');
+  });
+};
+
+/* An adult holds one too, and is stopped by it when it is wrong. */
+const adult_card = () => {
+  const w = boot();
+  const id = x => w.document.getElementById(x);
+  const say = () => (id('form-msg').textContent || '').trim();
+  const set = (f, v) => { const n = id(f); n.value = v; n.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  const submit = () => id('reg-form').dispatchEvent(
+    new w.Event('submit', { bubbles: true, cancelable: true }));
+
+  return waitFor(w, () => id('wilaya') && id('wilaya').options.length > 1).then(() => {
+    const radio = w.document.querySelector('input[name="category"][value="adult"]');
+    radio.checked = true;
+    radio.dispatchEvent(new w.Event('change', { bubbles: true }));
+    set('first_name_ar', 'أمين');
+    set('last_name_ar', 'بلعيد');
+    set('birth_date', '1990/01/01');
+    set('phone', '0661000003');
+    set('address', 'حي');
+    id('terms').checked = true;
+    set('email', 'probe.adult@example.com');
+    set('username', 'probe.adult');
+    set('password', 'correct-horse');
+    set('password_confirm', 'correct-horse');
+    set('national_id', '19850101');
+    id('form-msg').hidden = true;
+    submit();
+    return waitFor(w, () => say()).then(() => {
+      if (!/9/.test(say())) {
+        errors.push('[card] an adult\'s card number was not checked: ' + say());
+      }
+    });
+  }).then(() => {
+    set('national_id', '198501011');
+    set('national_id_expiry', '2031/04/17');
+    submit();
+    return waitFor(w, () => w.__calls.some(c => c.method === 'POST'))
+      .catch(() => errors.push('[card] an adult with a card was never sent: ' + say()));
+  }).then(() => {
+    const posts = w.__calls.filter(c => c.method === 'POST' && /\/api\/applications$/.test(c.url));
+    const body = posts.length ? JSON.parse(posts[posts.length - 1].body) : null;
+    if (!body) return;
+    if (body.national_id !== '198501011') {
+      errors.push('[card] an adult\'s card number was sent as ' + JSON.stringify(body.national_id));
+    }
+    if (body.national_id_expiry !== '2031-04-17') {
+      errors.push('[card] an adult\'s card expiry was sent as ' + JSON.stringify(body.national_id_expiry));
+    }
+    if (body.guardian_national_id) errors.push('[card] an adult was sent with a guardian\'s card');
+  });
+};
+
+/* A wait that times out is a fault to report, not a crash: the check has already
+   failed by not getting its answer, and an exception here would stop every check
+   after it from running and hide which of them were fine. */
+tasks.push(() => card_fields().catch(e => errors.push('[card] the minor check did not finish: ' + e.message)));
+tasks.push(() => adult_card().catch(e => errors.push('[card] the adult check did not finish: ' + e.message)));
+
+/* ---- the notifications ---- */
+const toasts_rise = () => {
+  const w = boot();
+  const tray = w.document.getElementById('toasts');
+  const say = (t, k, m) => w.SADARA_FORM.notify(t, k, m);
+
+  if (!tray) {
+    errors.push('[notify] the page has no tray to show a notification in');
+    return Promise.resolve();
+  }
+
+  /* Kept and told apart: two notices arriving together must both be readable, and
+     the newer one must not push the older off the screen. */
+  say('حُفظت المسودة.', 'ok', 'ستعود تلقائياً.');
+  say('تعذّر إرسال الطلب.', 'error', 'لم يُفقد ما كتبته.');
+
+  const cards = [...tray.querySelectorAll('.toast')];
+  if (cards.length !== 2) {
+    errors.push('[notify] two notices produced ' + cards.length + ' cards');
+    return Promise.resolve();
+  }
+  /* Newest at the top: the notice said last is the thing being waited on. A card
+     begins with its mark, so this asks where the sentence is, not that it is
+     first. */
+  if (cards[0].textContent.indexOf('تعذّر إرسال الطلب') === -1) {
+    errors.push('[notify] the newest notice is not at the top of the tray');
+  }
+  if (cards[1].textContent.indexOf('تعذّر إرسال الطلب') !== -1) {
+    errors.push('[notify] both notices are the same one');
+  }
+  if (!cards[0].classList.contains('error')) errors.push('[notify] a refusal is not marked as one');
+  if (!cards[1].classList.contains('ok')) errors.push('[notify] a confirmation is not marked as one');
+
+  /* A sentence, not a class name: the glyph and both lines have to be there,
+     because that is all anybody ever reads. */
+  const body = cards[0].querySelector('.toast-body');
+  const lines = body ? [...body.querySelectorAll('p')].map(x => x.textContent) : [];
+  if (lines.length !== 2 || lines[0] !== 'تعذّر إرسال الطلب.' || lines[1] !== 'لم يُفقد ما كتبته.') {
+    errors.push('[notify] the notice reads ' + JSON.stringify(lines));
+  }
+  if (!cards[0].querySelector('.toast-ic')) errors.push('[notify] the notice has no mark on it');
+
+  /* A third and a fourth: the oldest goes, so the top of the screen does not grow
+     without bound down a form this long. */
+  say('ثالث.', 'info');
+  say('رابع.', 'info');
+  const four = [...tray.querySelectorAll('.toast')];
+  if (four.length !== 3) errors.push('[notify] four notices left ' + four.length + ' cards, not 3');
+  if (four.some(c => c.textContent.indexOf('حُفظت المسودة') !== -1)) {
+    errors.push('[notify] the oldest notice was kept and a newer one dropped');
+  }
+
+  /* Every one of them can be closed by hand, which is the only way a refusal ever
+     leaves: nobody reads a screen-reader announcement in six seconds. */
+  const closers = [...tray.querySelectorAll('.toast-x')];
+  if (closers.length !== 3) errors.push('[notify] ' + closers.length + ' ways to close three notices');
+  closers.forEach(b => b.click());
+
+  /* Closing is an animation, so the card is still there for the length of it --
+     that is the one moment it is meant to be. Look again once it is over. */
+  if (tray.querySelectorAll('.toast').length === 0) {
+    errors.push('[notify] a notice vanished before it had finished leaving');
+  }
+  return new Promise(resolve => setTimeout(() => {
+    if (tray.querySelectorAll('.toast').length !== 0) {
+      errors.push('[notify] closing a notice left it on the screen');
+    }
+    resolve();
+  }, 400));
+};
+
+tasks.push(() => toasts_rise().catch(e => errors.push('[notify] the check did not finish: ' + e.message)));
+
+/* One guardian, several swimmers -- and nothing from the session put on the page.
+
+   The thing being proved is that a second child of the same family can be
+   registered at all. Before this, the form made an account every time, so the
+   address was taken, the account could not be made again, and the chosen name was
+   already held: the second child simply could not be filed.
+
+   The session that stands in for a real one is dressed as a profile the club would
+   really have written: a role and an answer. Neither may appear anywhere on the
+   page afterwards. That is checked here rather than by reading the source, because
+   reading the source cannot tell a value that is written into a profile from one
+   that is shown to a visitor -- and it is the second that matters. */
+const CHILD_UID = 'guardian-uid-0001';
+const CHILD_PROFILE = {
+  username: 'karim.belaid',
+  name: 'كريم بلعيد',
+  role: 'admin',
+  request_status: 'rejected',
+  rejection_reason: 'سبب ما协调发展 يجب ألا يظهر'
+};
+
+/* A session this page can find: the account it is signed in with, and the one
+   profile document it may open -- its own. */
+function signInAs(w, email, uid) {
+  w.firebase = {
+    auth: () => ({
+      currentUser: { uid: uid || CHILD_UID, email: email },
+      signInWithEmailAndPassword: () => Promise.reject({ code: 'auth/wrong-password' }),
+      createUserWithEmailAndPassword: () => Promise.reject({ code: 'auth/email-already-in-use' })
+    }),
+    firestore: () => ({
+      collection: () => ({
+        doc: () => ({
+          get: () => Promise.resolve({ exists: true, data: () => CHILD_PROFILE }),
+          set: () => Promise.resolve()
+        })
+      })
+    })
+  };
+}
+
+const guardian_returns = () => {
+  const w = boot();
+  const id = x => w.document.getElementById(x);
+  const set = (f, v) => { const n = id(f); n.value = v; n.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  const say = () => (id('form-msg').textContent || '').trim();
+
+  return waitFor(w, () => id('wilaya') && id('wilaya').options.length > 1).then(() => {
+    signInAs(w, 'guardian@example.com');
+
+    const radio = w.document.querySelector('input[name="category"][value="minor"]');
+    radio.checked = true;
+    radio.dispatchEvent(new w.Event('change', { bubbles: true }));
+    id('wilaya').value = A_WILAYA.name;
+    id('wilaya').dispatchEvent(new w.Event('change', { bubbles: true }));
+
+    return waitFor(w, () => {
+      const offered = [...id('birth_place').options].map(o => o.value).filter(Boolean);
+      if (!offered.length) return false;
+      id('birth_place').value = offered[0];
+      return true;
+    });
+  }).then(() => {
+    /* The guardian answers everything but their own account: the address is on
+       the form and the browser already holds the account that address belongs to. */
+    set('first_name_ar', 'يوسف');
+    set('last_name_ar', 'بلعيد');
+    set('birth_date', '2017/09/14');
+    set('phone', '0661000009');
+    set('address', 'حي الثنية');
+    set('birth_certificate_no', '04512');
+    set('guardian_first_name', 'كريم');
+    set('guardian_last_name', 'بلعيد');
+    set('guardian_birth_date', '1978/06/02');
+    set('guardian_phone', '0661000002');
+    set('guardian_national_id', '197809031');
+    set('guardian_national_id_expiry', '2031/06/02');
+    id('terms').checked = true;
+    id('guardian_consent').checked = true;
+    set('email', 'guardian@example.com');
+    /* No password, and no user name: this is the whole point. A field that is
+       still demanded here is the field that stops a second child. */
+    id('password').value = '';
+    id('password_confirm').value = '';
+    id('username').value = '';
+    id('form-msg').hidden = true;
+    id('reg-form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+    return waitFor(w, () => w.__calls.some(c => c.method === 'POST'))
+      .catch(() => errors.push('[sibling] the second child was never sent: ' + say()));
+  }).then(() => {
+    const posts = w.__calls.filter(c => c.method === 'POST' && /\/api\/applications$/.test(c.url));
+    const body = posts.length ? JSON.parse(posts[posts.length - 1].body) : null;
+    if (!body) return;
+    /* The account the session named is the one the request is filed under. */
+    if (body.applicant_uid !== CHILD_UID) {
+      errors.push('[sibling] the request was filed under ' + JSON.stringify(body.applicant_uid));
+    }
+    /* And the name is the one that account already holds, not one chosen again. */
+    if (body.username !== CHILD_PROFILE.username) {
+      errors.push('[sibling] the request carries the name ' + JSON.stringify(body.username)
+        + ' rather than the one the account holds');
+    }
+    /* The password is offered to the provider and to nobody else -- including the
+       second request, which is the request most likely to be made carelessly. */
+    if (/password/.test(JSON.stringify(body))) {
+      errors.push('[sibling] a password reached the request');
+    }
+
+    /* Nothing out of that profile on the page. */
+    const shown = w.document.body.textContent || '';
+    for (const word of [CHILD_PROFILE.role, CHILD_PROFILE.request_status,
+                        CHILD_PROFILE.rejection_reason, CHILD_PROFILE.name]) {
+      if (shown.indexOf(word) !== -1) {
+        errors.push('[sibling] the page shows "' + word + '" out of the session');
+      }
+    }
+    /* And the offer for the next one, which is the point of all of it. */
+    const offer = id('done-sibling');
+    if (!offer || offer.hidden) {
+      errors.push('[sibling] no offer to register the next swimmer of this family');
+    }
+  });
+};
+
+tasks.push(() => guardian_returns().catch(
+  e => errors.push('[sibling] the check did not finish: ' + e.message)));
 /* ---- run the settling checks in order ---- */
 tasks.reduce((chain, task) => chain.then(task), Promise.resolve()).then(() => {
   if (errors.length) { console.log('PROBLEMS:\n  - ' + [...new Set(errors)].join('\n  - ')); process.exit(1); }

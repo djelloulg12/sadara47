@@ -116,7 +116,10 @@ def iso_date(value):
 DIGIT_FIELDS = frozenset((
     'national_id', 'birth_certificate_no', 'membership_no', 'registration_id',
     'phone', 'whatsapp', 'guardian_phone', 'guardian_national_id'))
-DATE_FIELDS = frozenset(('birth_date', 'guardian_birth_date', 'card_issue_date'))
+DATE_FIELDS = frozenset((
+    'birth_date', 'guardian_birth_date', 'card_issue_date',
+    # The national identity card: the day it runs out, and the day it was issued.
+    'national_id_expiry', 'guardian_national_id_expiry', 'guardian_card_issued'))
 
 
 def normalise_incoming(body):
@@ -330,7 +333,12 @@ def init_db():
         'registration_id': 'TEXT', 'pool_number': 'INTEGER',
         'username': 'TEXT', 'national_id_key': 'TEXT', 'duplicate_key': 'TEXT',
         'rejection_reason': 'TEXT', 'claim_only': 'INTEGER NOT NULL DEFAULT 0',
-        'filed_under': "TEXT NOT NULL DEFAULT 'reference'"})
+        'filed_under': "TEXT NOT NULL DEFAULT 'reference'",
+        # The national identity card: the number, the day it runs out, and -- for
+        # the guardian, whose card the club's own form has a box for -- the day it
+        # was issued.
+        'national_id_expiry': 'TEXT', 'guardian_national_id_expiry': 'TEXT',
+        'guardian_card_issued': 'TEXT'})
     ensure_columns(c, 'users', {
         'username': 'TEXT', 'registration_id': 'TEXT', 'request_status': 'TEXT',
         'rejection_reason': 'TEXT'})
