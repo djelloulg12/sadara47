@@ -116,7 +116,7 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
     if (!ys.some(y => Math.abs(y - target) < 0.05)) errors.push('[form] no spot on the rule at ' + target + 'mm');
   }
   if (!sheet.includes('جلول')) errors.push('[form] applicant name not filled in');
-  if (!sheet.includes('17/04/2012')) errors.push('[form] birth date not formatted for the form');
+  if (!sheet.includes('\u0662\u0660\u0661\u0662/\u0660\u0664/\u0661\u0667')) errors.push('[form] birth date not written year-first in Arabic digits: \u0662\u0660\u0661\u0662/\u0660\u0664/\u0661\u0667');
   if (!/f-photo/.test(sheet)) errors.push('[form] photo frame missing');
   const px = w.__t.PHOTO_BOX;
   if (Math.abs(px.w - 36.4) > 0.3 || Math.abs(px.h - 42.5) > 0.3) errors.push('[form] photo box size drifted from the image');

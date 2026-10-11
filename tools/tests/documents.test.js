@@ -50,8 +50,8 @@ const errors = [];
   let sheet = '';
   try { sheet = w.__t.overlaySheet(applicant); } catch (e) { errors.push('overlaySheet threw: ' + e.message); }
   const pairs = [['background image','assets/form-registration-01.jpg'],['first name','\u0623\u0645\u064a\u0646'],
-    ['surname','\u0628\u0644\u0639\u064a\u062f'],['birth date','17/04/2012'],['blood','O+'],
-    ['phone','0661000001'],['guardian','\u0643\u0631\u064a\u0645'],['guardian id','1970011122334'],
+    ['surname','\u0628\u0644\u0639\u064a\u062f'],['birth date','\u0662\u0660\u0661\u0662/\u0660\u0664/\u0661\u0667'],['blood','O+'],
+    ['phone','\u0660\u0666\u0666\u0661\u0660\u0660\u0660\u0660\u0660\u0661'],['guardian','\u0643\u0631\u064a\u0645'],['guardian id','\u0661\u0669\u0667\u0660\u0660\u0661\u0661\u0661\u0662\u0662\u0663\u0663\u0664'],
     ['pool','\u0627\u0644\u0645\u0633\u0628\u062d \u0627\u0644\u062c\u0648\u0627\u0631\u064a \u0628\u0648\u0647\u0631\u0627\u0648\u0629']];
   for (const [label, needle] of pairs) if (!sheet.includes(needle)) errors.push('official overlay missing [' + label + ']');
   if (/undefined|NaN/.test(sheet)) errors.push('official overlay contains undefined/NaN');
@@ -107,6 +107,53 @@ const errors = [];
   const order = [61.95, 75.25, 85.05, 94.85, 104.65, 114.45, 124.25];
   const bottoms = [...sheet.matchAll(/bottom:([\d.]+)mm/g)].map(m => 297 - Number(m[1]) - 0.4);
   for (const y of order) if (!bottoms.some(v => Math.abs(v - y) < 0.02)) errors.push('no overlay on the rule at ' + y + 'mm');
+
+  /* The club writes its documents in Arabic-Indic digits and dates year first,
+     but a reference number stays in the digits it is quoted and looked up in.
+     Checked on both sides of that line, because getting either one wrong is the
+     failure that matters: a date the club reads as 2050, or a membership number
+     that cannot be typed back in. */
+  const printed = sheet.replace(/<[^>]+>/g, ' ');
+  for (const [what, want] of [
+    ['the birth date', '٢٠١٢/٠٤/١٧'],
+    ['the telephone number', '٠٦٦١٠٠٠٠٠١'],
+    ["the guardian's identity number", '١٩٧٠٠١١١٢٢٣٣٤']
+  ]) {
+    if (!sheet.includes(want)) errors.push('the printed form has no ' + what
+      + ' in Arabic digits: ' + want);
+  }
+  if (/17\/04\/2012/.test(printed)) {
+    errors.push('a date is still printed day-first');
+  }
+  /* The reference number is checked the other way round already: the serial above
+     must equal the applicant's request number exactly, which is only true while
+     the sheet is still printing it in Latin digits. */
+  if (!serial || serial.text !== applicant.application_no) {
+    errors.push('the registration number is no longer printed in the digits it is quoted in');
+  }
+
+  /* The card keeps a photograph, the season it was issued for, and the number,
+     in that order down the side. */
+  const card = w.__t.luxuryCard({ membership_no: 'SDR-0042', name: 'x', group_name: 'y',
+                                  blood_group: 'O+', joined: '2026-09-01', phone: '0661234567' }, 'swimmer');
+  const under = card.match(/<div class="lux-photo-wrap">([\s\S]*?)<div class="lux-info">/);
+  if (!under.length) errors.push('the card has no photograph column to put the season under');
+  else {
+    const order = [...under[1].matchAll(/class="(lux-photo|lux-season|lux-no)"/g)].map(m => m[1]);
+    if (order.join('>') !== 'lux-photo>lux-season>lux-no') {
+      errors.push('under the photograph the card reads ' + order.join(' > ') + '; it should be photo > season > number');
+    }
+  }
+  const SEASON_AR = '٢٠٢٧ / ٢٠٢٦';
+  if (!card.includes(SEASON_AR)) {
+    errors.push('the card does not carry the season in Arabic digits, later year first');
+  }
+  if (!card.includes('SDR-0042')) {
+    errors.push('the card number is no longer printed in the digits it is quoted in');
+  }
+  if (!APP.includes('2027 / 2026')) {
+    errors.push('the club season is not 2027/2026 -- Arabic reads a season from the later year');
+  }
 
   /* The bar above the form tells the user what to do with it. It is an
      instruction for the screen, not part of the document: left in the print it

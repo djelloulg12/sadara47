@@ -87,7 +87,7 @@ shutil.copyfile(os.path.join(ROOT, "app.js"), os.path.join(PUBLIC, "app.js"))
 # sw.js and firebase-adapter.js are plain source with no build step of their own.
 # The static check refuses to publish while a copy differs, and forgetting them
 # is how the deployed tree quietly serves last month's file.
-for plain in ("sw.js", "firebase-adapter.js"):
+for plain in ("sw.js", "firebase-adapter.js", "styles.css"):
     shutil.copyfile(os.path.join(ROOT, plain), os.path.join(PUBLIC, plain))
 
 SRC_ISTIMARA = os.path.join(ROOT, "istimara")

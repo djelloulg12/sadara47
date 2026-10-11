@@ -288,7 +288,7 @@ function fill(w, category) {
     if (left < g.x0 - 0.02) errors.push('[card] ' + g.id + ' starts before its printed line');
   });
   if (!sheet.includes('جلول')) errors.push('[card] the given name is missing');
-  if (!sheet.includes('17/04/2012')) errors.push('[card] the birth date is not day-first');
+  if (!sheet.includes('\u0662\u0660\u0661\u0662/\u0660\u0664/\u0661\u0667')) errors.push('[card] the birth date is not year-first in Arabic digits: \u0662\u0660\u0661\u0662/\u0660\u0664/\u0661\u0667');
   if (!sheet.includes('assets/form-registration-01.jpg')) errors.push('[card] the club scan is missing');
   if (!/class="f-photo"/.test(sheet)) errors.push('[card] the photo frame is missing');
 
@@ -327,11 +327,11 @@ function fill(w, category) {
   /* everything the applicant typed has to be readable on paper */
   for (const [key, what] of [
     ['APP-20260101-AB12', 'رقم الطلب'], ['جلول', 'الاسم'], ['قندوز', 'اللقب'],
-    ['17/04/2012', 'تاريخ الميلاد'], ['حي الثنية', 'العنوان'], ['O+', 'فصيلة الدم'],
-    ['0661000001', 'الهاتف'], ['0661000002', 'الواتساب'], ['ذكر', 'الجنس'],
-    ['حرة، ظهر', 'نمط السباحة'], ['20120417887', 'رقم التعريف'], ['المسبح الاختيارمبي', 'المسبح'],
-    ['لخضر', 'الولي'], ['أب', 'القرابة'], ['0661000003', 'هاتف الولي'],
-    ['1970011122334', 'تعريف الولي'], ['المسبح الاختيارمبي', 'المنشأة'],
+    ['\u0662\u0660\u0661\u0662/\u0660\u0664/\u0661\u0667', 'تاريخ الميلاد'], ['حي الثنية', 'العنوان'], ['O+', 'فصيلة الدم'],
+    ['٠٦٦١٠٠٠٠٠١', 'الهاتف'], ['٠٦٦١٠٠٠٠٠٢', 'الواتساب'], ['ذكر', 'الجنس'],
+    ['حرة، ظهر', 'نمط السباحة'], ['٢٠١٢٠٤١٧٨٨٧', 'رقم التعريف'], ['المسبح الاختيارمبي', 'المسبح'],
+    ['لخضر', 'الولي'], ['أب', 'القرابة'], ['٠٦٦١٠٠٠٠٠٣', 'هاتف الولي'],
+    ['١٩٧٠٠١١١٢٢٣٣٤', 'تعريف الولي'], ['المسبح الاختيارمبي', 'المنشأة'],
     ['اشتراك موسمي', 'الاشتراك'], ['نقدًا', 'طريقة الدفع'],
     ['يفضّل التدريب صباحاً', 'الملاحظة']
   ]) {
@@ -350,9 +350,9 @@ function fill(w, category) {
   if (/doctor_|medical_date|medical_place/.test(PRINT.replace(/\/\*[\s\S]*?\*\//g, ''))) {
     errors.push('[summary] the print still reads a doctor field off the record');
   }
-  if (!isAmount(summary, '6400')) errors.push('[summary] the expected amount is not printed');
+  if (!isAmount(summary, '\u0666\u0664\u0660\u0660')) errors.push('[summary] the expected amount is not printed');
   /* An added option with no known price must not claim to be free. */
-  if (!isAmount(summary, '900') || !isAmount(summary, '2500')) {
+  if (!isAmount(summary, '\u0669\u0660\u0660') || !isAmount(summary, '\u0662\u0665\u0660\u0660')) {
     errors.push('[summary] the extras are not priced on the summary');
   }
   /* Sections are numbered once each, in order, so the club can cite one. */
@@ -943,12 +943,85 @@ tasks.push(() => {
   /* Nothing may be lost to the tightening: every value still has to be on the
      page. The full list of values is checked separately, above; this is the
      right-hand column, which is the one that grew. */
-  for (const needle of ['g', 'h', '03/02/1985', '198502031122334455']) {
+  for (const needle of ['g', 'h', '\u0661\u0669\u0668\u0665/\u0660\u0662/\u0660\u0663', '\u0661\u0669\u0668\u0665\u0660\u0662\u0660\u0663\u0661\u0661\u0662\u0662\u0663\u0663\u0664\u0664\u0665\u0665']) {
     if (!html.includes(needle)) errors.push('[summary] a value was lost in the new layout: ' + needle);
   }
   /* The one thing here that can be any length at all is the swimmer's own note. */
   if (!/\.s-notes\{[^}]*max-height/.test(css)) {
     errors.push('[summary] a long note is not capped, so it can push the signatures off the page');
+  }
+}
+
+/* ---- 23) the season on the summary, under the request number ---- */
+{
+  const F = boot().SADARA_FORM;
+  const html = F.documentHTML({ application_no: 'APP-20261011-33A7', category: 'adult',
+    first_name_ar: 'x', last_name_ar: 'y', birth_date: '2000-01-01', phone: '1', address: 'a' });
+  const no = /<div class="s-no">([\s\S]*?)<\/div>/.exec(html);
+  if (!no) errors.push('[season] the summary has no block for the request number');
+  else {
+    /* Directly under it, and in Arabic-Indic digits with the later year first --
+       the way a season is read and written in Arabic. */
+    if (!/رقم الطلب[\s\S]*APP-20261011-33A7[\s\S]*الموسم الرياضي[\s\S]*٢٠٢٧ \/ ٢٠٢٦/.test(no[1])) {
+      errors.push('[season] the summary does not carry the season under the request number');
+    }
+    /* The request number itself stays in the digits it is quoted in. */
+    if (/[٠-٩]/.test(no[1].replace(/٢٠٢٧ \/ ٢٠٢٦/g, ''))) {
+      errors.push('[season] something on the request number is in Arabic digits');
+    }
+  }
+  /* Set larger than the number above it: the number is matched, the season is
+     read to know the year. */
+  const css = F.printCSS();
+  const size = sel => {
+    const m = new RegExp('\\' + sel + '\\{[^}]*font-size:([\\d.]+)pt').exec(css);
+    return m ? Number(m[1]) : 0;
+  };
+  const season = size('.s-season'), request = size('.s-no b');
+  if (!season) errors.push('[season] the season on the summary has no size of its own');
+  else if (season <= request) {
+    errors.push('[season] the season is not larger than the request number above it: '
+      + season + 'pt against ' + request + 'pt');
+  }
+  if (F.CLUB.season !== '2027 / 2026') {
+    errors.push('[season] the club season is not written later-year-first: ' + F.CLUB.season);
+  }
+}
+
+/* ---- 24) the sheet is written in Arabic-Indic digits ---- */
+{
+  const F = boot().SADARA_FORM;
+  if (F.ar('2026/10/11') !== '٢٠٢٦/١٠/١١') {
+    errors.push('[digits] the conversion to Arabic-Indic digits is wrong: ' + F.ar('2026/10/11'));
+  }
+  if (F.slashDate('2013-05-09') !== '٢٠١٣/٠٥/٠٩') {
+    errors.push('[digits] a date is not written year-first in Arabic digits: ' + F.slashDate('2013-05-09'));
+  }
+  /* The values a person reads off the page. */
+  const rec = { birth_date: '2013-05-09', phone: '0661234567', blood_group: 'O+',
+                guardian_birth_date: '1985-02-03', guardian_national_id: '198502031122334455',
+                category: 'minor', first_name_ar: 'x', last_name_ar: 'y',
+                address: 'a', application_no: 'APP-20261011-33A7', expected_amount: 6400 };
+  const vals = F.formValues(rec);
+  for (const [what, got, want] of [
+    ['the birth date', vals.birth_date, '٢٠١٣/٠٥/٠٩'],
+    ["the guardian's birth date", vals.parent_birth, '١٩٨٥/٠٢/٠٣'],
+    ['the telephone number', vals.phone, '٠٦٦١٢٣٤٥٦٧'],
+    ["the guardian's identity number", vals.parent_id, '١٩٨٥٠٢٠٣١١٢٢٣٣٤٤٥٥']
+  ]) {
+    if (got !== want) errors.push('[digits] ' + what + ' prints as ' + got + ', not ' + want);
+  }
+  /* And the one thing that must not: a number the person has to read back. */
+  if (vals.registration !== 'APP-20261011-33A7') {
+    errors.push('[digits] the request number was converted, and then cannot be looked up: ' + vals.registration);
+  }
+  /* The thousands separator is whatever locale gives -- a narrow no-break space
+     here, an ordinary one elsewhere -- so every run of blanks is collapsed to one
+     before the amount is compared rather than pinned to one kind of space. */
+  const sheet = F.summarySheet(rec).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (sheet.indexOf('المبلغ المتوقع ٦ ٤٠٠ دج') === -1) {
+    errors.push('[digits] the amount is not written in Arabic digits: '
+      + (sheet.match(/المبلغ[^د]*دج/) || ['(not found)'])[0]);
   }
 }
 

@@ -314,7 +314,7 @@ setTimeout(()=>{if(state.user)recordPendingAttendance();},0);
 /* ==========================================================
    Sadara Core — طباعة، بيانات حقيقية، وواجهة المدربين والرياضيين
    ========================================================== */
-const CLUB={name:'النادي الرياضي الصدارة',unit:'فوج السباحة',address:'حي الثنية — غرداية',city:'غرداية',phone:'0660 60 64 67',email:'nadisadara@gmail.com',facebook:'https://www.facebook.com/nadiSadara47/',season:'2026 / 2027'};
+const CLUB={name:'النادي الرياضي الصدارة',unit:'فوج السباحة',address:'حي الثنية — غرداية',city:'غرداية',phone:'0660 60 64 67',email:'nadisadara@gmail.com',facebook:'https://www.facebook.com/nadiSadara47/',season:'2027 / 2026'};
 const AR_MONTHS=['جانفي','فيفري','مارس','أفريل','ماي','جوان','جويلية','أوت','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 const AR_DAYS=['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 const WEEK_DAYS=['السبت','الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة'];
@@ -323,7 +323,7 @@ const pad2=n=>String(n).padStart(2,'0');
 const isoDay=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 const todayISO=()=>isoDay(new Date());
 const longDate=(d=new Date())=>`${AR_DAYS[d.getDay()]}، ${pad2(d.getDate())} ${AR_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-const money=v=>`${Number(v||0).toLocaleString('en-US')} دج`;
+const money=v=>`${arDigits(Number(v||0).toLocaleString('en-US'))} دج`;
 const sum=(list,f)=>list.reduce((t,x)=>t+(Number(typeof f==='function'?f(x):x[f])||0),0);
 const stateLabel=s=>s==='approved'?'مقبول':s==='rejected'?'مرفوض':s==='paid'?'مدفوع':s==='cancelled'?'ملغى':'قيد المراجعة';
 const planName=code=>(state.subscriptions||[]).find(p=>p.code===code)?.name||code||'—';

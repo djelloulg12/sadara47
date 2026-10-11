@@ -70,8 +70,11 @@ function spotStyle(s) {
 }
 function formValues(a){
   const v = (k, fb) => (a && a[k] ? a[k] : (fb || ''));
-  const dayFirst = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))
-    ? String(d).split('-').reverse().join('/') : String(d || '');
+  /* Arabic-Indic digits on the sheet, and dates written year first -- 2026/10/11
+     -- the way the club writes them. A reference number is the exception and is
+     left alone: it is the one thing a person has to read back and look up. */
+  const slashDate = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))
+    ? arDigits(String(d).split('-').join('/')) : arDigits(String(d || ''));
   return {
     /* The pool, on the line the scan draws for it. */
     facility: v('facility'),
@@ -81,10 +84,10 @@ function formValues(a){
     registration: v('membership_no') || v('application_no'),
     first_name: v('first_name_ar'),
     last_name: v('last_name_ar'),
-    birth_date: dayFirst(a && a.birth_date),
+    birth_date: slashDate(a && a.birth_date),
     address: v('address'),
-    blood_group: v('blood_group'),
-    phone: v('phone'),
+    blood_group: arDigits(v('blood_group')),
+    phone: arDigits(v('phone')),
     /* There is no doctor value. It used to be the swimmer's own name, written
        into the line reserved for the doctor who certifies them, and on a document
        the club keeps that is the wrong name in the wrong place. The scan has no
@@ -96,10 +99,10 @@ function formValues(a){
        identity block at the top separates الإسم from اللقب. Nationality has no
        blank of its own on this form, so nothing is written for it. */
     parent_name: v('guardian_first_name'),
-    parent_birth: dayFirst(v('guardian_birth_date')),
+    parent_birth: slashDate(v('guardian_birth_date')),
     parent_last_name: v('guardian_last_name'),
-    parent_id: v('guardian_national_id'),
-    card_issued_at: dayFirst(v('card_issue_date')),
+    parent_id: arDigits(v('guardian_national_id')),
+    card_issued_at: slashDate(v('card_issue_date')),
     card_place: v('card_issue_place'),
     authorised_for: v('guardian_child')
   };

@@ -48,6 +48,22 @@ function printWindow(features) {
   return w;
 }
 
+/* ---------------------- الأرقام العربية في الطباعة ---------------------- */
+/* The club writes its documents in Arabic-Indic digits, the way its forms and its
+   section numbers already are. This is for the printed sheets only.
+
+   Not for a reference number. A membership number and a request number are the
+   two things a person has to read back over the phone or type into the platform,
+   and a number quoted in one set of digits and looked up in the other is a
+   number nobody can find. Everything else -- dates, money, telephone numbers,
+   identity numbers, the season, years of experience -- is read by eye off a
+   printed page, and is written this way. */
+const AR_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+function arDigits(v) {
+  return String(v === undefined || v === null ? '' : v)
+    .replace(/[0-9]/g, d => AR_DIGITS[Number(d)]);
+}
+
 /* ---------------------- ربط وثائق النادي ---------------------- */function coachAccounts(){return (state.cards||[]).filter(c=>c.role==='coach'||c.kind==='coach');}function luxPreviewBox(items,kind){
   if(!items.length) return '<div class="panel empty-cell">لا توجد بيانات.</div>';
   return '<div class="lux-preview">'+items.slice(0,4).map(p=>luxuryCard(p,kind)).join('')+'</div>';

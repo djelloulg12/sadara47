@@ -63,8 +63,26 @@
     address: 'حي الثنية — غرداية',
     phone: '0660 60 64 67',
     email: 'nadisadara@gmail.com',
-    season: '2026 / 2027'
+    /* Written the way the club reads a season aloud and writes it on its forms:
+       the later year first, since Arabic is read from the right. */
+    season: '2027 / 2026'
   };
+
+  /* The club writes its sections in Arabic-Indic digits. */
+  var AR_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+
+  /* Arabic-Indic digits, for anything printed.
+
+     Applied to the sheets, not to what is stored and not to a reference number.
+     A membership number and a request number are the two things a person has to
+     read back over the phone or type into the platform, and a number quoted in
+     one set of digits and looked up in the other is a number that cannot be
+     found. Everything else -- dates, money, phone numbers, identity numbers, the
+     season -- is read by eye off a printed page and is written this way. */
+  function ar(v) {
+    return String(v === undefined || v === null ? '' : v)
+      .replace(/[0-9]/g, function (d) { return AR_DIGITS[Number(d)]; });
+  }
 
   function esc(v) {
     return String(v === undefined || v === null ? '' : v)
@@ -76,10 +94,15 @@
     return String((rec && rec.category) || '').toLowerCase() === 'adult';
   }
 
-  /* The card writes the date the way the club reads it: day first. */
-  function dayFirst(d) {
+  /* A date, written the way the club writes it: year first, then month, then
+     day -- 2026/10/11 -- and in Arabic-Indic digits.
+
+     The value arrives from a date input as YYYY-MM-DD, so only the separators
+     change and the order is already the one asked for. It used to be day first;
+     the same function was doing the opposite of this. */
+  function slashDate(d) {
     d = String(d || '');
-    return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.split('-').reverse().join('/') : d;
+    return ar(/^\d{4}-\d{2}-\d{2}$/.test(d) ? d.split('-').join('/') : d);
   }
 
   /* Anchoring on the bottom edge keeps the value sitting on its rule whatever
@@ -107,14 +130,14 @@
     registration: v('membership_no') || v('application_no'),
       first_name: v('first_name_ar'),
       last_name: v('last_name_ar'),
-      birth_date: dayFirst(rec.birth_date),
+      birth_date: slashDate(rec.birth_date),
       address: v('address'),
-      blood_group: v('blood_group'),
-      phone: v('phone'),
+      blood_group: ar(v('blood_group')),
+      phone: ar(v('phone')),
             parent_name: v('guardian_first_name'),
-      parent_birth: dayFirst(v('guardian_birth_date')),
+      parent_birth: slashDate(v('guardian_birth_date')),
       parent_last_name: v('guardian_last_name'),
-      parent_id: v('guardian_national_id'),
+      parent_id: ar(v('guardian_national_id')),
       /* The place and the date of issue are the club's to fill in, so a public
          form leaves them on the blank line the scan already carries. */
       card_issued_at: '',
@@ -177,12 +200,10 @@
   var FACILITIES = ['المسبح الأولمبي', 'المسبح النصف أولمبي', 'الملعب البلدي', 'غابة غرداية'];
   var PAYMENTS = { cash: 'نقدًا', postal_check: 'صك بريدي', postal_transfer: 'حوالة بريدية' };
   var PLANS = { quarter: 'اشتراك فصلي', season: 'اشتراك موسمي', agreement: 'ضمن اتفاقية معتمدة' };
-  /* The club writes its sections in Arabic-Indic digits. */
-  var AR_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
 
   function money(n) {
     n = Number(n) || 0;
-    return n.toLocaleString('fr-DZ') + ' دج';
+    return ar(n.toLocaleString('fr-DZ')) + ' دج';
   }
 
   /* One field of the grid: a label and its value, with no table around them.
@@ -197,8 +218,11 @@
     opts = opts || {};
     if (!value) return '';
     var cls = 's-f' + (opts.mono ? ' s-mono' : '') + (opts.wide ? ' s-wide' : '');
+    /* Arabic-Indic digits on the sheet. A reference number is not one of the
+       values -- the request number sits in the header and the registration number
+       on the card, both left in the digits they are quoted in. */
     return '<div class="' + cls + '"><b>' + esc(label) + '</b>'
-      + '<span' + (opts.mono ? ' dir="ltr"' : '') + '>' + esc(value) + '</span></div>';
+      + '<span' + (opts.mono ? ' dir="ltr"' : '') + '>' + esc(ar(value)) + '</span></div>';
   }
 
   /* A titled group of fields. An empty group prints nothing at all, so an adult
@@ -237,14 +261,14 @@
     if (rec.uniform) {
       extras.push(rec.uniform_amount ? 'البدلة الرياضية ' + money(rec.uniform_amount) : 'البدلة الرياضية');
     }
-    if (rec.membership_no) extras.push('تسجيل سابق: ' + rec.membership_no);
+    if (rec.membership_no) extras.push('تسجيل سابق: ' + ar(rec.membership_no));
 
     var identity = ''
       + field('الاسم بالعربية', rec.first_name_ar)
       + field('اللقب بالعربية', rec.last_name_ar)
       + field('الاسم بالفرنسية', rec.first_name_fr)
       + field('اللقب بالفرنسية', rec.last_name_fr)
-      + field('تاريخ الميلاد', dayFirst(rec.birth_date))
+      + field('تاريخ الميلاد', slashDate(rec.birth_date))
       + field('الجنس', GENDERS[rec.gender] || rec.gender)
       + field('مكان الميلاد', rec.birth_place)
       + field('الولاية', rec.wilaya)
@@ -264,7 +288,7 @@
     var guardian = adult ? ''
       : field('اسم الولي', rec.guardian_first_name)
       + field('لقب الولي', rec.guardian_last_name)
-      + field('تاريخ ميلاد الولي', dayFirst(rec.guardian_birth_date))
+      + field('تاريخ ميلاد الولي', slashDate(rec.guardian_birth_date))
       + field('صلة القرابة', rec.guardian_relation)
       + field('هاتف الولي', rec.guardian_phone, { mono: true })
       + field('رقم تعريف الولي', rec.guardian_national_id, { mono: true })
@@ -292,13 +316,20 @@
       + '<header class="s-head">'
       +   '<img class="s-logo" src="/assets/logo.png" alt="" />'
       +   '<div class="s-id"><b>' + esc(CLUB.ar) + '</b>'
-      +     '<span>فرع السباحة &middot; موسم ' + esc(CLUB.season) + '</span></div>'
+      +     '<span>فرع السباحة &middot; موسم ' + esc(ar(CLUB.season)) + '</span></div>'
       /* The photograph moved up into the header. It used to hold a 34 mm column
          open down the whole page for a picture 42 mm tall. */
       +   '<div class="s-photo">'
       +     (photo ? '<img src="' + esc(photo) + '" alt="صورة المنخرط">' : '<span>لا توجد صورة</span>')
       +   '</div>'
-      +   '<div class="s-no"><span>رقم الطلب</span><b dir="ltr">' + esc(rec.application_no || '—') + '</b></div>'
+      +   '<div class="s-no"><span>رقم الطلب</span><b dir="ltr">' + esc(rec.application_no || '—') + '</b>'
+      /* The season belongs under the request number: on a sheet that may be read
+         again next season, the two are what say which one it is. It is set larger
+         than the number above it because the number is a reference to be
+         matched, while the season is what a person reads to know the year. */
+      +     '<em class="s-season-lbl">الموسم الرياضي</em>'
+      +     '<em class="s-season">' + esc(ar(CLUB.season)) + '</em>'
+      +   '</div>'
       + '</header>'
 
       + '<h1>استمارة التسجيل &mdash; ملخّص البيانات</h1>'
@@ -341,7 +372,7 @@
       + '</div>'
 
       + '<footer class="s-foot">'
-      +   esc(CLUB.address) + ' &mdash; هاتف <span dir="ltr">' + esc(CLUB.phone) + '</span>'
+      +   esc(CLUB.address) + ' &mdash; هاتف <span dir="ltr">' + esc(ar(CLUB.phone)) + '</span>'
       +   ' &mdash; <span dir="ltr">' + esc(CLUB.email) + '</span>'
       +   '<small>أخلاق، احترام، وانضباط</small>'
       + '</footer>'
@@ -401,6 +432,9 @@
       + '.s-no{text-align:left;display:flex;flex-direction:column;line-height:1.4;flex:none}'
       + '.s-no span{font-size:8.2pt;color:#5c7b85}'
       + '.s-no b{font-size:10pt;color:#0b3b46}'
+      + '.s-season-lbl{display:block;font-style:normal;font-size:8pt;color:#5c7b85;margin-top:2mm}'
+      + '.s-season{display:block;font-style:normal;font-size:13pt;font-weight:700;color:#075a61;'
+      +   'letter-spacing:.3px;margin-top:.4mm}'
       + '.s-page h1{font-size:12.5pt;color:#075a61;margin:3mm 0 2.5mm;flex:none}'
       + '.s-flow{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}'
       + '.s-cols{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:6mm;align-items:start}'
@@ -555,7 +589,8 @@
     CLUB: CLUB,
     REGS_BG: REGS_BG,
     esc: esc,
-    dayFirst: dayFirst,
+    ar: ar,
+    slashDate: slashDate,
     isAdult: isAdult,
     spotStyle: spotStyle,
     formValues: formValues,

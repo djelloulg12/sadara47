@@ -85,7 +85,7 @@ function receiptSheet(a) {
       '</header>' +
       '<div class="pk-meta">' +
         '<span>رقم الطلب</span><b dir="ltr">' + esc(a.application_no || '—') + '</b>' +
-        '<span>تاريخ الاستلام</span><b>' + esc(today.toISOString().slice(0, 10)) + '</b>' +
+        '<span>تاريخ الاستلام</span><b>' + esc(arDigits(today.toISOString().slice(0, 10).replace(/-/g, '/'))) + '</b>' +
         '<span>الاسم واللقب</span><b>' + esc(appName(a) || '—') + '</b>' +
         '<span>الصفة</span><b>' + esc(catLabel(a.category === 'minor' ? 'minor' : 'adult')) + '</b>' +
         '<span>الفوج / المنشأة</span><b>' + esc(a.facility || '—') + '</b>' +

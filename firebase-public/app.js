@@ -309,7 +309,7 @@ setTimeout(()=>{if(state.user)recordPendingAttendance();},0);
 /* ==========================================================
    Sadara Core — طباعة، بيانات حقيقية، وواجهة المدربين والرياضيين
    ========================================================== */
-const CLUB={name:'النادي الرياضي الصدارة',unit:'فوج السباحة',address:'حي الثنية — غرداية',city:'غرداية',phone:'0660 60 64 67',email:'nadisadara@gmail.com',facebook:'https://www.facebook.com/nadiSadara47/',season:'2026 / 2027'};
+const CLUB={name:'النادي الرياضي الصدارة',unit:'فوج السباحة',address:'حي الثنية — غرداية',city:'غرداية',phone:'0660 60 64 67',email:'nadisadara@gmail.com',facebook:'https://www.facebook.com/nadiSadara47/',season:'2027 / 2026'};
 const AR_MONTHS=['جانفي','فيفري','مارس','أفريل','ماي','جوان','جويلية','أوت','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 const AR_DAYS=['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 const WEEK_DAYS=['السبت','الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة'];
@@ -318,7 +318,7 @@ const pad2=n=>String(n).padStart(2,'0');
 const isoDay=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 const todayISO=()=>isoDay(new Date());
 const longDate=(d=new Date())=>`${AR_DAYS[d.getDay()]}، ${pad2(d.getDate())} ${AR_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-const money=v=>`${Number(v||0).toLocaleString('en-US')} دج`;
+const money=v=>`${arDigits(Number(v||0).toLocaleString('en-US'))} دج`;
 const sum=(list,f)=>list.reduce((t,x)=>t+(Number(typeof f==='function'?f(x):x[f])||0),0);
 const stateLabel=s=>s==='approved'?'مقبول':s==='rejected'?'مرفوض':s==='paid'?'مدفوع':s==='cancelled'?'ملغى':'قيد المراجعة';
 const planName=code=>(state.subscriptions||[]).find(p=>p.code===code)?.name||code||'—';
@@ -1282,6 +1282,22 @@ function printWindow(features) {
   return w;
 }
 
+/* ---------------------- الأرقام العربية في الطباعة ---------------------- */
+/* The club writes its documents in Arabic-Indic digits, the way its forms and its
+   section numbers already are. This is for the printed sheets only.
+
+   Not for a reference number. A membership number and a request number are the
+   two things a person has to read back over the phone or type into the platform,
+   and a number quoted in one set of digits and looked up in the other is a
+   number nobody can find. Everything else -- dates, money, telephone numbers,
+   identity numbers, the season, years of experience -- is read by eye off a
+   printed page, and is written this way. */
+const AR_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+function arDigits(v) {
+  return String(v === undefined || v === null ? '' : v)
+    .replace(/[0-9]/g, d => AR_DIGITS[Number(d)]);
+}
+
 /* ---------------------- ربط وثائق النادي ---------------------- */function coachAccounts(){return (state.cards||[]).filter(c=>c.role==='coach'||c.kind==='coach');}function luxPreviewBox(items,kind){
   if(!items.length) return '<div class="panel empty-cell">لا توجد بيانات.</div>';
   return '<div class="lux-preview">'+items.slice(0,4).map(p=>luxuryCard(p,kind)).join('')+'</div>';
@@ -1807,8 +1823,11 @@ function spotStyle(s) {
 }
 function formValues(a){
   const v = (k, fb) => (a && a[k] ? a[k] : (fb || ''));
-  const dayFirst = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))
-    ? String(d).split('-').reverse().join('/') : String(d || '');
+  /* Arabic-Indic digits on the sheet, and dates written year first -- 2026/10/11
+     -- the way the club writes them. A reference number is the exception and is
+     left alone: it is the one thing a person has to read back and look up. */
+  const slashDate = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))
+    ? arDigits(String(d).split('-').join('/')) : arDigits(String(d || ''));
   return {
     /* The pool, on the line the scan draws for it. */
     facility: v('facility'),
@@ -1818,10 +1837,10 @@ function formValues(a){
     registration: v('membership_no') || v('application_no'),
     first_name: v('first_name_ar'),
     last_name: v('last_name_ar'),
-    birth_date: dayFirst(a && a.birth_date),
+    birth_date: slashDate(a && a.birth_date),
     address: v('address'),
-    blood_group: v('blood_group'),
-    phone: v('phone'),
+    blood_group: arDigits(v('blood_group')),
+    phone: arDigits(v('phone')),
     /* There is no doctor value. It used to be the swimmer's own name, written
        into the line reserved for the doctor who certifies them, and on a document
        the club keeps that is the wrong name in the wrong place. The scan has no
@@ -1833,10 +1852,10 @@ function formValues(a){
        identity block at the top separates الإسم from اللقب. Nationality has no
        blank of its own on this form, so nothing is written for it. */
     parent_name: v('guardian_first_name'),
-    parent_birth: dayFirst(v('guardian_birth_date')),
+    parent_birth: slashDate(v('guardian_birth_date')),
     parent_last_name: v('guardian_last_name'),
-    parent_id: v('guardian_national_id'),
-    card_issued_at: dayFirst(v('card_issue_date')),
+    parent_id: arDigits(v('guardian_national_id')),
+    card_issued_at: slashDate(v('card_issue_date')),
     card_place: v('card_issue_place'),
     authorised_for: v('guardian_child')
   };
@@ -2064,10 +2083,10 @@ function luxuryCard(p, kind){
   const photo = (p.photo && /^(data:|https?:)/.test(p.photo)) ? p.photo : '';
   const phone = p.phone || CLUB.phone;
   const rows = coach
-    ? [['التخصص', p.specialty || 'مدرب سباحة'], ['سنوات الخبرة', (p.experience || '—') + ' سنة'],
+    ? [['التخصص', p.specialty || 'مدرب سباحة'], ['سنوات الخبرة', arDigits((p.experience || '—') + ' سنة')],
        ['البريد الإلكتروني', p.email || '—'], ['الفوج', p.group_name || 'الطاقم الفني']]
     : [['الفوج', p.group_name || '—'], ['فصيلة الدم', p.blood_group || '—'],
-       ['تاريخ الالتحاق', p.joined || '—'], ['الموسم', CLUB.season]];
+       ['تاريخ الالتحاق', arDigits(p.joined || '—')], ['الموسم', arDigits(CLUB.season)]];
   return '' +
   '<article class="lux-card ' + (coach ? 'is-coach' : 'is-swimmer') + '" data-no="' + esc(no) + '">' +
     '<div class="lux-side">' +
@@ -2085,6 +2104,12 @@ function luxuryCard(p, kind){
           '<div class="lux-photo">' + (photo
             ? '<img class="lux-photo-img" src="' + esc(photo) + '" alt="">'
             : '<img class="lux-photo-fallback" src="' + esc(assetUrl('assets/logo.png')) + '" alt="">') + '</div>' +
+          /* The season, directly under the photograph. A card is kept for years and
+             filed by season, and the season used to appear only in the footer, at
+             the far edge of a card 85 mm wide -- the one thing on it that says
+             which year it is. */
+          '<b class="lux-season">' + esc(arDigits(CLUB.season)) + '</b>' +
+          /* The number stays in the digits it is quoted and looked up in. */
           '<b class="lux-no" dir="ltr">' + esc(no) + '</b>' +
         '</div>' +
         '<div class="lux-info">' +
@@ -2095,11 +2120,11 @@ function luxuryCard(p, kind){
         '</div>' +
         '<div class="lux-qr">' +
           '<div class="qr-code" data-qr="' + esc(no) + '"></div>' +
-          '<b class="lux-phone" dir="ltr">' + esc(phone) + '</b>' +
+          '<b class="lux-phone" dir="ltr">' + esc(arDigits(phone)) + '</b>' +
           '<small>امسح لتسجيل الحضور</small>' +
         '</div>' +
       '</div>' +
-      '<div class="lux-foot"><span>' + esc(CLUB.season) + '</span><span>' + esc(CLUB.address) + '</span></div>' +
+      '<div class="lux-foot"><span>' + esc(arDigits(CLUB.season)) + '</span><span>' + esc(CLUB.address) + '</span></div>' +
     '</div>' +
   '</article>';
 }
@@ -2412,7 +2437,7 @@ function receiptSheet(a) {
       '</header>' +
       '<div class="pk-meta">' +
         '<span>رقم الطلب</span><b dir="ltr">' + esc(a.application_no || '—') + '</b>' +
-        '<span>تاريخ الاستلام</span><b>' + esc(today.toISOString().slice(0, 10)) + '</b>' +
+        '<span>تاريخ الاستلام</span><b>' + esc(arDigits(today.toISOString().slice(0, 10).replace(/-/g, '/'))) + '</b>' +
         '<span>الاسم واللقب</span><b>' + esc(appName(a) || '—') + '</b>' +
         '<span>الصفة</span><b>' + esc(catLabel(a.category === 'minor' ? 'minor' : 'adult')) + '</b>' +
         '<span>الفوج / المنشأة</span><b>' + esc(a.facility || '—') + '</b>' +
