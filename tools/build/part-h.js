@@ -50,18 +50,75 @@ function printWindow(features) {
 
 /* ---------------------- الأرقام العربية في الطباعة ---------------------- */
 /* The club writes its documents in Arabic-Indic digits, the way its forms and its
-   section numbers already are. This is for the printed sheets only.
+   section numbers already are.
 
-   Not for a reference number. A membership number and a request number are the
-   two things a person has to read back over the phone or type into the platform,
-   and a number quoted in one set of digits and looked up in the other is a
-   number nobody can find. Everything else -- dates, money, telephone numbers,
-   identity numbers, the season, years of experience -- is read by eye off a
-   printed page, and is written this way. */
+   Two directions, and both of them are needed:
+
+     arDigits   what a person reads. Applied to everything on screen and on paper.
+     latinDigits what a person types. Applied on the way in, so that a national
+                number typed in Arabic-Indic digits is stored, searched and
+                matched as the same number as one typed in Latin digits.
+
+   The one place the two must not meet is the database. It holds Latin digits,
+   and that is not a preference: the registration number is read back out of
+   itself to count the next one, identity numbers are compared to catch the same
+   person registering twice, and amounts are added up. Storing ١٩٨٥ where the
+   comparison expects 1985 would make the club's own duplicate check answer "not
+   seen before" for a member who is already on the list. So Arabic digits are
+   what the club reads and what the club may type, and the database holds the one
+   form both of those are converted to. */
 const AR_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
 function arDigits(v) {
   return String(v === undefined || v === null ? '' : v)
     .replace(/[0-9]/g, d => AR_DIGITS[Number(d)]);
+}
+
+/* Arabic-Indic digits turned back into Latin ones, and nothing else touched.
+
+   Folded by code point rather than through a table of characters, because a table
+   has to be typed and two of the three sets look identical on screen: written out
+   they are indistinguishable, and a table that quietly lost one of them would fold
+   the digits it was not asked about and leave the rest. A subtraction cannot.
+
+   Arabic-Indic is U+0660..U+0669. Persian and Urdu share the shapes and sit at
+   U+06F0..U+06F9; a person copying a number out of a message on one of those
+   phones should not be told it is not a number. */
+function latinDigits(v) {
+  return String(v === undefined || v === null ? '' : v)
+    .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0) - 0x06F0));
+}
+
+/* A date the way the club writes it: 2026/10/11, in Arabic-Indic digits.
+
+   Anything that is not a plain date is passed through arDigits alone -- a note
+   somebody typed, a season written out -- rather than dropped. A date written
+   with Arabic digits already, or with slashes rather than dashes, is still a
+   date and is re-laid-out rather than left alone, because the whole point is that
+   every date on every sheet reads the same way. */
+function slashDate(v) {
+  const raw = latinDigits(v);
+  const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw.trim());
+  if (!m) return arDigits(raw);
+  return arDigits(m[1] + '/' + String(m[2]).padStart(2, '0') + '/' + String(m[3]).padStart(2, '0'));
+}
+
+/* The same date for the database and for arithmetic: 2026-10-11, Latin digits.
+   '' when the text is not a date at all, rather than a guess: a birth date that
+   has been guessed is a member who is the wrong age on the card for ever. */
+function isoDate(v) {
+  const raw = latinDigits(v).trim();
+  const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw);
+  if (!m) return '';
+  const year = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+  return m[1] + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+}
+
+/* The same date typed back into a field for editing, so a person correcting a
+   date sees it as it was written rather than as the machine stored it. */
+function dateForInput(v) {
+  return slashDate(v);
 }
 
 /* ---------------------- ربط وثائق النادي ---------------------- */function coachAccounts(){return (state.cards||[]).filter(c=>c.role==='coach'||c.kind==='coach');}function luxPreviewBox(items,kind){

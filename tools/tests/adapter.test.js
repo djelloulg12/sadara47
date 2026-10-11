@@ -714,6 +714,83 @@ test('a member still gets a number where no counter can be kept', async () => {
   }
 });
 
+test('the database holds one form of a number and a date', async () => {
+  /* The club reads and writes Arabic-Indic digits and writes dates as
+     year/month/day. What is stored is Latin digits and 2026-10-11 -- not a
+     preference: an identity number is compared against the ones on file to catch
+     the same person registering twice, a registration number is read back out of
+     itself to count the next one, and a birth date is subtracted from today to
+     work out an age. Storing ١٩٨٥ where those expect 1985 would make the club's
+     own duplicate check answer "not seen before" for a member already on the list.
+
+     Checked on a request that arrives in Arabic digits from a client that never
+     opened the page -- which is the whole reason it is done at the boundary. */
+  const ar = s => Array.from(s).map(c =>
+    (c >= '0' && c <= '9') ? String.fromCodePoint(0x0660 + Number(c)) : c).join('');
+  /* Its own national number: an earlier check in this run has already claimed
+     1985010111122, and being refused by it would be the duplicate check working
+     rather than a fault -- which is worth proving separately and deliberately. */
+  const NID = '2010998877666';
+  const w = boot(asUser('u1'));
+  const res = await call(w, '/api/applications', 'POST', {
+    application_no: 'APP-ARABIC', category: 'adult',
+    first_name_ar: 'x', last_name_ar: 'y',
+    /* Arabic digits, and a date written with slashes the way the club writes it */
+    national_id: ar(NID),
+    birth_date: ar('1998/3/7'),
+    phone: ar('0661234567'),
+    guardian_birth_date: ar('1975/06/02'),
+    address: ar('حي 12'),
+    notes: ar('الحساب 1234'),
+    subscription_code: 'quarter'
+  });
+  if (!res.ok) { errors.push('a request typed in Arabic digits was refused: ' + JSON.stringify(res.data).slice(0, 140)); return; }
+  const record = Object.values(DATA.applications).find(r => r.application_no === 'APP-ARABIC');
+  if (!record) { errors.push('the request was not written'); return; }
+
+  /* Only the fields that say who the person is are folded. An address and a note
+     are the person's own words and are stored exactly as they were written -- and
+     a rule that worked by pattern rather than by name would have rewritten both,
+     which is the difference between a number and a sentence. */
+  const wants = {
+    national_id: NID,
+    birth_date: '1998-03-07',
+    phone: '0661234567',
+    guardian_birth_date: '1975-06-02',
+    address: 'حي ' + ar('12'),
+    notes: 'الحساب ' + ar('1234')
+  };
+  for (const [field, want] of Object.entries(wants)) {
+    if (record[field] !== want) {
+      errors.push(`${field} was stored as ${JSON.stringify(record[field])} rather than ${JSON.stringify(want)}`);
+    }
+  }
+  /* And the duplicate check still catches the same person, which is the whole
+     reason the stored form has to be the one thing: a number stored in Arabic
+     would be a different string from the one in Latin and would pass. */
+  const again = await call(w, '/api/applications', 'POST', {
+    application_no: 'APP-ARABIC-2', category: 'adult',
+    first_name_ar: 'z', last_name_ar: 'w', birth_date: '1998-03-07',
+    phone: '06', address: 'a', national_id: NID, subscription_code: 'quarter'
+  });
+  if (again.status !== 409) {
+    errors.push('the same person was registered again when one was typed in Arabic digits and one in Latin: '
+      + again.status);
+  }
+
+  /* A date that is not one is left alone rather than guessed at. */
+  const bad = await call(w, '/api/applications', 'POST', {
+    application_no: 'APP-ARABIC-3', category: 'adult',
+    first_name_ar: 'q', last_name_ar: 'r', birth_date: ar('1998/13/40'),
+    phone: '06', address: 'a', national_id: 'ARABIC-3', subscription_code: 'quarter'
+  });
+  const stored = Object.values(DATA.applications).find(r => r.application_no === 'APP-ARABIC-3');
+  if (!bad.ok || !stored || stored.birth_date !== '1998/13/40') {
+    errors.push('an impossible date was corrected into a real one: '
+      + JSON.stringify(stored && stored.birth_date));
+  }
+});
+
 (async () => {
   let failed = 0;
   for (const t of tests) {

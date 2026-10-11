@@ -328,7 +328,7 @@ const ATTENDANCE_LABELS={present:'حاضر',absent:'غائب',late:'متأخر',
 const pad2=n=>String(n).padStart(2,'0');
 const isoDay=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 const todayISO=()=>isoDay(new Date());
-const longDate=(d=new Date())=>`${AR_DAYS[d.getDay()]}، ${pad2(d.getDate())} ${AR_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+const longDate=(d=new Date())=>`${AR_DAYS[d.getDay()]}، ${slashDate(d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()))}`;
 const money=v=>`${arDigits(Number(v||0).toLocaleString('en-US'))} دج`;
 const sum=(list,f)=>list.reduce((t,x)=>t+(Number(typeof f==='function'?f(x):x[f])||0),0);
 const stateLabel=s=>s==='approved'?'مقبول':s==='rejected'?'مرفوض':s==='paid'?'مدفوع':s==='cancelled'?'ملغى':'قيد المراجعة';
@@ -386,7 +386,7 @@ function printBtn(action,label){return '<button class="btn btn-outline" data-act
 function buildMembersTable(list,extraHead,extraCell){
   if(!list.length) return '<p class="empty-cell">لا يوجد سباحون مسجلون في هذه القائمة.</p>';
   return '<table class="print-table"><thead><tr><th>#</th><th>الاسم واللقب</th><th>رقم الانخراط</th><th>الفوج</th><th>الهاتف</th><th>الحالة</th>'+(extraHead||'')+'<th>التوقيع</th></tr></thead><tbody>'
-    +list.map((s,i)=>'<tr><td>'+(i+1)+'</td><td><b>'+esc(s.name||'')+'</b></td><td dir="ltr">'+esc(s.id||'')+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(s.phone||'—')+'</td><td><span class="status '+(s.status==='نشط'?'success':'pending')+'">'+esc(s.status||'—')+'</span></td>'+(extraCell?'<td>'+extraCell(s)+'</td>':'')+'<td class="sign-cell"></td></tr>').join('')
+    +list.map((s,i)=>'<tr><td>'+(i+1)+'</td><td><b>'+esc(s.name||'')+'</b></td><td dir="ltr">'+esc(arDigits(s.id||''))+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(arDigits(s.phone||'—'))+'</td><td><span class="status '+(s.status==='نشط'?'success':'pending')+'">'+esc(s.status||'—')+'</span></td>'+(extraCell?'<td>'+extraCell(s)+'</td>':'')+'<td class="sign-cell"></td></tr>').join('')
     +'</tbody></table>';
 }
 function printGroupRoster(groupId){
@@ -413,7 +413,7 @@ function printAttendanceSheet(){
   const list=state.swimmers||[];
   const box=document.createElement('section');
   box.className='roster';
-  box.innerHTML='<div class="roster-head"><div><h3>كشف حضور حصة '+esc(todayISO())+'</h3><p>مسبح الصدارة · '+esc(todayISO())+'</p></div><div class="roster-count"><b>'+list.length+'</b><small>سباح</small></div></div>'
+  box.innerHTML='<div class="roster-head"><div><h3>كشف حضور حصة '+esc(slashDate(todayISO()))+'</h3><p>مسبح الصدارة · '+esc(slashDate(todayISO()))+'</p></div><div class="roster-count"><b>'+list.length+'</b><small>سباح</small></div></div>'
     +(list.length?buildMembersTable(list,'<th>الحالة</th><th>وقت الدخول</th>',s=>{const a=attendanceOf(s.id);return '<span class="status '+(a?(a.status==='present'?'success':'pending'):'pending')+'">'+(a?ATTENDANCE_LABELS[a.status]||a.status:'لم يُسجّل')+'</span><br><small>'+esc(a&&a.at?String(a.at).slice(11,16):'—')+'</small>';}):'<p class="empty-cell">لا يوجد سباحة مسجلون.</p>');
   printArea(box,{title:'كشف الحضور',sub:longDate(),variant:'roster'});
 }
@@ -502,7 +502,7 @@ function pageOverview(){
     +week.map(d=>'<div class="bar-wrap'+(d.isToday?' is-today':'')+'"><div class="bar'+(d.value===null?' empty':'')+'" style="height:'+Math.max(d.value||0,2)+'%"><b>'+(d.value===null?'—':d.value+'%')+'</b></div><small>'+esc(d.label)+'</small></div>').join('')
     +'</div></div></section>'
     +'<section class="panel"><div class="panel-head"><div><h3>آخر الإعلانات</h3><p>تحديثات النادي الأخيرة</p></div><a class="link" data-page="notices">عرض الكل</a></div>'
-    +((state.notices||[]).length?state.notices.slice(0,4).map(n=>'<div class="notice-row"><span class="notice-dot"></span><div><b>'+esc(n.title)+'</b><p>'+esc(n.text)+'</p><small>'+esc(n.date||'')+'</small></div></div>').join(''):'<p class="empty-cell">لا توجد إعلانات.</p>')
+    +((state.notices||[]).length?state.notices.slice(0,4).map(n=>'<div class="notice-row"><span class="notice-dot"></span><div><b>'+esc(n.title)+'</b><p>'+esc(n.text)+'</p><small>'+esc(slashDate(n.date||''))+'</small></div></div>').join(''):'<p class="empty-cell">لا توجد إعلانات.</p>')
     +'</section></div>'
     +'<section class="panel quick-panel"><div class="panel-head"><div><h3>الوصول السريع</h3><p>أكثر العمليات استخدامًا</p></div></div><div class="quick-actions">'
     +'<button data-page="attendance">✓ <span>تسجيل الحضور</span></button>'
@@ -551,7 +551,7 @@ function pageApplications(){
       /* The number the club reads off the card and the applicant is told at the
          counter. Beside the request number rather than instead of it: one is what
          the platform filed, the other is what the member is. */
-      +'<td dir="ltr">'+(a.registration_id?'<b>'+esc(a.registration_id)+'</b>':'<small>—</small>')+'</td>'
+      +'<td dir="ltr">'+(a.registration_id?'<b>'+esc(arDigits(a.registration_id))+'</b>':'<small>—</small>')+'</td>'
       +'<td><b>'+esc(appName(a))+'</b><br><small dir="ltr">'+esc(appContact(a)||'—')+'</small></td>'
       +'<td>'+esc(catLabel(a.application_type==='coach'?'coach':a.category))+'</td>'
       +'<td>'+esc(a.application_type==='coach'?'—':planName(a.subscription_code))+'<br><small>'+(a.transport?'النقل ':'')+(a.uniform?'البدلة':'')+'</small></td>'
@@ -610,7 +610,7 @@ function pageUsers(){
     +'<section class="panel table-panel"><div class="panel-head"><div><h3>قائمة السباحين</h3><p>'+list.length+' من '+(state.swimmers||[]).length+' سجل — الموسم '+esc(CLUB.season)+'</p></div></div>'
     +'<div class="table-scroll"><table><thead><tr><th>السباح</th><th>رقم الانخراط</th><th>الفوج</th><th>الهاتف</th><th>الحالة</th><th>الحضور اليوم</th><th></th></tr></thead><tbody>'
     +(list.length?list.map(s=>{const a=attendanceOf(s.id);return '<tr><td><span class="table-avatar">'+esc((s.name||'?')[0])+'</span><b>'+esc(s.name||'')+'</b></td>'
-      +'<td dir="ltr">'+esc(s.id||'')+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(s.phone||'—')+'</td>'
+      +'<td dir="ltr">'+esc(arDigits(s.id||''))+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(arDigits(s.phone||'—'))+'</td>'
       +'<td><span class="status '+(s.status==='نشط'?'success':'pending')+'">'+esc(s.status||'—')+'</span></td>'
       +'<td>'+(a?'<span class="status '+(a.status==='present'?'success':a.status==='late'?'late':'absent')+'">'+esc(ATTENDANCE_LABELS[a.status]||a.status)+'</span>':'<small>لم يُسجّل</small>')+'</td>'
       +'<td class="row-actions"><button class="check-btn" data-action="edit-swimmer" data-id="'+esc(s.id)+'">تعديل</button> <button class="check-btn no" data-action="delete-swimmer" data-id="'+esc(s.id)+'">حذف</button></td></tr>';}).join(''):emptyRow(7,'لا يوجد سباحون مطابقون.'))
@@ -672,7 +672,7 @@ function pageAttendance(){
     +'<button class="btn btn-outline" data-action="mark-all-present">✓ تأكيد الجميع</button>'
     +'<button class="btn btn-outline" data-action="reset-attendance">↺ تصفير</button>'
     +'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button>'
-    +'</div><span class="page-description">'+esc(longDate())+' · '+esc(todayISO())+'</span></div>'
+    +'</div><span class="page-description">'+esc(longDate())+' · '+esc(slashDate(todayISO()))+'</span></div>'
     +'<section class="panel table-panel"><div class="panel-head"><div><h3>حضور حصة اليوم</h3><p>'+shown.length+' سباح · اضغط على الحالة لتغييرها</p></div></div>'
     +'<div class="table-scroll"><table><thead><tr><th>السباح</th><th>الفوج</th><th>وقت الدخول</th><th>الحالة</th><th>تغيير الحالة</th></tr></thead><tbody>'
     +(shown.length?shown.map(s=>{const a=attendanceOf(s.id);const cur=a?a.status:'';return '<tr><td><span class="table-avatar">'+esc((s.name||'?')[0])+'</span><b>'+esc(s.name||'')+'</b></td>'
@@ -688,7 +688,7 @@ function pageNotices(){
     +'<div class="toolbar-group">'+printBtn('print-notices','طباعة')+'<button class="btn btn-primary" data-action="add-notice">+ إعلان جديد</button></div></div>'
     +'<div class="notice-list">'
     +(list.length?list.map((n,i)=>'<article class="notice-card"><span class="notice-type '+((i%2)?'blue-type':'gold-type')+'">'+esc(n.type||'إعلان')+'</span>'
-      +'<div><h3>'+esc(n.title)+'</h3><p>'+esc(n.text)+'</p><small>'+esc(n.date||'')+'</small></div>'
+      +'<div><h3>'+esc(n.title)+'</h3><p>'+esc(n.text)+'</p><small>'+esc(slashDate(n.date||''))+'</small></div>'
       +'<div class="notice-actions"><button class="check-btn" data-action="edit-notice" data-id="'+esc(n.id||'')+'">تعديل</button> <button class="check-btn no" data-action="delete-notice" data-id="'+esc(n.id||'')+'">حذف</button></div></article>').join('')
       :'<p class="empty-cell">لا توجد إعلانات.</p>')
     +'</div>';
@@ -722,7 +722,7 @@ function pageSettings(){
     +'<label>اسم النادي<input id="club-name" value="'+esc(CLUB.name)+'"></label>'
     +'<label>الفوج<input id="club-unit" value="'+esc(CLUB.unit)+'"></label>'
     +'<label>العنوان<input id="club-address" value="'+esc(CLUB.address)+'"></label>'
-    +'<label>الهاتف<input id="club-phone" dir="ltr" value="'+esc(CLUB.phone)+'"></label>'
+    +'<label>الهاتف<input id="club-phone" dir="ltr" value="'+esc(arDigits(CLUB.phone))+'"></label>'
     +'<label>البريد الإلكتروني<input id="club-email" dir="ltr" value="'+esc(CLUB.email)+'"></label>'
     +'<label>الموسم الرياضي<input id="club-season" value="'+esc(CLUB.season)+'"></label>'
     +'</div>'
@@ -847,7 +847,7 @@ function roleAttendance(){
     +'<div><b>تأخر</b><strong class="orange">'+rows.filter(a=>a.status==='late').length+'</strong></div></div>'
     +'<div class="toolbar"><span class="page-description">سجل حضورك في الموسم '+esc(CLUB.season)+'</span>'+printBtn('print-role-attendance','طباعة السجل')+'</div>'
     +'<section class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>اليوم</th><th>الحالة</th></tr></thead><tbody>'
-    +(rows.length?rows.map(a=>{const d=new Date(a.date);return '<tr><td dir="ltr">'+esc(a.date)+'</td><td>'+esc(isNaN(d)?a.date:AR_DAYS[d.getDay()])+'</td>'
+    +(rows.length?rows.map(a=>{const d=new Date(a.date);return '<tr><td dir="ltr">'+esc(slashDate(a.date))+'</td><td>'+esc(isNaN(d)?slashDate(a.date):AR_DAYS[d.getDay()])+'</td>'
       +'<td><span class="status '+(a.status==='present'?'success':a.status==='late'?'late':'absent')+'">'+esc(ATTENDANCE_LABELS[a.status]||a.status)+'</span></td></tr>';}).join(''):emptyRow(3,'لا يوجد سجل حضور بعد.'))
     +'</tbody></table></div></section>';
 }
@@ -866,7 +866,7 @@ function roleNotices(){
   const list=state.notices||[];
   return '<div class="toolbar"><span class="page-description">آخر تحديثات إدارة النادي.</span>'+printBtn('print-role-notices','طباعة')+'</div>'
     +'<div class="notice-list">'+(list.length?list.map((n,i)=>'<article class="notice-card"><span class="notice-type '+((i%2)?'blue-type':'gold-type')+'">'+esc(n.type||'إعلان')+'</span>'
-      +'<div><h3>'+esc(n.title)+'</h3><p>'+esc(n.text)+'</p><small>'+esc(n.date||'')+'</small></div></article>').join(''):'<p class="empty-cell">لا توجد إعلانات.</p>')+'</div>';
+      +'<div><h3>'+esc(n.title)+'</h3><p>'+esc(n.text)+'</p><small>'+esc(slashDate(n.date||''))+'</small></div></article>').join(''):'<p class="empty-cell">لا توجد إعلانات.</p>')+'</div>';
 }
 function roleApplications(){
   const phone=String(state.user?.phone||'').replace(/\s/g,'');
@@ -915,7 +915,7 @@ function swimmerModal(s){
     +'<label>الاسم واللقب *<input id="sw-name" value="'+esc(s?.name||'')+'"></label>'
     +'<label>رقم الانخراط<input id="sw-no" dir="ltr" value="'+esc(s?.id||'')+'"'+(isEdit?' disabled':'')+' placeholder="يُولَّد تلقائيًا"></label>'
     +'<label>الفوج<select id="sw-group">'+groupOptions(s?.group)+'</select></label>'
-    +'<label>الهاتف<input id="sw-phone" dir="ltr" value="'+esc(s?.phone||'')+'"></label>'
+    +'<label>الهاتف<input id="sw-phone" dir="ltr" value="'+esc(arDigits(s?.phone||''))+'"></label>'
     +'<label>الحالة<select id="sw-status"><option value="نشط"'+(s?.status==='نشط'?' selected':'')+'>نشط</option><option value="موقوف"'+(s?.status==='موقوف'?' selected':'')+'>موقوف</option><option value="بانتظار"'+(s?.status==='بانتظار'?' selected':'')+'>بانتظار</option></select></label>'
     +'</div>',
     'save-swimmer',s?' data-id="'+esc(s.id)+'"':'');
@@ -961,8 +961,8 @@ action=async function(a,el){
   if(a==='print-role-schedule'){printTable('البرنامج الأسبوعي',['اليوم','التوقيت','الفوج','المدرب','المسبح'],mySessions().map(s=>'<tr><td><b>'+esc(s.day_name||'')+'</b></td><td dir="ltr">'+esc(s.time_range||'')+'</td><td>'+esc(s.group_name||'')+'</td><td>'+esc(s.coach||'')+'</td><td>'+esc(s.pool||'مسبح الصدارة')+'</td></tr>'),'الموسم '+CLUB.season);return}
   if(a==='print-role-attendance'){
     if(state.user?.role==='coach'){printAttendanceSheet();return}
-    printTable('سجل الحضور',['التاريخ','اليوم','الحالة'],myAttendance().map(x=>{const d=new Date(x.date);return '<tr><td dir="ltr">'+esc(x.date)+'</td><td>'+esc(isNaN(d)?x.date:AR_DAYS[d.getDay()])+'</td><td><span class="status success">'+esc(ATTENDANCE_LABELS[x.status]||x.status)+'</span></td></tr>';}),'الموسم '+CLUB.season);return}
-  if(a==='print-role-notices'){printTable('إعلانات النادي',['العنوان','النص','النوع','التاريخ'],(state.notices||[]).map(n=>'<tr><td><b>'+esc(n.title)+'</b></td><td>'+esc(n.text)+'</td><td>'+esc(n.type||'')+'</td><td>'+esc(n.date||'')+'</td></tr>')) ;return}
+    printTable('سجل الحضور',['التاريخ','اليوم','الحالة'],myAttendance().map(x=>{const d=new Date(x.date);return '<tr><td dir="ltr">'+esc(slashDate(x.date))+'</td><td>'+esc(isNaN(d)?slashDate(x.date):AR_DAYS[d.getDay()])+'</td><td><span class="status success">'+esc(ATTENDANCE_LABELS[x.status]||x.status)+'</span></td></tr>';}),'الموسم '+CLUB.season);return}
+  if(a==='print-role-notices'){printTable('إعلانات النادي',['العنوان','النص','النوع','التاريخ'],(state.notices||[]).map(n=>'<tr><td><b>'+esc(n.title)+'</b></td><td>'+esc(n.text)+'</td><td>'+esc(n.type||'')+'</td><td>'+esc(slashDate(n.date||''))+'</td></tr>')) ;return}
   if(a==='print-role-applications'){const phone=String(state.user?.phone||'').replace(/\s/g,'');printTable('طلبات التسجيل',['رقم الطلب','الرياضي','الاشتراك','المبلغ','الحالة'],(state.applications||[]).filter(x=>String(x.phone||'').replace(/\s/g,'')===phone).map(x=>'<tr><td dir="ltr">'+esc(x.application_no||x.id)+'</td><td><b>'+esc(appName(x))+'</b></td><td>'+esc(planName(x.subscription_code))+'</td><td>'+esc(money(x.expected_amount))+'</td><td><span class="status success">'+esc(stateLabel(x.status))+'</span></td></tr>'));return}
 
   /* ---------- الوثائق ---------- */
@@ -1016,7 +1016,7 @@ action=async function(a,el){
   if(a==='save-swimmer'){
     const name=$('#sw-name')?.value.trim();
     if(!name){showToast('أدخل اسم السباح.','error');return}
-    const payload={name,group_name:$('#sw-group').value,phone:$('#sw-phone').value.trim(),status:$('#sw-status').value};
+    const payload={name,group_name:$('#sw-group').value,phone:latinDigits($('#sw-phone').value.trim()),status:$('#sw-status').value};
     try{
       if(el.dataset.id){payload.id=el.dataset.id;await api('/api/swimmers','PUT',payload);showToast('تم تحديث بيانات السباح.')}
       else{payload.membership_no=$('#sw-no')?.value.trim();await api('/api/swimmers','POST',payload);showToast('تمت إضافة السباح.')}
@@ -1154,7 +1154,7 @@ action=async function(a,el){
     return;
   }
   if(a==='save-club'){
-    state.club={name:$('#club-name').value.trim()||CLUB.name,unit:$('#club-unit').value.trim()||CLUB.unit,address:$('#club-address').value.trim(),phone:$('#club-phone').value.trim(),email:$('#club-email').value.trim(),season:$('#club-season').value.trim()||CLUB.season};
+    state.club={name:$('#club-name').value.trim()||CLUB.name,unit:$('#club-unit').value.trim()||CLUB.unit,address:$('#club-address').value.trim(),phone:latinDigits($('#club-phone').value.trim()),email:$('#club-email').value.trim(),season:$('#club-season').value.trim()||CLUB.season};
     Object.assign(CLUB,state.club);save();render();showToast('تم حفظ بيانات النادي.');
     return;
   }
@@ -1301,18 +1301,75 @@ function printWindow(features) {
 
 /* ---------------------- الأرقام العربية في الطباعة ---------------------- */
 /* The club writes its documents in Arabic-Indic digits, the way its forms and its
-   section numbers already are. This is for the printed sheets only.
+   section numbers already are.
 
-   Not for a reference number. A membership number and a request number are the
-   two things a person has to read back over the phone or type into the platform,
-   and a number quoted in one set of digits and looked up in the other is a
-   number nobody can find. Everything else -- dates, money, telephone numbers,
-   identity numbers, the season, years of experience -- is read by eye off a
-   printed page, and is written this way. */
+   Two directions, and both of them are needed:
+
+     arDigits   what a person reads. Applied to everything on screen and on paper.
+     latinDigits what a person types. Applied on the way in, so that a national
+                number typed in Arabic-Indic digits is stored, searched and
+                matched as the same number as one typed in Latin digits.
+
+   The one place the two must not meet is the database. It holds Latin digits,
+   and that is not a preference: the registration number is read back out of
+   itself to count the next one, identity numbers are compared to catch the same
+   person registering twice, and amounts are added up. Storing ١٩٨٥ where the
+   comparison expects 1985 would make the club's own duplicate check answer "not
+   seen before" for a member who is already on the list. So Arabic digits are
+   what the club reads and what the club may type, and the database holds the one
+   form both of those are converted to. */
 const AR_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
 function arDigits(v) {
   return String(v === undefined || v === null ? '' : v)
     .replace(/[0-9]/g, d => AR_DIGITS[Number(d)]);
+}
+
+/* Arabic-Indic digits turned back into Latin ones, and nothing else touched.
+
+   Folded by code point rather than through a table of characters, because a table
+   has to be typed and two of the three sets look identical on screen: written out
+   they are indistinguishable, and a table that quietly lost one of them would fold
+   the digits it was not asked about and leave the rest. A subtraction cannot.
+
+   Arabic-Indic is U+0660..U+0669. Persian and Urdu share the shapes and sit at
+   U+06F0..U+06F9; a person copying a number out of a message on one of those
+   phones should not be told it is not a number. */
+function latinDigits(v) {
+  return String(v === undefined || v === null ? '' : v)
+    .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0) - 0x06F0));
+}
+
+/* A date the way the club writes it: 2026/10/11, in Arabic-Indic digits.
+
+   Anything that is not a plain date is passed through arDigits alone -- a note
+   somebody typed, a season written out -- rather than dropped. A date written
+   with Arabic digits already, or with slashes rather than dashes, is still a
+   date and is re-laid-out rather than left alone, because the whole point is that
+   every date on every sheet reads the same way. */
+function slashDate(v) {
+  const raw = latinDigits(v);
+  const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw.trim());
+  if (!m) return arDigits(raw);
+  return arDigits(m[1] + '/' + String(m[2]).padStart(2, '0') + '/' + String(m[3]).padStart(2, '0'));
+}
+
+/* The same date for the database and for arithmetic: 2026-10-11, Latin digits.
+   '' when the text is not a date at all, rather than a guess: a birth date that
+   has been guessed is a member who is the wrong age on the card for ever. */
+function isoDate(v) {
+  const raw = latinDigits(v).trim();
+  const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw);
+  if (!m) return '';
+  const year = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+  return m[1] + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+}
+
+/* The same date typed back into a field for editing, so a person correcting a
+   date sees it as it was written rather than as the machine stored it. */
+function dateForInput(v) {
+  return slashDate(v);
 }
 
 /* ---------------------- ربط وثائق النادي ---------------------- */function coachAccounts(){return (state.cards||[]).filter(c=>c.role==='coach'||c.kind==='coach');}function luxPreviewBox(items,kind){
@@ -2458,7 +2515,7 @@ function receiptSheet(a) {
         '<span>الاسم واللقب</span><b>' + esc(appName(a) || '—') + '</b>' +
         '<span>الصفة</span><b>' + esc(catLabel(a.category === 'minor' ? 'minor' : 'adult')) + '</b>' +
         '<span>الفوج / المنشأة</span><b>' + esc(a.facility || '—') + '</b>' +
-        '<span>الهاتف</span><b dir="ltr">' + esc(a.phone || '—') + '</b>' +
+        '<span>الهاتف</span><b dir="ltr">' + esc(arDigits(a.phone || '—')) + '</b>' +
       '</div>' +
       '<table class="pk-table"><thead><tr><th>البيان</th><th>المبلغ (دج)</th></tr></thead><tbody>' +
         lines.map(row).join('') +
@@ -2476,7 +2533,7 @@ function receiptSheet(a) {
       '<footer class="pk-foot">' +
         '<span>تُوقّع نسختان: واحدة للنادي وأخرى للولي/المنخرط.</span>' +
         '<span>ترفع النسخة الموقّعة إلى المنصة بعد الدخول بحساب المحاسب أو المسيّر.</span>' +
-        '<span>' + esc(CLUB.address) + ' · <span dir="ltr">' + esc(CLUB.phone) + '</span></span>' +
+        '<span>' + esc(CLUB.address) + ' · <span dir="ltr">' + esc(arDigits(CLUB.phone)) + '</span></span>' +
       '</footer>' +
     '</div>' +
   '</section>';

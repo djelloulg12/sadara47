@@ -254,6 +254,94 @@ function waitFor(w, predicate, ms) {
   });
 }
 
+/* ---- the club's digits: Arabic on the page, Latin in the database ----
+   Typed by hand and laid out as 1998/03/07; stored as 1998-03-07. Everything
+   below is the same date written down in more than one way, because that is what
+   has to give one answer. */
+tasks.push(() => {
+  const w = boot();
+  const ar = s => Array.from(String(s)).map(c =>
+    (c >= '0' && c <= '9') ? String.fromCodePoint(0x0660 + Number(c)) : c).join('');
+  const field = id => w.document.getElementById(id);
+  const type = (id, v) => {
+    /* Set the value and fire the event the same way a keystroke does: the
+       conversion listens for input, so setting value alone would prove nothing. */
+    field(id).value = v;
+    field(id).dispatchEvent(new w.Event('input', { bubbles: true }));
+  };
+  const SHOWN = ar('1998/03/07');
+
+  /* A number is shown in the club's digits as it is typed. Typed in Latin first,
+     so the conversion is what is being checked and not a round trip of its own. */
+  type('national_id', '1985010111122');
+  if (field('national_id').value !== ar('1985010111122')) {
+    errors.push('[digits] a national number typed in Latin is not shown in Arabic digits: '
+      + field('national_id').value);
+  }
+  /* The spaces a number is read with are how it is written on the card and are
+     not part of the number, so they are left exactly as they were typed. */
+  type('phone', '0661 00 00 01');
+  if (field('phone').value !== ar('0661') + ' ' + ar('00') + ' ' + ar('00') + ' ' + ar('01')) {
+    errors.push('[digits] a telephone number lost the way it is written: ' + field('phone').value);
+  }
+
+  /* A date stays as it is typed while the year is still being typed -- taking the
+     slashes away under the caret moves it out from under the person -- and is laid
+     out as year/month/day the moment there is enough of one to be one. */
+  type('birth_date', '199');
+  if (field('birth_date').value !== ar('199')) {
+    errors.push('[date] a half-typed year was re-laid out under the caret: ' + field('birth_date').value);
+  }
+  type('birth_date', '19980307');
+  if (field('birth_date').value !== SHOWN) {
+    errors.push('[date] a date typed as eight digits is not laid out as year/month/day: '
+      + field('birth_date').value);
+  }
+  for (const typed of ['1998/03/07', '1998-03-07', '1998/3/7', ar('1998/3/7'), ar('1998-3-7')]) {
+    type('birth_date', typed);
+    if (field('birth_date').value !== SHOWN) {
+      errors.push('[date] a date typed as ' + typed + ' reads as ' + field('birth_date').value);
+    }
+  }
+
+  /* What goes out is the one form the database holds. */
+  fill(w, 'adult');
+  type('birth_date', ar('1998/03/07'));
+  type('national_id', ar('1985010111122'));
+  type('phone', ar('0661000001'));
+  field('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  return waitFor(w, () => !field('done').hidden || !!field('form-msg').textContent)
+    .catch(() => errors.push('[store] nothing came back after sending'))
+    .then(() => {
+      const post = w.__calls.filter(c => c.method === 'POST' && /\/api\/applications$/.test(c.url));
+      if (post.length !== 1) {
+        errors.push('[store] expected one post to /api/applications, got ' + post.length
+          + (field('form-msg').textContent ? ' -- ' + field('form-msg').textContent : ''));
+        return;
+      }
+      /* The harness records the body as it was handed to fetch, which is a string.
+         Read as an object it would be a check that never runs. */
+      const body = JSON.parse(post[0].body);
+      const stored = {
+        birth_date: '1998-03-07',
+        national_id: '1985010111122',
+        phone: '0661000001'
+      };
+      for (const [field2, want] of Object.entries(stored)) {
+        if (body[field2] !== want) {
+          errors.push('[store] ' + field2 + ' typed in Arabic digits was stored as '
+            + JSON.stringify(body[field2]) + ' rather than ' + JSON.stringify(want));
+        }
+      }
+      /* And what the person is shown back is the form the club reads. */
+      const rows = field('done-summary').textContent;
+      if (rows.indexOf(SHOWN) === -1) {
+        errors.push('[store] the confirmation does not show the date as year/month/day: '
+          + rows.slice(0, 160));
+      }
+    });
+});
+
 const posted = w => w.__calls.some(c => c.method === 'POST');
 
 function fill(w, category) {
@@ -486,8 +574,14 @@ tasks.push(() => {
 
     /* after sending: the number is shown, and the print opens */
     if (w.document.getElementById('done').hidden) errors.push('[done] the confirmation did not appear');
-    if (w.document.getElementById('done-no').textContent !== 'APP-20260101-AB12') {
-      errors.push('[done] the request number is not shown to the person');
+    /* The number is shown in the club's digits. Built here rather than typed:
+       writing the expected value out by hand is how a twelve-character number
+       ends up eleven characters long and the test blames the page. */
+    const arNum = s => String.fromCodePoint(...Array.from(s).map(c =>
+      (c >= '0' && c <= '9') ? 0x0660 + Number(c) : c.codePointAt(0)));
+    if (w.document.getElementById('done-no').textContent !== arNum('APP-20260101-AB12')) {
+      errors.push('[done] the request number is not shown in the club\'s digits: '
+        + w.document.getElementById('done-no').textContent);
     }
     w.document.getElementById('print-form').dispatchEvent(new w.Event('click', { bubbles: true }));
     if (!w.__frames.length) errors.push('[done] the print button opened nothing');

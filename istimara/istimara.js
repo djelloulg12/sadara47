@@ -69,6 +69,131 @@
     return node ? String(node.value || '').trim() : '';
   }
 
+  /* ---------------------- الأرقام العربية ---------------------- */
+  /* The club writes its numbers the way it writes its forms, in Arabic-Indic
+     digits, and its dates as year/month/day. Both are accepted in either set of
+     digits, and both are read back in Arabic-Indic.
+
+     What is stored is Latin, and that is not a preference: an identity number is
+     compared against the ones already on file to catch the same person
+     registering twice, a registration number is read back out of itself to count
+     the next one, and a birth date is subtracted from today to work out an age.
+     Storing ١٩٨٥ where those expect 1985 would make the club's own duplicate
+     check answer "not seen before" for somebody already on the list. So the
+     person reads and writes Arabic digits, and the database holds the one form
+     both of those are converted to on the way through. */
+  var AR_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+
+  function arDigits(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .replace(/[0-9]/g, function (d) { return AR_DIGITS[Number(d)]; });
+  }
+
+  /* Folded by code point, not through a table of characters: written out, the
+     Arabic-Indic and Persian sets are indistinguishable, and a table that quietly
+     lost one of them would leave the digits it was not asked about unchanged. A
+     subtraction cannot get that wrong. */
+  function latinDigits(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .replace(/[٠-٩]/g, function (d) { return String(d.charCodeAt(0) - 0x0660); })
+      .replace(/[۰-۹]/g, function (d) { return String(d.charCodeAt(0) - 0x06F0); });
+  }
+
+  function pad2(v) { return String(v).length < 2 ? '0' + v : String(v); }
+
+  /* The date the club writes: 2026/10/11, in Arabic-Indic digits. Anything that
+     is not a plain date is passed through arDigits alone, so a note somebody typed
+     is still shown rather than dropped. */
+  function slashDate(value) {
+    var raw = latinDigits(value);
+    var m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw.trim());
+    if (!m) return arDigits(raw);
+    return arDigits(m[1] + '/' + pad2(m[2]) + '/' + pad2(m[3]));
+  }
+
+  /* The same date for the database. '' when the text is not a date rather than a
+     guess: a birth date that has been guessed is a member who is the wrong age on
+     the card for ever. */
+  function isoDate(value) {
+    var raw = latinDigits(value).trim();
+    var m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw);
+    if (!m) return '';
+    var month = Number(m[2]), day = Number(m[3]);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+    return m[1] + '-' + pad2(m[2]) + '-' + pad2(m[3]);
+  }
+
+  /* The fields that hold a number rather than a name. Their digits are folded to
+     Arabic as they pass the field and back to Latin as they leave it, so the same
+     number is found whichever set it was typed in -- a number quoted over the
+     phone in Arabic and typed in Latin is still the same number. */
+  var NUMBER_FIELDS = [
+    'national_id', 'birth_certificate_no', 'membership_no',
+    'phone', 'whatsapp', 'guardian_phone', 'guardian_national_id'
+  ];
+  var DATE_FIELDS = ['birth_date', 'guardian_birth_date'];
+
+  /* What a number field gives up: the digits as they were typed, in either set. */
+  function valNumber(id) {
+    return latinDigits(val(id));
+  }
+
+  /* What a date field gives up: one form, for the database. '' when what was typed
+     is not a date, which is caught by validate() before the request is sent. */
+  function valDate(id) {
+    return isoDate(val(id));
+  }
+
+  /* A date laid out as it is finished.
+     Nothing is re-written while the year is still being typed -- taking the
+     slashes away under the caret moves it out from under the person and turns
+     four keystrokes into an argument with the field. Once there is enough to be a
+     date it is laid out, and a dash typed where a slash belongs is taken as a
+     dash, because that is how the date is written on the card. */
+  function layOutDate(raw) {
+    var text = latinDigits(raw);
+    var digits = text.replace(/[^0-9]/g, '');
+    var hasSep = /[-/.]/.test(text);
+    if (!hasSep && digits.length <= 4) return arDigits(digits);
+    if (!hasSep && digits.length <= 6) return arDigits(digits.slice(0, 4) + '/' + digits.slice(4));
+    if (!hasSep && digits.length <= 8) return arDigits(digits.slice(0, 4) + '/' + digits.slice(4, 6) + '/' + digits.slice(6));
+    var m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(text.trim());
+    if (m) return slashDate(m[1] + '-' + pad2(m[2]) + '-' + pad2(m[3]));
+    return arDigits(text.slice(0, 12));
+  }
+
+  /* A number as it is finished: its digits shown in Arabic, and the spaces and
+     dashes a person reads a number with left exactly as they were typed -- those
+     are how it is written on the card and are not part of the number. */
+  function layOutNumber(raw) {
+    return String(raw).replace(/[0-9]/g, function (d) { return AR_DIGITS[Number(d)]; });
+  }
+
+  function listenForDigits() {
+    NUMBER_FIELDS.concat(DATE_FIELDS).forEach(function (id) {
+      var node = el(id);
+      if (!node) return;
+      var isDate = DATE_FIELDS.indexOf(id) !== -1;
+      var relayout = function () {
+        var before = node.value;
+        var after = isDate ? layOutDate(before) : layOutNumber(before);
+        if (after === before) return;
+        var at = node.selectionStart;
+        node.value = after;
+        /* The caret goes back to where it was in the text being edited. Setting the
+           value alone drops it at the end, so a digit typed in the middle of a
+           number lands in the wrong place. */
+        if (document.activeElement === node) {
+          try { node.setSelectionRange(at, at); } catch (_) { /* not every field allows it */ }
+        }
+      };
+      node.addEventListener('input', relayout);
+      /* A number pasted from a message arrives in whichever digits the sender used;
+         the same folding puts it in the shape a typed one would be in. */
+      node.addEventListener('paste', function () { window.setTimeout(relayout, 0); });
+    });
+  }
+
   function checked(id) { var n = el(id); return !!(n && n.checked); }
 
   function category() {
@@ -300,8 +425,15 @@
     required.forEach(function (id) { if (!val(id)) missing.push(id); });
 
     if (!val('birth_date')) missing.push('birth_date');
+    /* A date that is present but is not one is not a date. It is caught here
+       rather than being sent and quietly stored, because a birth date that has
+       been guessed is a member who is the wrong age on the card for ever. */
+    else if (!isoDate(val('birth_date'))) missing.push('birth_date');
+    if (val('guardian_birth_date') && !isoDate(val('guardian_birth_date'))) {
+      missing.push('guardian_birth_date');
+    }
     var phone = val('phone');
-    if (phone && phone.replace(/[\s.\-()]/g, '').length < 9) missing.push('phone');
+    if (phone && latinDigits(phone).replace(/[\s.\-()]/g, '').length < 9) missing.push('phone');
     /* The shape of an address is checked here rather than being left to the mail
        provider, so a typo is caught before a request is written rather than after
        somebody has tried to sign in with something that was never an address. */
@@ -319,7 +451,7 @@
   var MESSAGES = {
     first_name_ar: 'اكتب الاسم بالعربية.',
     last_name_ar: 'اكتب اللقب بالعربية.',
-    birth_date: 'اختر تاريخ الميلاد.',
+    birth_date: 'اكتب تاريخ الميلاد بصيغة سنة/شهر/يوم — 1998/03/17.',
     phone: 'اكتب رقم هاتف صحيح.',
     address: 'اكتب العنوان.',
     email: 'اكتب بريدًا إلكترونيًا صحيحًا — مثال: name@example.com',
@@ -329,6 +461,7 @@
     guardian_first_name: 'اكتب اسم الولي.',
     guardian_last_name: 'اكتب لقب الولي.',
     guardian_national_id: 'اكتب رقم تعريف الولي.',
+    guardian_birth_date: 'اكتب تاريخ ميلاد الولي بصيغة سنة/شهر/يوم — 1975/06/02.',
     guardian_consent: 'التصريح بإذن التدريب ضروري للأصاغر.',
     terms: 'يجب الموافقة على النظام الداخلي قبل الإرسال.'
   };
@@ -380,7 +513,14 @@
         Array.prototype.forEach.call(form.elements[key], function (r) { r.checked = (r.value === data[key]); });
       } else if (node.type === 'checkbox') {
         node.checked = !!data[key];
-      } else node.value = data[key];
+      } else {
+        /* A draft written before this change holds a date as the machine stored
+           it, or a number in Latin digits; one written after holds them as the
+           club reads them. Both are laid out again rather than trusted, so a
+           restored form never shows one shape while another shows the other. */
+        node.value = DATE_FIELDS.indexOf(key) !== -1 ? slashDate(data[key])
+          : (NUMBER_FIELDS.indexOf(key) !== -1 ? arDigits(data[key]) : data[key]);
+      }
     });
     state.photo = data.__photo || '';
     paintPhoto();
@@ -412,11 +552,11 @@
       last_name_ar: val('last_name_ar'),
       first_name_fr: val('first_name_fr'),
       last_name_fr: val('last_name_fr'),
-      national_id: val('national_id'),
-      birth_certificate_no: val('birth_certificate_no'),
+      national_id: valNumber('national_id'),
+      birth_certificate_no: valNumber('birth_certificate_no'),
       birth_place: val('birth_place'),
       wilaya: val('wilaya'),
-      birth_date: val('birth_date'),
+      birth_date: valDate('birth_date'),
       gender: val('gender'),
       blood_group: val('blood_group'),
       level: val('level'),
@@ -424,16 +564,16 @@
        at the pool. The key stays so the shape of a request does not change, and
        records collected before this still print it. */
       swimming_strokes: '',
-      phone: val('phone'),
-      whatsapp: val('whatsapp'),
+      phone: valNumber('phone'),
+      whatsapp: valNumber('whatsapp'),
       address: val('address'),
-      membership_no: val('membership_no'),
+      membership_no: valNumber('membership_no'),
       guardian_first_name: val('guardian_first_name'),
       guardian_last_name: val('guardian_last_name'),
-      guardian_birth_date: val('guardian_birth_date'),
+      guardian_birth_date: valDate('guardian_birth_date'),
       guardian_relation: val('guardian_relation'),
-      guardian_phone: val('guardian_phone'),
-      guardian_national_id: val('guardian_national_id'),
+      guardian_phone: valNumber('guardian_phone'),
+      guardian_national_id: valNumber('guardian_national_id'),
       guardian_consent: checked('guardian_consent'),
       guardian_child: (val('first_name_ar') + ' ' + val('last_name_ar')).trim(),
       subscription_code: val('subscription_code'),
@@ -601,8 +741,9 @@
     form.hidden = true;
     done.hidden = false;
 
-    el('done-no').textContent = rec.application_no || '—';
-    el('done-amount').textContent = (Number(rec.expected_amount) || 0).toLocaleString('fr-DZ') + ' دج';
+    el('done-no').textContent = arDigits(rec.application_no || '\u2014');
+    el('done-amount').textContent = arDigits(
+      (Number(rec.expected_amount) || 0).toLocaleString('fr-DZ')) + ' دج';
     el('done-date').textContent = longDate();
 
     /* Say so plainly rather than let the person believe the picture is on the
@@ -618,6 +759,11 @@
       var value = rec[key];
       if (!value) return '';
       if (key === 'gender') value = GENDERS[value] || value;
+      /* What the person reads is the form the club reads: numbers in Arabic-Indic
+         digits and dates as year/month/day. The request behind it holds the other
+         form, and the two are converted into each other rather than stored twice. */
+      else if (DATE_FIELDS.indexOf(key) !== -1) value = slashDate(value);
+      else if (NUMBER_FIELDS.indexOf(key) !== -1) value = arDigits(value);
       return '<div><span>' + F.esc(SUMMARY_LABELS[key]) + '</span><b>' + F.esc(value) + '</b></div>';
     }).join('');
     rows += '<div><span>الاشتراك</span><b>' + F.esc(rec.plan_name || rec.subscription_code || '') + '</b></div>';
@@ -628,9 +774,14 @@
   }
 
   function longDate() {
+    /* The day the request reached the club, written the way the club writes a
+       date: year/month/day, in Arabic-Indic digits. An Intl long date names the
+       month, which is right for a letter and wrong for a form the club fills in by
+       hand and matches against the numbers on a birth certificate. */
     try {
-      return new Intl.DateTimeFormat('ar-DZ', { dateStyle: 'long' }).format(new Date());
-    } catch (_) { return new Date().toISOString().slice(0, 10); }
+      var now = new Date();
+      return slashDate(now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate()));
+    } catch (_) { return slashDate(new Date().toISOString().slice(0, 10)); }
   }
 
   /* ---------------- where ---------------- */
@@ -830,6 +981,9 @@
   paintWilayas();
   paintPlans();
   paintFacilities();
+  /* Laid out before the draft is read, so a restored value and a typed one are in
+     the same shape rather than the form holding both. */
+  listenForDigits();
   syncCategory();
   updateTotal();
   paintPhoto();

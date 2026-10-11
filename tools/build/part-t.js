@@ -89,7 +89,7 @@ function receiptSheet(a) {
         '<span>الاسم واللقب</span><b>' + esc(appName(a) || '—') + '</b>' +
         '<span>الصفة</span><b>' + esc(catLabel(a.category === 'minor' ? 'minor' : 'adult')) + '</b>' +
         '<span>الفوج / المنشأة</span><b>' + esc(a.facility || '—') + '</b>' +
-        '<span>الهاتف</span><b dir="ltr">' + esc(a.phone || '—') + '</b>' +
+        '<span>الهاتف</span><b dir="ltr">' + esc(arDigits(a.phone || '—')) + '</b>' +
       '</div>' +
       '<table class="pk-table"><thead><tr><th>البيان</th><th>المبلغ (دج)</th></tr></thead><tbody>' +
         lines.map(row).join('') +
@@ -107,7 +107,7 @@ function receiptSheet(a) {
       '<footer class="pk-foot">' +
         '<span>تُوقّع نسختان: واحدة للنادي وأخرى للولي/المنخرط.</span>' +
         '<span>ترفع النسخة الموقّعة إلى المنصة بعد الدخول بحساب المحاسب أو المسيّر.</span>' +
-        '<span>' + esc(CLUB.address) + ' · <span dir="ltr">' + esc(CLUB.phone) + '</span></span>' +
+        '<span>' + esc(CLUB.address) + ' · <span dir="ltr">' + esc(arDigits(CLUB.phone)) + '</span></span>' +
       '</footer>' +
     '</div>' +
   '</section>';

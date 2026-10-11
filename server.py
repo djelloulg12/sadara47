@@ -77,13 +77,77 @@ def subscription_default(extras):
 DUPLICATE_MESSAGE = 'هذا المشترك مسجل مسبقاً.'
 
 
+def latin_digits(value):
+    """Arabic-Indic, Persian and Urdu digits turned into Latin ones.
+
+    By code point rather than through a table of characters: written out, the
+    Arabic-Indic and Persian sets are indistinguishable, and a table that quietly
+    lost one of them would fold the digits it was not asked about and leave the
+    rest alone."""
+    out = []
+    for ch in ('' if value is None else str(value)):
+        point = ord(ch)
+        if 0x0660 <= point <= 0x0669:
+            out.append(str(point - 0x0660))
+        elif 0x06F0 <= point <= 0x06F9:
+            out.append(str(point - 0x06F0))
+        else:
+            out.append(ch)
+    return ''.join(out)
+
+
+def iso_date(value):
+    """The date the database holds: 2026-10-11, Latin digits.
+
+    The club writes 2026/10/11 and may type it in either set of digits; both are
+    laid down here in one form. Something that is not a recognisable date is
+    returned untouched rather than guessed at -- a birth date that has been
+    guessed is a member who is the wrong age for ever."""
+    raw = latin_digits(value).strip()
+    m = re.match(r'^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})', raw)
+    if not m:
+        return raw
+    month, day = int(m.group(2)), int(m.group(3))
+    if not (1 <= month <= 12) or not (1 <= day <= 31):
+        return raw
+    return '%s-%02d-%02d' % (m.group(1), month, day)
+
+
+DIGIT_FIELDS = frozenset((
+    'national_id', 'birth_certificate_no', 'membership_no', 'registration_id',
+    'phone', 'whatsapp', 'guardian_phone', 'guardian_national_id'))
+DATE_FIELDS = frozenset(('birth_date', 'guardian_birth_date', 'card_issue_date'))
+
+
+def normalise_incoming(body):
+    """Folded to the one form the database holds, whatever a client sent.
+
+    Fields are named rather than guessed from their shape: `national_id` holds a
+    number and a field called `national_id_label` might not, and a rule that
+    worked by pattern would one day rewrite somebody's note."""
+    if not isinstance(body, dict):
+        return body
+    out = dict(body)
+    for key, value in list(out.items()):
+        if not isinstance(value, str):
+            continue
+        if key in DATE_FIELDS:
+            out[key] = iso_date(value)
+        elif key in DIGIT_FIELDS:
+            out[key] = latin_digits(value)
+    return out
+
+
 def norm_id(value):
     """A name is compared the way a person writes it, not the way a keyboard
     typed it: the same national number written with spaces, with dashes or in
-    capitals is the same person. Without this one member becomes three."""
+    capitals is the same person. Without this one member becomes three.
+
+    Arabic-Indic digits are folded on the way through too, so a number quoted
+    over the phone in Arabic and typed in Latin is the same number."""
     text = '' if value is None else str(value)
     text = unicodedata.normalize('NFKC', text)
-    return re.sub(r'[\s  \-_.]', '', text).upper()
+    return re.sub(r'[\s  \-_.]', '', latin_digits(text)).upper()
 
 
 def identity_key(d):
@@ -559,6 +623,11 @@ class App(SimpleHTTPRequestHandler):
         if path == '/api/applications':
             c=connect()
             try:
+                # Folded to the one form the database holds before anything reads
+                # it, so the duplicate check below and the identity this is filed
+                # under see the number as it will be stored -- whichever digits it
+                # arrived in.
+                data=normalise_incoming(data)
                 d=data; category=d.get('category','adult'); minor=category=='minor'
 
                 # Nobody is registered twice: the name is looked for before

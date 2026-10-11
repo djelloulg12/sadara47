@@ -244,6 +244,64 @@
     return { kind: 'national_id', key: nid };
   };
 
+  /* ---------------- the one form the database holds ----------------
+     The club reads and writes Arabic-Indic digits and writes dates as
+     year/month/day. What is stored is Latin digits and 2026-10-11, and that is
+     not a preference:
+
+       an identity number is compared against the ones on file to catch the same
+         person registering twice -- storing ١٩٨٥ where the comparison expects
+         1985 would answer "not seen before" for a member already on the list
+       a registration number is read back out of itself to count the next one
+       a birth date is subtracted from today to work out an age
+       amounts are added up, and Firestore sorts by what it is given
+
+     So this is done here, at the boundary, rather than only on the page: a
+     request typed on a phone, sent by a script, or posted by somebody who has
+     not opened the page at all is stored in the same form as one that was.
+     Anything that is not recognisable is left exactly as it arrived -- a name, a
+     note, an address -- and a date that cannot be read is not guessed at, because
+     a birth date that has been guessed is a member who is the wrong age for
+     ever. */
+  const FOLD_DIGIT = /[\u0660-\u0669]/g;
+  const FOLD_DIGIT_ALT = /[\u06F0-\u06F9]/g;
+  const latinDigits = v => String(v === undefined || v === null ? '' : v)
+    .replace(FOLD_DIGIT, d => String(d.charCodeAt(0) - 0x0660))
+    .replace(FOLD_DIGIT_ALT, d => String(d.charCodeAt(0) - 0x06F0));
+
+  const ISO_DATE = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/;
+  const isoDate = v => {
+    const raw = latinDigits(v).trim();
+    const m = ISO_DATE.exec(raw);
+    if (!m) return raw;
+    const month = Number(m[2]), day = Number(m[3]);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return raw;
+    const p = n => String(n).length < 2 ? '0' + n : String(n);
+    return m[1] + '-' + p(m[2]) + '-' + p(day);
+  };
+
+  /* Named rather than guessed from the shape of the field. A field called
+     `national_id` holds a number and a field called `national_id_label` might not,
+     and a rule that worked by pattern would one day rewrite somebody's note. */
+  const DIGIT_FIELDS = new Set([
+    'national_id', 'birth_certificate_no', 'membership_no', 'registration_id',
+    'phone', 'whatsapp', 'guardian_phone', 'guardian_national_id'
+  ]);
+  const DATE_FIELDS = new Set([
+    'birth_date', 'guardian_birth_date', 'card_issue_date'
+  ]);
+
+  const normaliseIncoming = body => {
+    if (!body || typeof body !== 'object') return body;
+    const out = { ...body };
+    for (const key of Object.keys(out)) {
+      if (typeof out[key] !== 'string') continue;
+      if (DATE_FIELDS.has(key)) out[key] = isoDate(out[key]);
+      else if (DIGIT_FIELDS.has(key)) out[key] = latinDigits(out[key]);
+    }
+    return out;
+  };
+
   /* Somebody already on the books under the same name. Looked for among the
      requests and among the members: a person who applied twice has two requests,
      and a person who applied and was accepted has a request and a member, and
@@ -680,6 +738,7 @@
       if (path === '/api/swimmers' && method === 'POST') {
         const gate = await managerView('هذه العملية لرئيس النادي فقط');
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
+        body = normaliseIncoming(body);
         const ref = db.collection('swimmers').doc();
         await ref.set({
           membership_no: body.membership_no || 'SDR-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
@@ -692,6 +751,7 @@
         const gate = await managerView('هذه العملية لرئيس النادي فقط');
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
         if (!body.id) return jsonResponse({ error: 'معرّف السباح مطلوب' }, 400);
+        body = normaliseIncoming(body);
         await db.collection('swimmers').doc(String(body.id)).set({
           name: body.name || '', group_name: body.group_name || 'المبتدئون', phone: body.phone || '',
           status: body.status === 'نشط' ? 'active' : (body.status || 'active')
@@ -779,6 +839,10 @@
         return jsonResponse((await rows('applications')).filter(row => !row.claim_only));
       }
       if (path === '/api/applications' && method === 'POST') {
+        /* Folded to the form the database holds before anything reads it, so the
+           duplicate check below, the identity this is filed under and the record
+           that is written all see the same number whichever digits it arrived in. */
+        body = normaliseIncoming(body);
         const [plans, extras, pools] = await Promise.all([rows('subscription_plans'), readExtras(), rows('facilities')]);
         const list = plans.length ? plans : DEFAULT_PLANS;
         const applicationNo = body.application_no
