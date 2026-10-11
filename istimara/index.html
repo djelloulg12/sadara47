@@ -355,51 +355,62 @@
       <!-- ---------- 6. the account ---------- -->
       <fieldset class="card">
         <legend><span class="step-no">٦</span> حسابك في النادي</legend>
-        <p class="card-note" id="acct-note">
-          به تفتح طلبك، وترى مصيرَه، وتطبع استمارتك في أي وقت.
-          لا تُحفظ كلمة المرور في قاعدة بياناتنا — يحفظها
-          <b>Firebase</b> مُشفّرة، ولا يطّلع عليها أحد.
-        </p>
+        <!-- One step, two arrangements.
 
-        <!-- One guardian, several swimmers. A family with three children in the
-             club is not three families, so the second child is registered under
-             the same account rather than refused because the address is taken. -->
-        <div class="seg" id="acct-mode" role="group" aria-label="حساب جديد أم حساب موجود">
-          <button type="button" class="seg-btn is-on" id="acct-new" aria-pressed="true">حساب جديد</button>
-          <button type="button" class="seg-btn" id="acct-returning" aria-pressed="false">لديّ حساب بالفعل</button>
-        </div>
-        <small class="hint acct-hint" id="acct-hint" hidden>
-          سيؤخذ اسم المستخدم من حسابك، وتكتب كلمة المرور فقط. بالولاية نفسها يمكنك
-          تسجيل كل أبنائك واحدًا بعد الآخر.
-        </small>
-        <div class="row two">
-          <label class="f">
-            <span class="lbl">البريد الإلكتروني *</span>
-            <input id="email" name="email" type="email" required dir="ltr"
-                   autocomplete="email" maxlength="120" placeholder="name@example.com" />
-            <small class="hint">يُستعمل لتسجيل الدخول ولاستعادة كلمة المرور.</small>
-          </label>
-          <label class="f" id="acct-username-field">
-            <span class="lbl">اسم المستخدم *</span>
-            <input id="username" name="username" type="text" required dir="ltr"
-                   autocomplete="username" maxlength="32" pattern="[A-Za-z0-9._-]{3,32}"
-                   placeholder="messaoud.belkacem" />
-            <small class="hint">حروف لاتينية وأرقام و . _ - — من ٣ إلى ٣٢ خانة، ولا يُستعمل مرّتين.</small>
-          </label>
-        </div>
-        <div class="row two">
-          <label class="f">
-            <span class="lbl" id="acct-pass-name">كلمة المرور *</span>
-            <input id="password" name="password" type="password" required dir="ltr"
-                   autocomplete="new-password" minlength="8" maxlength="72" />
-            <small class="hint">ثماني خانات على الأقل.</small>
-          </label>
-          <label class="f" id="acct-confirm-field">
-            <span class="lbl" id="acct-pass-label">تأكيد كلمة المرور *</span>
-            <input id="password_confirm" name="password_confirm" type="password" required dir="ltr"
-                   autocomplete="new-password" minlength="8" maxlength="72" />
-            <small class="hint">أعد كتابتها للتأكد من عدم وجود خطأ.</small>
-          </label>
+             A family with three children in the club is not three families, so
+             the second child is registered under the same account rather than
+             refused because the address is already taken. What that means for this
+             space is that the fields do not stay put: one face asks for a name and
+             a password to keep, the other asks for the password alone and takes
+             the name off the account that already holds it.
+
+             So the panel says which arrangement it is -- in a colour as well as in
+             words -- and the fields that are not part of it leave the row entirely
+             rather than sitting there greyed out. A disabled field beside somebody
+             who must not fill it in has told them the wrong thing; a field that is
+             not there has told them the truth. -->
+
+        <div class="acct" id="acct-panel" data-mode="new">
+          <div class="acct-bar">
+            <div class="acct-pick" id="acct-mode" role="group" aria-label="حساب جديد أم حساب موجود">
+              <button type="button" class="acct-btn is-on" id="acct-new" aria-pressed="true">حساب جديد</button>
+              <button type="button" class="acct-btn" id="acct-returning" aria-pressed="false">لديّ حساب بالفعل</button>
+            </div>
+            <p class="acct-say" id="acct-say">به تفتح طلبك، وترى مصيره، وتطبع استمارتك في أي وقت.
+              لا تُحفظ كلمة المرور في قاعدة بياناتنا — يحفظها <b>Firebase</b> مُشفّرة، ولا يطّلع عليها أحد.</p>
+          </div>
+
+          <div class="acct-fields">
+            <div class="row two">
+              <label class="f">
+                <span class="lbl">البريد الإلكتروني *</span>
+                <input id="email" name="email" type="email" required dir="ltr"
+                       autocomplete="email" maxlength="120" placeholder="name@example.com" />
+                <small class="hint">يُستعمل لتسجيل الدخول ولاستعادة كلمة المرور.</small>
+              </label>
+              <label class="f" id="acct-username-field">
+                <span class="lbl">اسم المستخدم *</span>
+                <input id="username" name="username" type="text" required dir="ltr"
+                       autocomplete="username" maxlength="32" pattern="[A-Za-z0-9._-]{3,32}"
+                       placeholder="messaoud.belkacem" />
+                <small class="hint">حروف لاتينية وأرقام و . _ - — من ٣ إلى ٣٢ خانة، ولا يُستعمل مرّتين.</small>
+              </label>
+            </div>
+            <div class="row two">
+              <label class="f">
+                <span class="lbl" id="acct-pass-name">كلمة المرور *</span>
+                <input id="password" name="password" type="password" required dir="ltr"
+                       autocomplete="new-password" minlength="8" maxlength="72" />
+                <small class="hint" id="acct-pass-hint">ثماني خانات على الأقل.</small>
+              </label>
+              <label class="f" id="acct-confirm-field">
+                <span class="lbl" id="acct-pass-label">تأكيد كلمة المرور *</span>
+                <input id="password_confirm" name="password_confirm" type="password" required dir="ltr"
+                       autocomplete="new-password" minlength="8" maxlength="72" />
+                <small class="hint">أعد كتابتها للتأكد من عدم وجود خطأ.</small>
+              </label>
+            </div>
+          </div>
         </div>
       </fieldset>
 

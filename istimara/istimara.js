@@ -136,6 +136,19 @@
     return dismiss;
   }
 
+  /* What the panel says under the switch, once per arrangement. The third is the
+     case in between: the account this device already holds, where not even the
+     password is asked for -- a guardian registering a second child, on the same
+     phone, minutes after the first. */
+  var ACCOUNT_SAYS = {
+    new: 'به تفتح طلبك، وترى مصيره، وتطبع استمارتك في أي وقت. لا تُحفظ كلمة المرور '
+      + 'في قاعدة بياناتنا — يحفظها Firebase مُشفّرة، ولا يطّلع عليها أحد.',
+    returning: 'اسم المستخدم في حسابك، فلا يُطلب منك. تكتب كلمة المرور فقط، '
+      + 'وبالحساب نفسه تسجّل كل أبناءك واحدًا بعد الآخر.',
+    open: 'حسابك مفتوح على هذا الجهاز — تكتب بيانات السبّاح فقط، ولا اسم مستعمل '
+      + 'ولا كلمة مرور. وبه تسجّل كل أبناءك واحدًا بعد الآخر.'
+  };
+
   /* On the same object the print helpers are on, so the checks can raise one the
      way the page does rather than reaching past the front door. */
   F.notify = notify;
@@ -817,7 +830,7 @@
     return accountMode() === 'returning' && !!openAccountFor(val('email'));
   }
 
-  function setAccountMode(mode) {
+  function setAccountMode(mode, open) {
     var returning = mode === 'returning';
     var pair = [['acct-new', 'new'], ['acct-returning', 'returning']];
     pair.forEach(function (p) {
@@ -827,24 +840,54 @@
       b.classList.toggle('is-on', on);
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
+    /* The panel carries the arrangement as well: the tint is the same information
+       the button carries, said a second way, because somebody glancing at a phone
+       reads the colour and not a line of small text. */
+    var panel = el('acct-panel');
+    if (panel) panel.setAttribute('data-mode', mode);
+
     /* The user name belongs to the account, so somebody signing in to an account
        they already hold does not choose one -- it is read from their profile. And
        the confirmation exists to catch a typing slip in a password being set,
-       which is not happening here. Both say where they went; a field that simply
-       is not on the page reads as a field that was lost. */
+       which is not happening here.
+
+       Both leave the row rather than sitting there greyed out. A disabled field
+       beside somebody who must not fill it in has told them the wrong thing; one
+       that is not there has told them the truth -- and the row closes up around
+       what is left instead of holding an empty half. */
     var userField = el('acct-username-field');
     var confirmField = el('acct-confirm-field');
     if (userField) userField.hidden = returning;
     if (confirmField) confirmField.hidden = returning;
-    var hint = el('acct-hint');
-    if (hint) hint.hidden = !returning;
+
+    /* What the password field is now for. Not a new sentence, but a different
+       one: it is the password of an account that already exists. */
+    var passName = el('acct-pass-name');
+    var passHint = el('acct-pass-hint');
     var pass = el('password');
-    if (pass) pass.setAttribute('autocomplete', returning ? 'current-password' : 'new-password');
+    if (passName) passName.textContent = returning ? 'كلمة مرور حسابك *' : 'كلمة المرور *';
+    if (passHint) {
+      passHint.textContent = open
+        ? 'حسابك مفتوح — لا تُكتب هنا.'
+        : returning ? 'ثماني خانات على الأقل.' : 'ثماني خانات على الأقل.';
+    }
+    if (pass) {
+      pass.setAttribute('autocomplete', returning ? 'current-password' : 'new-password');
+      if (open) pass.disabled = true; else pass.disabled = false;
+    }
+
+    var say = el('acct-say');
+    if (say) {
+      say.textContent = ACCOUNT_SAYS[open && returning ? 'open'
+        : returning ? 'returning' : 'new'];
+    }
     clearComplaintOnEdit();
   }
 
   el('acct-new').addEventListener('click', function () { setAccountMode('new'); });
-  el('acct-returning').addEventListener('click', function () { setAccountMode('returning'); });
+  el('acct-returning').addEventListener('click', function () {
+    setAccountMode('returning', !!openAccountFor(val('email')));
+  });
 
   /* The address decides, and only the address. An account this browser already
      holds for exactly the address in the box is the same person -- there is no
@@ -855,12 +898,7 @@
   function recogniseOpenSession() {
     if (accountMode() === 'returning') return;
     if (!openAccountFor(val('email'))) return;
-    setAccountMode('returning');
-    var hint = el('acct-hint');
-    if (hint) {
-      hint.textContent = 'هذا الحساب مفتوح على هذا الجهاز. تكتب بيانات السبّاح فقط، '
-        + 'وتسجيل كل أبناءك واحدًا بعد الآخر بالحساب نفسه.';
-    }
+    setAccountMode('returning', true);
     notify('حسابك مفتوح على هذا الجهاز.', 'info',
       'تسجيل سبّاح آخر لن يطلب منك كلمة مرور من جديد.');
   }
@@ -1370,9 +1408,10 @@
     });
     state.photo = '';
     paintPhoto();
-    /* The account is open on this device, so the other face of the step is the
-       right one and no password is asked for. */
-    setAccountMode('returning');
+    /* The other face of the step is the right one. Whether the password is asked
+       for as well is not assumed -- it is asked of the session, because a device
+       that has not kept the account open still needs it. */
+    setAccountMode('returning', !!openAccountFor(val('email')));
     syncCategory();
     updateTotal();
     saveDraft();

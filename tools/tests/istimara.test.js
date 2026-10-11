@@ -142,6 +142,47 @@ const A_WILAYA = WILAYA_LIST.find(x => (COMMUNES_BY_WILAYA[x.code] || []).length
   }
 }
 
+
+/* ---- every field is as wide as its row ---- */
+{
+  const w = boot();
+  /* jsdom lays nothing out, so the numbers cannot be measured here. What can be
+     checked is the rule they come from: that it exists, that it is the general
+     one, and that nothing has quietly gone back to naming input types. */
+  const GENERAL = /input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\)\s*,[\s\S]{0,120}?\{[^}]*width:\s*100%/;
+  if (!GENERAL.test(CSS)) {
+    errors.push('[width] no rule gives a field the width of its row');
+  }
+  /* Naming the types is the mistake: the address and the password were left off
+     the list and came out 177px beside a 353px neighbour, and nothing about that
+     looks broken -- it looks like a field. */
+  if (/input\[type=[a-z]+\][^{]*\{[^}]*\bwidth:/.test(CSS)) {
+    errors.push('[width] a field width is given by type name again');
+  }
+  /* Every input on the page is either one of the two the rule leaves alone, or
+     something it covers. A type nobody thought about is a field sized by the
+     browser, and that is the whole of the fault this check exists for. */
+  const ALONE = new Set(['checkbox', 'radio', 'file']);
+  for (const kind of new Set([...w.document.querySelectorAll('input')]
+    .map(n => (n.getAttribute('type') || 'text').toLowerCase()))) {
+    if (!ALONE.has(kind)) continue;
+    if (kind !== 'file') continue;
+    /* The photo picker is behind the button labelled «اختيار صورة» and is never
+       shown; it is here because a label cannot open a file dialog on its own on
+       every browser. */
+    if (!w.document.getElementById('photo')) {
+      errors.push('[width] the photo picker is gone from the page');
+    }
+  }
+  /* The account rows are the only ones that close up, so they are the only ones
+     that must not be a fixed two-column grid: a grid keeps the half of the row
+     that a field has left. */
+  const acct = CSS.indexOf('.acct-fields .row.two');
+  if (acct === -1 || !/flex-wrap:\s*wrap/.test(CSS.slice(acct, acct + 120))) {
+    errors.push('[width] the account rows cannot close up when a field leaves');
+  }
+}
+
 /* ---- 2) the printed geometry is the platform's, not a second copy that drifts ---- */
 {
   const spots = src => {

@@ -110,7 +110,11 @@ html, body { overflow-x: hidden; }
 .lbl { display: block; font-size: 14px; font-weight: 600; margin-bottom: 5px; }
 .req { color: var(--danger); font-style: normal; font-weight: 700; }
 
-input[type=text], input[type=tel], input[type=date], input[type=number],
+/* Every field takes the width of its row, except the two that are a tick or a
+   knob and are sized by themselves. Said as what it means rather than as a list
+   of types: a list has to be kept by hand every time a field is added, and
+   forgetting produces a field that looks like a field and is 177px wide. */
+input:not([type="checkbox"]):not([type="radio"]),
 select, textarea {
   width: 100%; min-height: var(--tap);
   padding: 10px 12px;
@@ -186,34 +190,65 @@ input.bad, select.bad, textarea.bad { border-color: var(--danger); background: #
 .form-msg.error { background: #fdecea; color: var(--danger); border-color: #f3c4c0; }
 .form-msg.ok { background: #e7f6ee; color: var(--ok); border-color: #b6e0c9; }
 
-/* ---------------- one step, two arrangements ---------------- */
-/* The switch between "a new account" and "an account I already have". It is a
-   pair of buttons rather than a checkbox because it is a choice between two whole
-   arrangements of the step, not a thing to tick -- and because the one who has an
-   account is the one who must not have to hunt for it. */
-.seg {
-  display: inline-flex; gap: 4px; margin: 0 0 10px; padding: 4px;
+/* ---------------- your account in the club ---------------- */
+/* The one part of the form that rearranges itself, so it is a tray inside its
+   card rather than four fields that happen to sit together. */
+.acct {
+  border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px; background: #fbfdfd;
+  transition: background .18s ease, border-color .18s ease;
+}
+.acct[data-mode="returning"] { background: var(--teal-soft); border-color: #bfe0e4; }
+
+.acct-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+  margin-bottom: 14px;
+}
+/* The switch is between the two arrangements, not between two labels: it is a pair
+   of buttons because choosing is what a person is doing here. */
+.acct-pick {
+  display: inline-flex; gap: 4px; padding: 4px; flex: 0 0 auto;
   background: #eef4f6; border: 1px solid var(--line); border-radius: 12px;
 }
-.seg-btn {
+.acct-btn {
   font: inherit; font-weight: 700; font-size: 14px;
   padding: 8px 16px; min-height: 40px; border: 0; border-radius: 9px;
   background: transparent; color: var(--muted); cursor: pointer;
 }
-.seg-btn:hover { color: var(--teal-dark); }
-.seg-btn.is-on { background: #fff; color: var(--teal-dark); box-shadow: 0 1px 3px rgba(16, 42, 67, .12); }
-.seg-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
-.acct-hint { display: block; margin: -4px 0 12px; max-width: 62ch; }
-
-.done-sibling {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: 12px; margin: 16px 0 4px; padding: 14px 16px;
-  background: var(--teal-soft); border: 1px solid #bfe0e4; border-radius: 14px;
+.acct-btn:hover { color: var(--teal-dark); }
+.acct-btn.is-on {
+  background: #fff; color: var(--teal-dark);
+  box-shadow: 0 1px 3px rgba(16, 42, 67, .14);
 }
-.done-sibling-text { display: flex; flex-direction: column; gap: 3px; }
-.done-sibling-text b { color: var(--teal-dark); font-size: 15px; }
-.done-sibling-text span { color: var(--muted); font-size: 13.5px; }
-.done-sibling .btn { flex: 0 0 auto; }
+.acct-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+/* Beside the switch rather than above the panel: above, it is read once and then
+   belongs to the whole form; here, it sits with the thing it describes. It takes
+   what is left of the row and wraps under the switch on a narrow phone, so it is
+   never squeezed to a width nobody can read. */
+.acct-say {
+  margin: 0; flex: 1 1 300px; font-size: 13px; color: var(--muted);
+}
+.acct-say b { color: var(--teal-dark); }
+
+/* Flex rather than the two-column grid the rest of the form uses, because a grid
+   cannot close a gap. Take one field out of a 1fr 1fr row and the other keeps its
+   half, beside an emptiness; with a flexible basis, one field left means one field
+   with the whole of the row -- which is the honest shape, since this arrangement
+   really does have half the fields the other one has. */
+.acct-fields .row.two { display: flex; flex-wrap: wrap; gap: 14px; }
+.acct-fields .f { flex: 1 1 240px; min-width: 0; }
+.acct-fields .row { margin: 0 0 12px; }
+.acct-fields .row:last-child { margin-bottom: 0; }
+.acct-fields .hint { margin-top: 5px; }
+
+/* On the narrowest phones the switch takes the whole row and the sentence goes
+   under it, which is the order it is read in. */
+@media (max-width: 560px) {
+  .acct { padding: 12px; }
+  .acct-pick { display: flex; width: 100%; }
+  .acct-btn { flex: 1 1 0; padding: 8px 10px; }
+}
 
 /* ---------------- notifications ---------------- */
 /* One tray for the page. It is fixed to the top so a message reaches the eye
