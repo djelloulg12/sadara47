@@ -185,15 +185,35 @@
     return n.toLocaleString('fr-DZ') + ' دج';
   }
 
-  function row(label, value, opts) {
+  /* One field of the grid: a label and its value, with no table around them.
+
+     The summary was a stack of two-column tables, one row per value, which put a
+     minor who had filled in every optional field at 483 mm of content on a 297 mm
+     page -- a page and a half. The values are the same and none of them is
+     dropped; what changed is what they are written in. Two across rather than one
+     per row is most of the saving, and it reads better besides: a field is a label
+     and a value, and a row of a table takes longer to say so. */
+  function field(label, value, opts) {
     opts = opts || {};
-    if (!value && !opts.keep) return '';
-    var attrs = '';
-    if (opts.mono) attrs += ' class="mono" dir="ltr"';
-    else if (opts.span) attrs += ' class="span2"';
-    return '<tr' + (opts.span && !opts.mono ? ' class="span2"' : '') + '>'
-      + '<th>' + esc(label) + '</th>'
-      + '<td' + attrs + '>' + esc(value || '—') + '</td></tr>';
+    if (!value) return '';
+    var cls = 's-f' + (opts.mono ? ' s-mono' : '') + (opts.wide ? ' s-wide' : '');
+    return '<div class="' + cls + '"><b>' + esc(label) + '</b>'
+      + '<span' + (opts.mono ? ' dir="ltr"' : '') + '>' + esc(value) + '</span></div>';
+  }
+
+  /* A titled group of fields. An empty group prints nothing at all, so an adult
+     has no guardian heading rather than a heading over nothing.
+
+     Three across for the blocks that carry the most values: the identity block is
+     fifteen fields for a minor, and on two across it was taller than everything
+     else on the page put together. Two across for the rest, which is easier to
+     read where there are four values or fewer. */
+  function block(head, title, fields, body, three) {
+    if (!fields && !body) return '';
+    return '<section class="s-block">'
+      + '<h2>' + head + ' &mdash; ' + esc(title) + '</h2>'
+      + (body || ('<div class="s-grid' + (three ? '3' : '') + '">' + fields + '</div>'))
+      + '</section>';
   }
 
   function summarySheet(rec) {
@@ -220,74 +240,91 @@
     if (rec.membership_no) extras.push('تسجيل سابق: ' + rec.membership_no);
 
     var identity = ''
-      + row('الاسم بالعربية', rec.first_name_ar)
-      + row('اللقب بالعربية', rec.last_name_ar)
-      + (rec.first_name_fr ? row('الاسم بالفرنسية', rec.first_name_fr) : '')
-      + (rec.last_name_fr ? row('اللقب بالفرنسية', rec.last_name_fr) : '')
-      + row('تاريخ الميلاد', dayFirst(rec.birth_date))
-      + row('الجنس', GENDERS[rec.gender] || rec.gender)
-      + row('مكان الميلاد', rec.birth_place)
-      + row('الولاية', rec.wilaya)
-      + row('رقم التعريف الوطني', rec.national_id, { mono: true })
-      + row('رقم شهادة الميلاد', rec.birth_certificate_no, { mono: true })
+      + field('الاسم بالعربية', rec.first_name_ar)
+      + field('اللقب بالعربية', rec.last_name_ar)
+      + field('الاسم بالفرنسية', rec.first_name_fr)
+      + field('اللقب بالفرنسية', rec.last_name_fr)
+      + field('تاريخ الميلاد', dayFirst(rec.birth_date))
+      + field('الجنس', GENDERS[rec.gender] || rec.gender)
+      + field('مكان الميلاد', rec.birth_place)
+      + field('الولاية', rec.wilaya)
+      + field('رقم التعريف الوطني', rec.national_id, { mono: true })
+      + field('رقم شهادة الميلاد', rec.birth_certificate_no, { mono: true })
       /* A+ and O- are written with the sign after the letter, so an RTL cell
          would print them backwards as +A. */
-      + row('فصيلة الدم', rec.blood_group, { mono: true })
-      + row('المستوى', rec.level || (LEVELS.indexOf(rec.level) === -1 ? rec.level : rec.level))
-      + row('نمط السباحة', rec.swimming_strokes)
-      + row('الهاتف', rec.phone, { mono: true })
-      + row('الواتساب', rec.whatsapp, { mono: true })
-      + row('العنوان', rec.address);
+      + field('فصيلة الدم', rec.blood_group, { mono: true })
+      + field('المستوى', rec.level)
+      + field('الهاتف', rec.phone, { mono: true })
+      + field('الواتساب', rec.whatsapp, { mono: true })
+      /* An address is a sentence and reads badly broken in half, so it is given
+         the whole width rather than one column of the pair. */
+      + field('العنوان', rec.address, { wide: true })
+      + field('نمط السباحة', rec.swimming_strokes);
 
-    var guardian = adult ? '' :
-      '<h2>' + headGuardian + ' &mdash; ولي الأمر</h2><table>'
-      + row('اسم الولي', rec.guardian_first_name)
-      + row('لقب الولي', rec.guardian_last_name)
-      + row('تاريخ ميلاد الولي', dayFirst(rec.guardian_birth_date))
-      + row('صلة القرابة', rec.guardian_relation)
-      + row('هاتف الولي', rec.guardian_phone, { mono: true })
-      + row('رقم تعريف الولي', rec.guardian_national_id, { mono: true })
-      + (rec.guardian_consent ? '<tr class="span2"><th>إذن التدريب</th><td>مصرّح به</td></tr>' : '')
-      + '</table>';
+    var guardian = adult ? ''
+      : field('اسم الولي', rec.guardian_first_name)
+      + field('لقب الولي', rec.guardian_last_name)
+      + field('تاريخ ميلاد الولي', dayFirst(rec.guardian_birth_date))
+      + field('صلة القرابة', rec.guardian_relation)
+      + field('هاتف الولي', rec.guardian_phone, { mono: true })
+      + field('رقم تعريف الولي', rec.guardian_national_id, { mono: true })
+      + field('إذن التدريب', rec.guardian_consent ? 'مصرّح به' : '');
 
     /* The club writes the doctor in by hand: the official form has no room for
-       it, so nothing is typed and nothing is printed. An empty ruled block says
-       exactly that -- the line is there, waiting for the pen. */
-    var medical = ''
-      + '<tr><th>الطبيب</th><td class="blank"></td></tr>'
-      + '<tr><th>التخصص</th><td class="blank"></td></tr>'
-      + '<tr><th>تاريخ الفحص</th><td class="blank"></td></tr>';
+       it, so nothing is typed and nothing is printed. The three lines say exactly
+       that -- they are there, waiting for the pen -- and laid side by side they
+       take a third of the height three stacked rows did. */
+    var medical = '<div class="s-med">'
+      + '<span>الطبيب</span><i></i>'
+      + '<span>التخصص</span><i></i>'
+      + '<span>تاريخ الفحص</span><i></i>'
+      + '</div>';
 
     var money_rows = ''
-      + row('الاشتراك', plan)
-      + row('المسبح أو المنشأة', rec.facility)
-      + row('طريقة الدفع', PAYMENTS[rec.payment_method] || rec.payment_method)
-      + (extras.length ? row('إضافات', extras.join(' — ')) : '')
-      + '<tr class="span2 total"><th>المبلغ المتوقع</th><td><b>' + esc(money(rec.expected_amount)) + '</b></td></tr>';
+      + field('الاشتراك', plan)
+      + field('المسبح أو المنشأة', rec.facility)
+      + field('طريقة الدفع', PAYMENTS[rec.payment_method] || rec.payment_method)
+      + (extras.length ? field('إضافات', extras.join(' — '), { wide: true }) : '')
+      + '<div class="s-total"><span>المبلغ المتوقع</span><b>'
+      +   esc(money(rec.expected_amount)) + '</b></div>';
 
     return '<section class="s-page">'
       + '<header class="s-head">'
       +   '<img class="s-logo" src="/assets/logo.png" alt="" />'
-      +   '<div><b>' + esc(CLUB.ar) + '</b><span>فرع السباحة &middot; موسم ' + esc(CLUB.season) + '</span></div>'
+      +   '<div class="s-id"><b>' + esc(CLUB.ar) + '</b>'
+      +     '<span>فرع السباحة &middot; موسم ' + esc(CLUB.season) + '</span></div>'
+      /* The photograph moved up into the header. It used to hold a 34 mm column
+         open down the whole page for a picture 42 mm tall. */
+      +   '<div class="s-photo">'
+      +     (photo ? '<img src="' + esc(photo) + '" alt="صورة المنخرط">' : '<span>لا توجد صورة</span>')
+      +   '</div>'
       +   '<div class="s-no"><span>رقم الطلب</span><b dir="ltr">' + esc(rec.application_no || '—') + '</b></div>'
       + '</header>'
 
       + '<h1>استمارة التسجيل &mdash; ملخّص البيانات</h1>'
-      + '<p class="s-lead">هذا الملخّص مرافق لاستمارة النادي المرفقة في الصفحة السابقة،'
-      + ' وتُملأ الفراغات التي لا يتّسع لها النموذج الرسمي.</p>'
 
-      + '<div class="s-body">'
-      +   '<div class="s-photo">'
-      +     (photo ? '<img src="' + esc(photo) + '" alt="صورة المنخرط">' : '<span>لا توجد صورة</span>')
-      +     '<small>الصورة الشخصية</small>'
-      +   '</div>'
-      +   '<div class="s-tables">'
-      +     '<h2>' + headSwimmer + ' &mdash; بيانات الرياضي</h2><table>' + identity + '</table>'
-      +     (adult ? '' : guardian)
-      +     '<h2>' + headMedical + ' &mdash; الفحص الطبي</h2>'
-      +     '<table>' + medical + '</table>'
-      +     '<h2>' + headMoney + ' &mdash; الاشتراك والدفع</h2><table>' + money_rows + '</table>'
-      +     (rec.notes ? '<h2>ملاحظة الرياضي</h2><p class="s-notes">' + esc(rec.notes) + '</p>' : '')
+      + '<div class="s-flow">'
+      /* Two columns, each field the width it had before. The saving is not from
+         squeezing fields narrower -- at three across the labels and values no
+         longer fitted and every one of them wrapped -- but from running two
+         independent lists down the page side by side instead of stacking all
+         thirty values in one.
+
+         The swimmer's own details sit on the right, where the eye starts in
+         Arabic, and the declarations and the money beside them. Read right to
+         left and top to bottom the sections come in their usual order, so they
+         are not renumbered. */
+      +   '<div class="s-cols">'
+      +     '<div class="s-col">'
+      +       block(headSwimmer, 'بيانات الرياضي', identity)
+      +     '</div>'
+      +     '<div class="s-col">'
+      +       block(headGuardian, 'ولي الأمر', guardian)
+      +       block(headMedical, 'الفحص الطبي', '', medical)
+      +       block(headMoney, 'الاشتراك والدفع', '', money_rows)
+      +       (rec.notes ? '<section class="s-block"><h2>ملاحظة الرياضي</h2>'
+      +         '<p class="s-notes">' + esc(rec.notes) + '</p></section>' : '')
+      +     '</div>'
       +   '</div>'
       + '</div>'
 
@@ -345,49 +382,64 @@
       +   'padding-bottom:.3mm;white-space:nowrap;overflow:hidden;direction:rtl;text-align:right;'
       +   'background:transparent;border:0;outline:0;box-shadow:none}'
 
-      /* --- the summary --- */
-      + '.s-page{position:relative;width:210mm;min-height:297mm;background:#fff;padding:12mm 14mm;'
+      /* --- the summary ---
+         A fixed 297 mm with the flow area clipped, so a summary is one page
+         whatever it carries. It used to be min-height, which let a minor with
+         every optional field run to 483 mm and come out as two sheets, the second
+         of them nearly empty. */
+      + '.s-page{position:relative;width:210mm;height:297mm;overflow:hidden;background:#fff;padding:9mm 12mm 8mm;'
       +   'page-break-after:always;break-after:page;display:flex;flex-direction:column}'
-      + '.s-head{display:flex;align-items:center;gap:8mm;border-bottom:2.5px solid #0a6f78;padding-bottom:3mm}'
-      + '.s-logo{width:16mm;height:16mm;border-radius:50%;flex:none;background:#fff}'
-      + '.s-head>div:nth-child(2){flex:1;display:flex;flex-direction:column;line-height:1.5}'
-      + '.s-head>div:nth-child(2) b{font-size:13pt;color:#075a61}'
-      + '.s-head>div:nth-child(2) span{font-size:9.5pt;color:#5c7b85}'
-      + '.s-no{text-align:left;display:flex;flex-direction:column;line-height:1.5}'
-      + '.s-no span{font-size:8.5pt;color:#5c7b85}'
-      + '.s-no b{font-size:11pt;color:#0b3b46}'
-      + '.s-page h1{font-size:14pt;color:#075a61;margin:6mm 0 1mm}'
-      + '.s-lead{margin:0 0 4mm;font-size:9.5pt;color:#5c7b85;line-height:1.6}'
-      + '.s-body{display:flex;gap:7mm;align-items:flex-start}'
-      + '.s-photo{width:34mm;height:42mm;flex:none;border:1px solid #cfe2e6;border-radius:2mm;'
-      +   'overflow:hidden;background:#f7fbfb;display:flex;flex-direction:column;align-items:center;justify-content:center}'
-      + '.s-photo img{width:100%;height:34mm;object-fit:cover;display:block}'
-      + '.s-photo span{font-size:8pt;color:#9db4bb}'
-      + '.s-photo small{font-size:7.5pt;color:#5c7b85;margin-top:2mm}'
-      + '.s-tables{flex:1;min-width:0}'
-      + '.s-page h2{font-size:11pt;color:#075a61;margin:5mm 0 1.5mm;padding-bottom:1mm;border-bottom:1px solid #cfe2e6}'
-      + '.s-page h2:first-child{margin-top:0}'
-      + '.s-page table{width:100%;border-collapse:collapse;font-size:9.5pt}'
-      + '.s-page th{width:34%;text-align:right;font-weight:600;color:#5c7b85;padding:1.1mm 1.5mm;'
-      +   'border-bottom:1px dotted #cfe2e6;vertical-align:top}'
-      + '.s-page td{padding:1.1mm 1.5mm;border-bottom:1px dotted #cfe2e6;vertical-align:top;word-break:break-word}'
-      + '.s-page tr.span2 th,.s-page tr.span2 td{width:auto}'
-      + '.s-page td.mono{direction:ltr;text-align:left;font-variant-numeric:tabular-nums}'
-      + '.s-page tr.total th,.s-page tr.total td{background:#e6f4f5;border-bottom:none;padding:2mm 1.5mm}'
-      + '.s-page tr.total td b{font-size:12pt;color:#075a61}'
-      /* a line to write the doctor in by hand */
-      + '.s-page td.blank{height:9mm;border-bottom:1px solid #12333f}'
-      + '.s-notes{margin:0;font-size:9.5pt;line-height:1.6;background:#f7fbfd;border:1px solid #cfe2e6;'
-      +   'border-radius:2mm;padding:2mm 3mm}'
-      + '.s-sign{display:flex;gap:10mm;margin-top:8mm}'
+      + '.s-head{display:flex;align-items:center;gap:5mm;border-bottom:2.5px solid #0a6f78;padding-bottom:2.2mm;flex:none}'
+      + '.s-logo{width:13mm;height:13mm;border-radius:50%;flex:none;background:#fff}'
+      + '.s-id{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.4}'
+      + '.s-id b{font-size:11.5pt;color:#075a61}'
+      + '.s-id span{font-size:8.8pt;color:#5c7b85}'
+      + '.s-photo{width:24mm;height:29mm;flex:none;border:1px solid #cfe2e6;border-radius:2mm;'
+      +   'overflow:hidden;background:#f7fbfd;display:flex;align-items:center;justify-content:center}'
+      + '.s-photo img{width:100%;height:100%;object-fit:cover;display:block}'
+      + '.s-photo span{font-size:7.6pt;color:#9db4bb}'
+      + '.s-no{text-align:left;display:flex;flex-direction:column;line-height:1.4;flex:none}'
+      + '.s-no span{font-size:8.2pt;color:#5c7b85}'
+      + '.s-no b{font-size:10pt;color:#0b3b46}'
+      + '.s-page h1{font-size:12.5pt;color:#075a61;margin:3mm 0 2.5mm;flex:none}'
+      + '.s-flow{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}'
+      + '.s-cols{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:6mm;align-items:start}'
+      + '.s-col{display:flex;flex-direction:column;gap:3.6mm;min-width:0}'
+      + '.s-block{min-width:0}'
+      + '.s-page h2{font-size:9.6pt;color:#075a61;margin:0 0 1.3mm;padding-bottom:.6mm;border-bottom:1px solid #cfe2e6}'
+      /* One value per line: each block already sits in half the page, and a grid
+         inside that only made the labels and values fight for the same space. */
+      + '.s-grid{display:grid;grid-template-columns:1fr;gap:1.2mm}'
+      + '.s-f{display:flex;gap:1.6mm;align-items:baseline;min-width:0;'
+      +   'border-bottom:.4px dotted #cfe2e6;padding-bottom:.65mm}'
+      + '.s-f b{font-weight:600;font-size:8pt;color:#5c7b85;white-space:nowrap;flex:none}'
+      + '.s-f span{font-size:9pt;color:#0b3b46;min-width:0;word-break:break-word;line-height:1.3}'
+      + '.s-f.s-wide{grid-column:1/-1}'
+      + '.s-mono span{direction:ltr;text-align:left;font-variant-numeric:tabular-nums}'
+      /* the three lines the doctor is written into by hand, side by side */
+      + '.s-med{display:flex;align-items:baseline;gap:1.2mm 2.6mm}'
+      + '.s-med span{font-size:8pt;color:#5c7b85;white-space:nowrap}'
+      + '.s-med i{flex:1;min-width:20mm;border-bottom:1px solid #12333f;height:4.5mm}'
+      + '.s-total{display:flex;align-items:baseline;gap:3mm;background:#e6f4f5;border-radius:1.5mm;'
+      +   'padding:1.2mm 2.6mm;margin-top:1mm}'
+      + '.s-total span{font-size:9pt;color:#5c7b85;font-weight:600}'
+      + '.s-total b{font-size:11.5pt;color:#075a61}'
+      /* The swimmer's note is the one thing here that can be any length at all, so
+         it is capped rather than allowed to push the signatures onto a second
+         sheet. What is cut says so, rather than stopping mid-word. */
+      + '.s-notes{margin:0;font-size:8.8pt;line-height:1.45;background:#f7fbfd;border:1px solid #cfe2e6;'
+      +   'border-radius:2mm;padding:1.4mm 2.6mm;max-height:13mm;overflow:hidden;'
+      +   'display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}'
+      + '.s-sign{display:flex;gap:10mm;margin-top:5mm;flex:none}'
       + '.s-sign>div{flex:1;display:flex;flex-direction:column;gap:1mm}'
       + '.s-sign span{font-size:9pt;color:#5c7b85}'
-      + '.s-sign i{display:block;height:11mm;border-bottom:1px solid #12333f}'
+      + '.s-sign i{display:block;height:10mm;border-bottom:1px solid #12333f}'
       + '.s-sign small{font-size:7.5pt;color:#9db4bb}'
-      + '.s-club{margin-top:7mm;border:1px dashed #cfe2e6;border-radius:2mm;padding:2.5mm 3.5mm;'
+      + '.s-club{flex:none;margin-top:3mm;border:1px dashed #cfe2e6;border-radius:2mm;padding:1.6mm 3mm;'
       +   'display:flex;flex-wrap:wrap;gap:2mm 8mm;font-size:8.5pt;color:#5c7b85}'
       + '.s-club b{color:#075a61;width:100%}'
-      + '.s-foot{margin-top:auto;padding-top:4mm;border-top:1px solid #cfe2e6;font-size:8.5pt;color:#5c7b85;text-align:center}'
+      + '.s-foot{flex:none;margin-top:auto;padding-top:2.5mm;border-top:1px solid #cfe2e6;'
+      +   'font-size:8.5pt;color:#5c7b85;text-align:center}'
       + '.s-foot small{display:block;margin-top:1mm;font-size:8pt;color:#9db4bb}'
 
       /* --- the club's own rules, one page, edge to edge --- */

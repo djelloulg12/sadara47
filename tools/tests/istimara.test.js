@@ -342,7 +342,9 @@ function fill(w, category) {
   for (const gone of ['د. بن عمر', 'طباعة رياضية', '2025-09-01', 'المصحة الجامعية']) {
     if (summary.includes(gone)) errors.push('[summary] the doctor is printed, but the club writes him by hand: ' + gone);
   }
-  if ((summary.match(/class="blank"/g) || []).length < 3) {
+  /* The three lines are drawn by .s-med i rather than by three empty table cells,
+     so the count is read from the markup that draws them. */
+  if ((summary.match(/<i><\/i>/g) || []).length < 3) {
     errors.push('[summary] no ruled line for the doctor to be written in by hand');
   }
   if (/doctor_|medical_date|medical_place/.test(PRINT.replace(/\/\*[\s\S]*?\*\//g, ''))) {
@@ -901,6 +903,52 @@ tasks.push(() => {
   }
   if (pool && reg && pool.y !== reg.y) {
     errors.push('[print] the registration number and the pool are not on the same line');
+  }
+}
+
+/* ---- 22) the summary is one page, whatever it has to carry ---- */
+{
+  const F = boot().SADARA_FORM;
+  const css = F.printCSS();
+  const rec = {
+    category: 'minor', application_no: 'APP-T', first_name_ar: 'x', last_name_ar: 'y',
+    birth_date: '2013-05-09', phone: '1', address: 'a', expected_amount: 1000,
+    first_name_fr: 'x', last_name_fr: 'y', birth_place: 'p', wilaya: 'w',
+    national_id: 'n', birth_certificate_no: 'b', blood_group: 'O+', level: 'متوسط',
+    whatsapp: '2', guardian_first_name: 'g', guardian_last_name: 'h',
+    guardian_birth_date: '1985-02-03', guardian_relation: 'أب',
+    guardian_phone: '3', guardian_national_id: '198502031122334455', guardian_consent: true,
+    subscription_code: 'quarter', facility: 'f', transport: true, uniform: true,
+    transport_amount: 1, uniform_amount: 2, payment_method: 'cash', notes: 'ملاحظة'
+  };
+  const html = F.summarySheet(rec);
+
+  /* A fixed height is the guarantee. min-height let a minor with every optional
+     field run to 483 mm and come out as two sheets, the second nearly empty. */
+  const page = /\.s-page\{([^}]*)\}/.exec(css);
+  if (!page) errors.push('[summary] the page has no size at all');
+  else {
+    if (!/height:297mm/.test(page[1])) errors.push('[summary] the page is not a fixed A4 height');
+    if (/min-height/.test(page[1])) errors.push('[summary] min-height lets the summary grow past one page');
+    if (!/overflow:hidden/.test(page[1])) errors.push('[summary] the page does not clip what does not fit');
+  }
+  /* Two columns of full-width fields, not three columns of squeezed ones: at
+     three across the labels and values stopped fitting and every one wrapped. */
+  if ((html.match(/class="s-col"/g) || []).length !== 2) {
+    errors.push('[summary] the summary is not laid out in two columns');
+  }
+  if (!/grid-template-columns:1fr 1fr/.test(css)) {
+    errors.push('[summary] the two columns are not side by side');
+  }
+  /* Nothing may be lost to the tightening: every value still has to be on the
+     page. The full list of values is checked separately, above; this is the
+     right-hand column, which is the one that grew. */
+  for (const needle of ['g', 'h', '03/02/1985', '198502031122334455']) {
+    if (!html.includes(needle)) errors.push('[summary] a value was lost in the new layout: ' + needle);
+  }
+  /* The one thing here that can be any length at all is the swimmer's own note. */
+  if (!/\.s-notes\{[^}]*max-height/.test(css)) {
+    errors.push('[summary] a long note is not capped, so it can push the signatures off the page');
   }
 }
 
