@@ -500,7 +500,9 @@
         username: record.username,
         role: 'member',
         /* The club's own wording for the three states, so the page and the
-           database never disagree about what a status means. */
+           database never disagree about what a status means. Written to
+           request_status, because `status` on the club's own accounts has always
+           meant whether the account may be used at all. */
         request_status: 'pending',
         phone: record.phone || '',
         birth_date: record.birth_date || '',

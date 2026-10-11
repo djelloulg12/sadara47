@@ -361,7 +361,10 @@ test('the door answers according to where the request stands', async () => {
     { status: 'rejected', gate: 'rejected', why: 'لا توجد شهادة سباحة سارية.' }
   ];
   for (const c of cases) {
-    DATA.users.u9 = { name: 'مقدّم', role: 'member', status: c.status, rejection_reason: c.why };
+    /* Written to request_status, not status: on the club's own accounts `status`
+       has always meant whether the account may be used at all, and putting the
+       request's state there would have silently disabled an account. */
+    DATA.users.u9 = { name: 'مقدّم', role: 'member', request_status: c.status, rejection_reason: c.why };
     const w = boot({ uid: 'u9', email: 'u9@x.dz' });
     const res = await call(w, '/api/login', 'POST', { email: 'u9@x.dz', password: 'x' });
     const gate = res.data.gate || {};

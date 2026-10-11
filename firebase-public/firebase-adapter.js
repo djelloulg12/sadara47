@@ -59,7 +59,11 @@
          one that predates this field -- the club owner and the first coaches --
          and is let through: reading "no answer" as "not allowed" would lock the
          people who run the club out of their own club. */
-      status: profile.status || '',
+      /* Where the person's request stands, read from request_status rather than
+         from status: on the club's own accounts `status` has always meant whether
+         the account may be used at all, and one column cannot answer both
+         questions at once. */
+      status: profile.request_status || '',
       rejection_reason: profile.rejection_reason || ''
     };
   };
@@ -160,6 +164,42 @@
       }
     }
     return claimsChecked;
+  };
+
+  /* Whether the requests can be read by whoever is registering.
+     The duplicate check is a lookup among the requests, and the requests are the
+     club's own business -- readable by management, not by somebody standing at a
+     form. So on a project whose rules keep it that way the check cannot run, and
+     a check that cannot run must not be reported as one that passed. */
+  let lookupChecked = null;
+  const duplicateLookupAvailable = async () => {
+    if (lookupChecked === null) {
+      try {
+        await db.collection('applications').limit(1).get();
+        lookupChecked = true;
+      } catch (error) {
+        lookupChecked = false;
+        console.warn('this project does not let a registration read the requests; duplicates are not checked', error);
+      }
+    }
+    return lookupChecked;
+  };
+
+  /* Whether a running count can be kept. Same question, same answer: asked, not
+     assumed, and a number that cannot be counted here is left to be counted when
+     the club accepts, where the counter can be written. */
+  let countersChecked = null;
+  const countersAvailable = async () => {
+    if (countersChecked === null) {
+      try {
+        await db.collection('counters').doc('_probe').get();
+        countersChecked = true;
+      } catch (error) {
+        countersChecked = false;
+        console.warn('this project has no rules for the registration counter', error);
+      }
+    }
+    return countersChecked;
   };
 
   /* Writes the claim, or reports that the name is already taken.
@@ -271,6 +311,7 @@
   const yearOf = () => new Date().getFullYear();
 
   const nextRegistrationId = async (kind, poolNo) => {
+    if (!await countersAvailable()) return '';
     const year = yearOf();
     const pool = Math.max(0, Math.min(99, Number(poolNo) || 0));
     const ref = db.collection('counters').doc('registration_' + year + '_' + pool);
@@ -715,8 +756,14 @@
            none of their own, is the birth certificate number with the year and
            the commune of birth. Either way the name is looked for before anything
            is written, and the answer is the club's own words rather than a refusal
-           with nothing behind it. */
-        const duplicate = await findDuplicate(body);
+           with nothing behind it.
+
+           Whether that lookup can run at all is asked first: the requests are the
+           club's own business and a project whose rules keep them that way will
+           not let a visitor read them. A check that cannot run is not reported as
+           one that passed -- it is reported as not run. */
+        const checked = await duplicateLookupAvailable();
+        const duplicate = checked ? await findDuplicate(body) : null;
         if (duplicate) {
           return jsonResponse({
             error: DUPLICATE_MESSAGE,
@@ -765,10 +812,12 @@
         if (enforcing && uid && body.email) claims.push(['email', normId(body.email)]);
         if (enforcing && uid && body.username) claims.push(['username', normId(body.username)]);
         if (enforcing && identity) claims.push([identity.kind, identity.key]);
-        /* Which of the two answers was used is written on the record, so the club
-           can see at the counter whether a name that was allowed through was
+        /* Which of the three answers was used is written on the record, so the
+           club can see at the counter whether a name that was allowed through was
            allowed by the database or by a check that ran a moment earlier. */
-        record.uniqueness = enforcing ? 'claimed' : 'query-only';
+        record.uniqueness = !enforcing ? 'query-only'
+          : (!checked ? 'not-checked' : 'claimed');
+        if (!checked) record.duplicate_check = 'could-not-run';
         for (const [kind, key] of claims) {
           if (!key) continue;
           if (await claimName(kind, key, uid)) {
@@ -827,10 +876,29 @@
         if (patch.status === 'approved') {
           const no = patch.application_no || appMatch[1];
           const src = (await db.collection('applications').doc(no).get()).data() || {};
+
+          /* The number is raised here when it could not be raised when the request
+             was filed: the counter is written by management, and acceptance is
+             management. A member leaves the club with a number either way, and the
+             specification allows the number at acceptance as well as at
+             registration. */
+          let registrationId = src.registration_id || '';
+          if (!registrationId) {
+            const pools = await rows('facilities');
+            const poolNo = poolNumberOf(src.facility_id || src.facility, pools.length ? pools : DEFAULT_FACILITIES);
+            registrationId = await nextRegistrationId(
+              src.application_type === 'coach' ? 'coach' : 'swimmer', poolNo);
+            if (registrationId) {
+              await db.collection('applications').doc(no).set({
+                registration_id: registrationId, pool_number: poolNo
+              }, { merge: true });
+            }
+          }
+
           if (src.application_type !== 'coach') {
             await db.collection('swimmers').doc(no).set({
-              membership_no: src.membership_no || src.registration_id || no,
-              registration_id: src.registration_id || '',
+              membership_no: src.membership_no || registrationId || no,
+              registration_id: registrationId,
               name: [src.first_name_ar, src.last_name_ar].filter(Boolean).join(' '),
               first_name_ar: src.first_name_ar || '', last_name_ar: src.last_name_ar || '',
               birth_date: src.birth_date || '', phone: src.phone || '',
@@ -848,9 +916,10 @@
              study" at their own front door. */
           if (src.applicant_uid) {
             await db.collection('users').doc(src.applicant_uid).set({
-              status: 'accepted',
-              registration_id: src.registration_id || '',
-              member_no: src.registration_id || '',
+              /* Where the request stands, on the account. */
+              request_status: 'accepted',
+              registration_id: registrationId,
+              member_no: registrationId,
               rejection_reason: firebase.firestore.FieldValue.delete(),
               decided_at: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
@@ -868,7 +937,7 @@
           }
           if (stored.applicant_uid) {
             await db.collection('users').doc(stored.applicant_uid).set({
-              status: 'rejected',
+              request_status: 'rejected',
               rejection_reason: why,
               decided_at: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
