@@ -98,34 +98,44 @@
      check answer "not seen before" for somebody already on the list. So the
      person reads and writes Arabic digits, and the database holds the one form
      both of those are converted to on the way through. */
-  var AR_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+  /* The club writes its numbers 0 1 2 3 4 5 6 7 8 9 and its dates year/month/day.
 
-  function arDigits(value) {
-    return String(value === undefined || value === null ? '' : value)
-      .replace(/[0-9]/g, function (d) { return AR_DIGITS[Number(d)]; });
-  }
+     One form, end to end, and that is deliberate: a number read off the sheet is
+     read aloud over a counter and typed back in to find the record, an identity
+     number is compared against the ones on file to catch the same person twice,
+     and a birth date is subtracted from today to work out an age.
 
-  /* Folded by code point, not through a table of characters: written out, the
-     Arabic-Indic and Persian sets are indistinguishable, and a table that quietly
-     lost one of them would leave the digits it was not asked about unchanged. A
-     subtraction cannot get that wrong. */
+     What is left to do is fold a number that arrives in Arabic-Indic digits, so
+     somebody copying one out of a message gets a number the club can read back --
+     and somebody who types ٠١٢٣ watches it become 0123 as they type, rather than
+     being told at the end that what they typed was not a number.
+
+     Folded by code point rather than through a table of characters: the
+     Arabic-Indic and Persian sets are indistinguishable on screen, and a table
+     that quietly lost one of them would fold the digits it was not asked about
+     and leave the rest. A subtraction cannot get that wrong. */
   function latinDigits(value) {
     return String(value === undefined || value === null ? '' : value)
-      .replace(/[٠-٩]/g, function (d) { return String(d.charCodeAt(0) - 0x0660); })
-      .replace(/[۰-۹]/g, function (d) { return String(d.charCodeAt(0) - 0x06F0); });
+      .replace(/[\u0660-\u0669]/g, function (d) { return String(d.charCodeAt(0) - 0x0660); })
+      .replace(/[\u06F0-\u06F9]/g, function (d) { return String(d.charCodeAt(0) - 0x06F0); });
+  }
+
+  /* What the person reads. One definition decides it for every field. */
+  function clubDigits(value) {
+    return latinDigits(value);
   }
 
   function pad2(v) { return String(v).length < 2 ? '0' + v : String(v); }
 
-  /* The date the club writes: 2026/10/11, in Arabic-Indic digits. Anything that
-     is not a plain date is passed through arDigits alone, so a note somebody typed
-     is still shown rather than dropped. */
+  /* The date the club writes: 2026/10/11. A date typed with dashes, or with a
+     one-digit month, is still a date and is laid out the same way. */
   function slashDate(value) {
     var raw = latinDigits(value);
     var m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw.trim());
-    if (!m) return arDigits(raw);
-    return arDigits(m[1] + '/' + pad2(m[2]) + '/' + pad2(m[3]));
+    if (!m) return latinDigits(value);
+    return m[1] + '/' + pad2(m[2]) + '/' + pad2(m[3]);
   }
+
 
   /* The same date for the database. '' when the text is not a date rather than a
      guess: a birth date that has been guessed is a member who is the wrong age on
@@ -170,20 +180,21 @@
     var text = latinDigits(raw);
     var digits = text.replace(/[^0-9]/g, '');
     var hasSep = /[-/.]/.test(text);
-    if (!hasSep && digits.length <= 4) return arDigits(digits);
-    if (!hasSep && digits.length <= 6) return arDigits(digits.slice(0, 4) + '/' + digits.slice(4));
-    if (!hasSep && digits.length <= 8) return arDigits(digits.slice(0, 4) + '/' + digits.slice(4, 6) + '/' + digits.slice(6));
+    if (!hasSep && digits.length <= 4) return clubDigits(digits);
+    if (!hasSep && digits.length <= 6) return clubDigits(digits.slice(0, 4) + '/' + digits.slice(4));
+    if (!hasSep && digits.length <= 8) return clubDigits(digits.slice(0, 4) + '/' + digits.slice(4, 6) + '/' + digits.slice(6));
     var m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(text.trim());
     if (m) return slashDate(m[1] + '-' + pad2(m[2]) + '-' + pad2(m[3]));
-    return arDigits(text.slice(0, 12));
+    return clubDigits(text.slice(0, 12));
   }
 
-  /* A number as it is finished: its digits shown in Arabic, and the spaces and
-     dashes a person reads a number with left exactly as they were typed -- those
-     are how it is written on the card and are not part of the number. */
+  /* A number as it is finished: folded to Latin and otherwise exactly as it was
+     typed. The spaces and dashes a person reads a number with are how it is
+     written on the card and are not part of the number, so they are left alone. */
   function layOutNumber(raw) {
-    return String(raw).replace(/[0-9]/g, function (d) { return AR_DIGITS[Number(d)]; });
+    return latinDigits(raw);
   }
+
 
   function listenForDigits() {
     NUMBER_FIELDS.concat(DATE_FIELDS).forEach(function (id) {
@@ -537,7 +548,7 @@
            club reads them. Both are laid out again rather than trusted, so a
            restored form never shows one shape while another shows the other. */
         node.value = DATE_FIELDS.indexOf(key) !== -1 ? slashDate(data[key])
-          : (NUMBER_FIELDS.indexOf(key) !== -1 ? arDigits(data[key]) : data[key]);
+          : (NUMBER_FIELDS.indexOf(key) !== -1 ? clubDigits(data[key]) : data[key]);
       }
     });
     state.photo = data.__photo || '';
@@ -759,8 +770,8 @@
     form.hidden = true;
     done.hidden = false;
 
-    el('done-no').textContent = arDigits(rec.application_no || '\u2014');
-    el('done-amount').textContent = arDigits(
+    el('done-no').textContent = clubDigits(rec.application_no || '\u2014');
+    el('done-amount').textContent = clubDigits(
       (Number(rec.expected_amount) || 0).toLocaleString('fr-DZ')) + ' دج';
     el('done-date').textContent = longDate();
 
@@ -781,7 +792,7 @@
          digits and dates as year/month/day. The request behind it holds the other
          form, and the two are converted into each other rather than stored twice. */
       else if (DATE_FIELDS.indexOf(key) !== -1) value = slashDate(value);
-      else if (NUMBER_FIELDS.indexOf(key) !== -1) value = arDigits(value);
+      else if (NUMBER_FIELDS.indexOf(key) !== -1) value = clubDigits(value);
       return '<div><span>' + F.esc(SUMMARY_LABELS[key]) + '</span><b>' + F.esc(value) + '</b></div>';
     }).join('');
     rows += '<div><span>الاشتراك</span><b>' + F.esc(rec.plan_name || rec.subscription_code || '') + '</b></div>';

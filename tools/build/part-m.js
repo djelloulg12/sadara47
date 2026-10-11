@@ -112,14 +112,14 @@ function luxuryCard(p, kind){
   const roleLabel = coach ? 'مدرب' : 'سباح';
   const name = p.coach_name || p.name || '';
   const fr = p.first_name_fr ? (p.first_name_fr + ' ' + (p.last_name_fr || '')).trim() : '';
-  const no = arDigits(p.membership_no || p.id || '');
+  const no = clubDigits(p.membership_no || p.id || '');
   const photo = (p.photo && /^(data:|https?:)/.test(p.photo)) ? p.photo : '';
   const phone = p.phone || CLUB.phone;
   const rows = coach
-    ? [['التخصص', p.specialty || 'مدرب سباحة'], ['سنوات الخبرة', arDigits((p.experience || '—') + ' سنة')],
+    ? [['التخصص', p.specialty || 'مدرب سباحة'], ['سنوات الخبرة', clubDigits((p.experience || '—') + ' سنة')],
        ['البريد الإلكتروني', p.email || '—'], ['الفوج', p.group_name || 'الطاقم الفني']]
     : [['الفوج', p.group_name || '—'], ['فصيلة الدم', p.blood_group || '—'],
-       ['تاريخ الالتحاق', arDigits(p.joined || '—')], ['الموسم', arDigits(CLUB.season)]];
+       ['تاريخ الالتحاق', clubDigits(p.joined || '—')], ['الموسم', clubDigits(CLUB.season)]];
   return '' +
   '<article class="lux-card ' + (coach ? 'is-coach' : 'is-swimmer') + '" data-no="' + esc(no) + '">' +
     '<div class="lux-side">' +
@@ -141,7 +141,7 @@ function luxuryCard(p, kind){
              filed by season, and the season used to appear only in the footer, at
              the far edge of a card 85 mm wide -- the one thing on it that says
              which year it is. */
-          '<b class="lux-season">' + esc(arDigits(CLUB.season)) + '</b>' +
+          '<b class="lux-season">' + esc(clubDigits(CLUB.season)) + '</b>' +
           /* The number stays in the digits it is quoted and looked up in. */
           '<b class="lux-no" dir="ltr">' + esc(no) + '</b>' +
         '</div>' +
@@ -153,11 +153,11 @@ function luxuryCard(p, kind){
         '</div>' +
         '<div class="lux-qr">' +
           '<div class="qr-code" data-qr="' + esc(no) + '"></div>' +
-          '<b class="lux-phone" dir="ltr">' + esc(arDigits(phone)) + '</b>' +
+          '<b class="lux-phone" dir="ltr">' + esc(clubDigits(phone)) + '</b>' +
           '<small>امسح لتسجيل الحضور</small>' +
         '</div>' +
       '</div>' +
-      '<div class="lux-foot"><span>' + esc(arDigits(CLUB.season)) + '</span><span>' + esc(CLUB.address) + '</span></div>' +
+      '<div class="lux-foot"><span>' + esc(clubDigits(CLUB.season)) + '</span><span>' + esc(CLUB.address) + '</span></div>' +
     '</div>' +
   '</article>';
 }

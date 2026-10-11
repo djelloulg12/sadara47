@@ -79,7 +79,7 @@ function seed(user) {
       /* Arabic-Indic digits: the club writes its numbers the way it writes its
          forms. Built from the number rather than typed out, so the expectation
          cannot be the wrong length. */
-      if (!/^SDR-[\u0660-\u0669]{4}$/.test(no.textContent.trim())) {
+      if (!/^SDR-[0-9]{4}$/.test(no.textContent.trim())) {
         errors.push('[2] the number is not in the club\'s digits: ' + no.textContent.trim());
       }
       const wrap = card.querySelector('.lux-photo-wrap');

@@ -116,7 +116,7 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
     if (!ys.some(y => Math.abs(y - target) < 0.05)) errors.push('[form] no spot on the rule at ' + target + 'mm');
   }
   if (!sheet.includes('جلول')) errors.push('[form] applicant name not filled in');
-  if (!sheet.includes('\u0662\u0660\u0661\u0662/\u0660\u0664/\u0661\u0667')) errors.push('[form] birth date not written year-first in Arabic digits: \u0662\u0660\u0661\u0662/\u0660\u0664/\u0661\u0667');
+  if (!sheet.includes('2012/04/17')) errors.push('[form] birth date not written year-first in Arabic digits: 2012/04/17');
   if (!/f-photo/.test(sheet)) errors.push('[form] photo frame missing');
   const px = w.__t.PHOTO_BOX;
   if (Math.abs(px.w - 36.4) > 0.3 || Math.abs(px.h - 42.5) > 0.3) errors.push('[form] photo box size drifted from the image');
@@ -221,17 +221,34 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
     errors.push('[adults] a minor form is missing boxes');
   }
 
-  /* "بن ___" is the surname, not the nationality: the declaration reads
-     "... السيد(ة) ___ المولود(ة) بتاريخ ___ بن ___", so the given name and the
-     surname are two separate blanks. Nationality has no blank on the form. */
+  /* One box for the name, carrying both names.
+
+     The declaration prints `اسمه` and `اللقب` over a single rule, so the given
+     name and the surname belong in one box. They were being split: the given
+     name in the name box and the surname in a box on the other side of the line
+     that is not a name box at all, which put a family name where the person
+     reads a date and made the name look as though it were in two places. */
   const vals = w.__t.formValues(Object.assign({}, adult, {
     category: 'minor', guardian_first_name: 'كريم', guardian_last_name: 'بلعيد'
   }));
-  if (vals.parent_name !== 'كريم') errors.push('[form] the declaration name is not the given name: ' + vals.parent_name);
-  if (vals.parent_last_name !== 'بلعيد') errors.push('[form] the بن line is not the surname: ' + vals.parent_last_name);
+  if (vals.parent_name !== 'كريم بلعيد') {
+    errors.push('[form] the declaration does not carry both names in the one box: '
+      + JSON.stringify(vals.parent_name));
+  }
+  /* And nothing claims to be a surname field that the form has no box for. */
+  if ('parent_last_name' in vals) {
+    errors.push('[form] a surname of its own is still being written into a box that is not a name box');
+  }
   if ('parent_nationality' in vals) errors.push('[form] the declaration still carries a nationality field');
-  const bnSpot = w.__t.FORM_SPOTS.find(s => s.id === 'parent_last_name');
-  if (!bnSpot) errors.push('[form] the بن line lost its spot');
+  /* The third box on the declaration line is left for the club to fill by hand.
+     Nothing is written into it, which is the point: the surname used to land
+     there, and it is not a name box. */
+  const stray = w.__t.FORM_SPOTS.filter(s => s.y === 208.78 && s.id !== 'parent_name' && s.id !== 'parent_birth');
+  for (const s of stray) {
+    if (vals[s.id] !== undefined && String(vals[s.id]).trim()) {
+      errors.push('[form] something is still written into the third box of the declaration: ' + s.id);
+    }
+  }
   cleanup(w);
 }
 

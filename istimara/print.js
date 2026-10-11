@@ -44,9 +44,8 @@
     { id: 'address',            y: 104.65, x0: 62.3, colon: 178.3 },
     { id: 'blood_group',        y: 114.45, x0: 62.1,  colon: 178.3 },
     { id: 'phone',              y: 124.25, x0: 62.3,  colon: 178.3 },
-        { id: 'parent_name',        y: 208.78, x0: 105.7, colon: 152.9 },
+        { id: 'parent_name',        y: 208.78, x0: 102.4, colon: 152.9 },
     { id: 'parent_birth',       y: 208.78, x0: 32.9,  colon: 71.9 },
-    { id: 'parent_last_name',   y: 208.78, x0: 4.2,   colon: 31.5 },
     { id: 'parent_id',          y: 217.70, x0: 106.0, colon: 149.4 },
     { id: 'card_issued_at',     y: 217.70, x0: 40.0,  colon: 73.3 },
     { id: 'card_place',         y: 217.70, x0: 4.2,   colon: 31.5 },
@@ -79,9 +78,16 @@
      one set of digits and looked up in the other is a number that cannot be
      found. Everything else -- dates, money, phone numbers, identity numbers, the
      season -- is read by eye off a printed page and is written this way. */
+  /* The club writes its numbers 0 1 2 3 4 5 6 7 8 9 and its dates year/month/day.
+     One form, end to end: a number read off the sheet is read aloud over a counter
+     and typed back in to find the record, and an identity number is compared
+     against the ones on file to catch the same person twice. What is left to do
+     here is fold a number that arrives in Arabic-Indic digits, so somebody copying
+     one out of a message gets a number the club can read back. */
   function ar(v) {
     return String(v === undefined || v === null ? '' : v)
-      .replace(/[0-9]/g, function (d) { return AR_DIGITS[Number(d)]; });
+      .replace(/[\u0660-\u0669]/g, function (d) { return String(d.charCodeAt(0) - 0x0660); })
+      .replace(/[\u06F0-\u06F9]/g, function (d) { return String(d.charCodeAt(0) - 0x06F0); });
   }
 
   function esc(v) {
@@ -100,9 +106,19 @@
      The value arrives from a date input as YYYY-MM-DD, so only the separators
      change and the order is already the one asked for. It used to be day first;
      the same function was doing the opposite of this. */
-  function slashDate(d) {
-    d = String(d || '');
-    return ar(/^\d{4}-\d{2}-\d{2}$/.test(d) ? d.split('-').join('/') : d);
+  /* The date the way the club writes it: 2026/10/11.
+
+     A date typed with slashes rather than dashes, or with a one-digit month, is
+     still a date and is laid out the same way -- the point is that every date on
+     every sheet reads the same, whichever way the person who typed it wrote it.
+     Anything that is not a date is left as it stands rather than dropped: a note
+     somebody wrote is not a date and is still worth printing. */
+  function slashDate(v) {
+    var raw = ar(v).trim();
+    var m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw);
+    if (!m) return ar(v);
+    return m[1] + '/' + (m[2].length < 2 ? '0' + m[2] : m[2])
+      + '/' + (m[3].length < 2 ? '0' + m[3] : m[3]);
   }
 
   /* Anchoring on the bottom edge keeps the value sitting on its rule whatever
@@ -134,9 +150,13 @@
       address: v('address'),
       blood_group: ar(v('blood_group')),
       phone: ar(v('phone')),
-            parent_name: v('guardian_first_name'),
+            /* One box for the name, carrying both names: the form asks for `اسمه` and
+         `اللقب` over a single rule, and a surname on its own in a box of its own
+         reads as though the name were split -- and put a family name where the
+         person expects to read a date. */
+      parent_name: [v('guardian_first_name'), v('guardian_last_name')]
+        .filter(Boolean).join(' '),
       parent_birth: slashDate(v('guardian_birth_date')),
-      parent_last_name: v('guardian_last_name'),
       parent_id: ar(v('guardian_national_id')),
       /* The place and the date of issue are the club's to fill in, so a public
          form leaves them on the blank line the scan already carries. */

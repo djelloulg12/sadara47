@@ -720,7 +720,7 @@ test('the database holds one form of a number and a date', async () => {
      preference: an identity number is compared against the ones on file to catch
      the same person registering twice, a registration number is read back out of
      itself to count the next one, and a birth date is subtracted from today to
-     work out an age. Storing ١٩٨٥ where those expect 1985 would make the club's
+     work out an age. Storing 1985 where those expect 1985 would make the club's
      own duplicate check answer "not seen before" for a member already on the list.
 
      Checked on a request that arrives in Arabic digits from a client that never

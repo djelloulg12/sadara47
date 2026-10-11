@@ -48,59 +48,56 @@ function printWindow(features) {
   return w;
 }
 
-/* ---------------------- الأرقام العربية في الطباعة ---------------------- */
-/* The club writes its documents in Arabic-Indic digits, the way its forms and its
-   section numbers already are.
+/* ---------------------- أرقام النادي ---------------------- */
+/* The club writes its numbers 0 1 2 3 4 5 6 7 8 9, the way Algeria writes them,
+   and its dates year/month/day: 2026/10/11.
 
-   Two directions, and both of them are needed:
+   Everything on screen and on paper reads its numbers through one helper, and so
+   does everything stored. That is deliberate rather than tidy:
 
-     arDigits   what a person reads. Applied to everything on screen and on paper.
-     latinDigits what a person types. Applied on the way in, so that a national
-                number typed in Arabic-Indic digits is stored, searched and
-                matched as the same number as one typed in Latin digits.
+     a number on the sheet is read aloud over a counter and typed into the
+       platform to find a record, and a number quoted in one set of digits and
+       looked up in the other is a number nobody can find
+     an identity number is compared against the ones on file to catch the same
+       person registering twice
+     a registration number is read back out of itself to count the next one
+     amounts are added up, and Firestore sorts by what it is given
 
-   The one place the two must not meet is the database. It holds Latin digits,
-   and that is not a preference: the registration number is read back out of
-   itself to count the next one, identity numbers are compared to catch the same
-   person registering twice, and amounts are added up. Storing ١٩٨٥ where the
-   comparison expects 1985 would make the club's own duplicate check answer "not
-   seen before" for a member who is already on the list. So Arabic digits are
-   what the club reads and what the club may type, and the database holds the one
-   form both of those are converted to. */
-const AR_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-function arDigits(v) {
-  return String(v === undefined || v === null ? '' : v)
-    .replace(/[0-9]/g, d => AR_DIGITS[Number(d)]);
-}
+   So one form, end to end, and no conversion at all on the ordinary path.
 
-/* Arabic-Indic digits turned back into Latin ones, and nothing else touched.
-
-   Folded by code point rather than through a table of characters, because a table
-   has to be typed and two of the three sets look identical on screen: written out
-   they are indistinguishable, and a table that quietly lost one of them would fold
-   the digits it was not asked about and leave the rest. A subtraction cannot.
-
-   Arabic-Indic is U+0660..U+0669. Persian and Urdu share the shapes and sit at
-   U+06F0..U+06F9; a person copying a number out of a message on one of those
-   phones should not be told it is not a number. */
+   What is left here is the one thing still worth doing: a number that arrives in
+   Arabic-Indic digits is folded to Latin on the way past. Somebody copying one out
+   of a message on a phone gets a number the club can read back, and somebody who
+   types ٠١٢٣ gets 0123 stored -- which is the same number. Folded by code point
+   rather than through a table of characters, because a table has to be typed and
+   the Arabic-Indic and Persian sets are indistinguishable on screen: written out
+   they look the same, and a table that quietly lost one of them would fold the
+   digits it was not asked about and leave the rest. A subtraction cannot. */
 function latinDigits(v) {
   return String(v === undefined || v === null ? '' : v)
     .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0) - 0x0660))
     .replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0) - 0x06F0));
 }
 
-/* A date the way the club writes it: 2026/10/11, in Arabic-Indic digits.
+/* What a person reads, the way the club writes numbers. The whole platform reads
+   through here -- a screen, a card, a printed sheet -- so one definition decides
+   it for all of them. */
+function clubDigits(v) {
+  return latinDigits(v);
+}
 
-   Anything that is not a plain date is passed through arDigits alone -- a note
-   somebody typed, a season written out -- rather than dropped. A date written
-   with Arabic digits already, or with slashes rather than dashes, is still a
-   date and is re-laid-out rather than left alone, because the whole point is that
-   every date on every sheet reads the same way. */
+/* A date the way the club writes it: 2026/10/11.
+
+   Anything that is not a plain date is passed through alone -- a note somebody
+   typed, a season written out -- rather than dropped. A date typed with slashes
+   rather than dashes, or with a one-digit month, is still a date and is laid out
+   the same way, because the whole point is that every date on every sheet reads
+   the same. */
 function slashDate(v) {
   const raw = latinDigits(v);
   const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw.trim());
-  if (!m) return arDigits(raw);
-  return arDigits(m[1] + '/' + String(m[2]).padStart(2, '0') + '/' + String(m[3]).padStart(2, '0'));
+  if (!m) return raw;
+  return m[1] + '/' + String(m[2]).padStart(2, '0') + '/' + String(m[3]).padStart(2, '0');
 }
 
 /* The same date for the database and for arithmetic: 2026-10-11, Latin digits.
@@ -184,7 +181,7 @@ pageView=function(p){
     const extra=list.length?'<section class="panel"><div class="panel-head"><div><h3>استمارة الإلحاق الرسمية</h3><p>تُطبع بتخطيط استمارة النادي — كل معلومة في مكانها</p></div>'
       +'<div class="toolbar-group"><button class="btn btn-primary" data-action="print-official-forms-all">🖨 كل الاستمارات</button>'
       +'<button class="btn btn-outline" data-action="print-official-blank">استمارة فارغة</button></div></div>'
-      +'<div class="official-forms-list">'+list.map(x=>'<button data-action="print-official-form" data-id="'+esc(x.id)+'"><b>'+esc(appName(x))+'</b><span>'+esc(x.application_no||'')+' · '+(x.status==='approved'?'مقبول':'قيد المراجعة')+'</span></button>').join('')+'</div>'
+      +'<div class="official-forms-list">'+list.map(x=>'<button data-action="print-official-form" data-id="'+esc(x.id)+'"><b>'+esc(appName(x))+'</b><span>'+esc(clubDigits(x.application_no||''))+' · '+(x.status==='approved'?'مقبول':'قيد المراجعة')+'</span></button>').join('')+'</div>'
       +'</section>':'';
     return '<div class="page-root" id="page-root">'+pageApplications()+extra+'</div>';
   }

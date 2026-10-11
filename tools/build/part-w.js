@@ -129,7 +129,7 @@ function downloadXml(filename, xml) {
 /* One definition of a registration's columns, used by both exports, so the CSV
    and the Excel file can never list different fields. */
 const REGISTRATION_COLUMNS = [
-  ['رقم الطلب', a => a.application_no || a.id || ''],
+  ['رقم الطلب', a => clubDigits(a.application_no || a.id || '')],
   /* A coach request has no swimmer identity, so it carries the coach's name in
      the same two columns rather than leaving the row nameless. */
   ['الاسم بالعربية', a => a.first_name_ar || a.coach_name || ''],

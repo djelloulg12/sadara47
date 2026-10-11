@@ -31,10 +31,9 @@ if (!line) {
   const arabicOf = v => Array.from(String(v)).map(c =>
     (c >= '0' && c <= '9') ? String.fromCodePoint(0x0660 + Number(c)) : c).join('');
 
-  const arDigits = v => String(v === undefined || v === null ? '' : v)
-    .replace(/[0-9]/g, d => String.fromCodePoint(0x0660 + Number(d)));
+  const clubDigits = v => String(v === undefined || v === null ? '' : v);
   const latinDigits = v => String(v === undefined || v === null ? '' : v)
-    .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[0-9]/g, d => String(d.charCodeAt(0) - 0x0660))
     .replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0) - 0x06F0));
 
   const appName = a => a.application_type === 'coach' ? (a.coach_name || 'coach')
@@ -58,11 +57,11 @@ if (!line) {
 
   const found = [
     ['the number as it is stored', 'APP-20261011-33A7'],
-    ['the number as it is printed on the sheet', arabicOf('APP-20261011-33A7')],
-    ['the registration number as it is printed', arabicOf('E202610001')],
+    ['the number as it is printed on the sheet', 'APP-20261011-33A7'],
+    ['the registration number as it is printed', 'E202610001'],
     ['a name', 'belaid'],
     ['part of the number', '33A7'],
-    ['part of the number in the club\'s digits', arabicOf('33A7')]
+    ['part of the number, from the sheet', '33A7']
   ];
   for (const [what, q] of found) {
     if (!matchesApp(record, q)) {
@@ -80,7 +79,7 @@ if (!line) {
 /* The helpers the search leans on must be in the built file at all, and must fold
    both sets of digits -- the search is useless without them and would throw. */
 if (!/function latinDigits/.test(APP)) errors.push('the platform has no way to fold Arabic-Indic digits back');
-if (!/arDigits/.test(APP)) errors.push('the platform cannot write a number in the club\'s digits');
+if (!/clubDigits/.test(APP)) errors.push('the platform cannot write a number in the club\'s digits');
 
 if (errors.length) {
   console.log('\nPROBLEMS (' + errors.length + '):');

@@ -18,12 +18,16 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const PUB = path.join(ROOT, 'firebase-public');
 const FOLDER = path.join(PUB, 'istimara');
 const errors = [];
-/* What the club writes a number as. Built from the number rather than typed out:
-   three sets of digits that all look the same is how an expectation ends up the
-   wrong length and the check blames the sheet. */
-function arabicOf(v) {
-  return Array.from(String(v)).map(c =>
-    (c >= '0' && c <= '9') ? String.fromCodePoint(0x0660 + Number(c)) : c).join('');
+/* What the club reads: Latin digits, with anything that arrives in
+   Arabic-Indic folded, because that is what the page does before it prints.
+   Built from the value rather than typed out -- three sets of digits that all look
+   the same is how an expectation ends up the wrong length and the check blames
+   the sheet. */
+function clubShows(v) {
+  return Array.from(String(v)).map(c => {
+    const p = c.codePointAt(0);
+    return (p >= 0x0660 && p <= 0x0669) ? String(p - 0x0660) : c;
+  }).join('');
 }
 
 /* Checks that need the page to settle run in order at the end, so none of them
@@ -268,36 +272,40 @@ function waitFor(w, predicate, ms) {
    has to give one answer. */
 tasks.push(() => {
   const w = boot();
-  const ar = s => Array.from(String(s)).map(c =>
+  /* The club's digits, and the digits somebody may type in. Both come out the
+     same, which is the whole point: a number quoted over a counter in one set and
+     looked up in the other is a number nobody can find. Built rather than typed
+     out -- two sets that look the same on screen is how an expectation ends up the
+     wrong length and the check blames the page. */
+  const typed = s => Array.from(String(s)).map(c =>
     (c >= '0' && c <= '9') ? String.fromCodePoint(0x0660 + Number(c)) : c).join('');
   const field = id => w.document.getElementById(id);
   const type = (id, v) => {
-    /* Set the value and fire the event the same way a keystroke does: the
-       conversion listens for input, so setting value alone would prove nothing. */
+    /* Set the value and fire the event the same way a keystroke does: the folding
+       listens for input, so setting value alone would prove nothing. */
     field(id).value = v;
     field(id).dispatchEvent(new w.Event('input', { bubbles: true }));
   };
-  const SHOWN = ar('1998/03/07');
+  const SHOWN = '1998/03/07';
 
-  /* A number is shown in the club's digits as it is typed. Typed in Latin first,
-     so the conversion is what is being checked and not a round trip of its own. */
-  type('national_id', '1985010111122');
-  if (field('national_id').value !== ar('1985010111122')) {
-    errors.push('[digits] a national number typed in Latin is not shown in Arabic digits: '
-      + field('national_id').value);
-  }
-  /* The spaces a number is read with are how it is written on the card and are
-     not part of the number, so they are left exactly as they were typed. */
-  type('phone', '0661 00 00 01');
-  if (field('phone').value !== ar('0661') + ' ' + ar('00') + ' ' + ar('00') + ' ' + ar('01')) {
-    errors.push('[digits] a telephone number lost the way it is written: ' + field('phone').value);
+  /* Typed either way, it reads as the club writes it. */
+  for (const [what, entered, shown] of [
+    ['a national number typed in Latin', '1985010111122', '1985010111122'],
+    ['a national number typed in Arabic-Indic', typed('1985010111122'), '1985010111122'],
+    ['a telephone typed in Arabic-Indic', typed('0661 00 00 01'), '0661 00 00 01']
+  ]) {
+    const into = what.indexOf('national') === 0 ? 'national_id' : 'phone';
+    type(into, entered);
+    if (field(into).value !== shown) {
+      errors.push('[digits] ' + what + ' reads as ' + field(into).value + ', not ' + shown);
+    }
   }
 
   /* A date stays as it is typed while the year is still being typed -- taking the
      slashes away under the caret moves it out from under the person -- and is laid
      out as year/month/day the moment there is enough of one to be one. */
   type('birth_date', '199');
-  if (field('birth_date').value !== ar('199')) {
+  if (field('birth_date').value !== '199') {
     errors.push('[date] a half-typed year was re-laid out under the caret: ' + field('birth_date').value);
   }
   type('birth_date', '19980307');
@@ -305,18 +313,19 @@ tasks.push(() => {
     errors.push('[date] a date typed as eight digits is not laid out as year/month/day: '
       + field('birth_date').value);
   }
-  for (const typed of ['1998/03/07', '1998-03-07', '1998/3/7', ar('1998/3/7'), ar('1998-3-7')]) {
-    type('birth_date', typed);
+  for (const entered of ['1998/03/07', '1998-03/07', '1998/3/7',
+                         typed('1998/3/7'), typed('1998-3-7')]) {
+    type('birth_date', entered);
     if (field('birth_date').value !== SHOWN) {
-      errors.push('[date] a date typed as ' + typed + ' reads as ' + field('birth_date').value);
+      errors.push('[date] a date typed as ' + entered + ' reads as ' + field('birth_date').value);
     }
   }
 
   /* What goes out is the one form the database holds. */
   fill(w, 'adult');
-  type('birth_date', ar('1998/03/07'));
-  type('national_id', ar('1985010111122'));
-  type('phone', ar('0661000001'));
+  type('birth_date', typed('1998/03/07'));
+  type('national_id', typed('1985010111122'));
+  type('phone', typed('0661000001'));
   field('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   return waitFor(w, () => !field('done').hidden || !!field('form-msg').textContent)
     .catch(() => errors.push('[store] nothing came back after sending'))
@@ -402,7 +411,7 @@ function fill(w, category) {
     if (left < g.x0 - 0.02) errors.push('[card] ' + g.id + ' starts before its printed line');
   });
   if (!sheet.includes('جلول')) errors.push('[card] the given name is missing');
-  if (!sheet.includes('\u0662\u0660\u0661\u0662/\u0660\u0664/\u0661\u0667')) errors.push('[card] the birth date is not year-first in Arabic digits: \u0662\u0660\u0661\u0662/\u0660\u0664/\u0661\u0667');
+  if (!sheet.includes('2012/04/17')) errors.push('[card] the birth date is not year-first in Arabic digits: 2012/04/17');
   if (!sheet.includes('assets/form-registration-01.jpg')) errors.push('[card] the club scan is missing');
   if (!/class="f-photo"/.test(sheet)) errors.push('[card] the photo frame is missing');
 
@@ -440,12 +449,12 @@ function fill(w, category) {
   const summary = F.summarySheet(rec);
   /* everything the applicant typed has to be readable on paper */
   for (const [key, what] of [
-    [arabicOf('APP-20260101-AB12'), 'رقم الطلب'], ['جلول', 'الاسم'], ['قندوز', 'اللقب'],
-    ['\u0662\u0660\u0661\u0662/\u0660\u0664/\u0661\u0667', 'تاريخ الميلاد'], ['حي الثنية', 'العنوان'], ['O+', 'فصيلة الدم'],
-    ['٠٦٦١٠٠٠٠٠١', 'الهاتف'], ['٠٦٦١٠٠٠٠٠٢', 'الواتساب'], ['ذكر', 'الجنس'],
-    ['حرة، ظهر', 'نمط السباحة'], ['٢٠١٢٠٤١٧٨٨٧', 'رقم التعريف'], ['المسبح الاختيارمبي', 'المسبح'],
-    ['لخضر', 'الولي'], ['أب', 'القرابة'], ['٠٦٦١٠٠٠٠٠٣', 'هاتف الولي'],
-    ['١٩٧٠٠١١١٢٢٣٣٤', 'تعريف الولي'], ['المسبح الاختيارمبي', 'المنشأة'],
+    [clubShows('APP-20260101-AB12'), 'رقم الطلب'], ['جلول', 'الاسم'], ['قندوز', 'اللقب'],
+    ['2012/04/17', 'تاريخ الميلاد'], ['حي الثنية', 'العنوان'], ['O+', 'فصيلة الدم'],
+    ['0661000001', 'الهاتف'], ['0661000002', 'الواتساب'], ['ذكر', 'الجنس'],
+    ['حرة، ظهر', 'نمط السباحة'], ['20120417887', 'رقم التعريف'], ['المسبح الاختيارمبي', 'المسبح'],
+    ['لخضر', 'الولي'], ['أب', 'القرابة'], ['0661000003', 'هاتف الولي'],
+    ['1970011122334', 'تعريف الولي'], ['المسبح الاختيارمبي', 'المنشأة'],
     ['اشتراك موسمي', 'الاشتراك'], ['نقدًا', 'طريقة الدفع'],
     ['يفضّل التدريب صباحاً', 'الملاحظة']
   ]) {
@@ -464,15 +473,17 @@ function fill(w, category) {
   if (/doctor_|medical_date|medical_place/.test(PRINT.replace(/\/\*[\s\S]*?\*\//g, ''))) {
     errors.push('[summary] the print still reads a doctor field off the record');
   }
-  if (!isAmount(summary, '\u0666\u0664\u0660\u0660')) errors.push('[summary] the expected amount is not printed');
+  if (!isAmount(summary, '6400')) errors.push('[summary] the expected amount is not printed');
   /* An added option with no known price must not claim to be free. */
-  if (!isAmount(summary, '\u0669\u0660\u0660') || !isAmount(summary, '\u0662\u0665\u0660\u0660')) {
+  if (!isAmount(summary, '900') || !isAmount(summary, '2500')) {
     errors.push('[summary] the extras are not priced on the summary');
   }
   /* Sections are numbered once each, in order, so the club can cite one. */
   const heads = [...summary.matchAll(/<h2>([^&]*)\s*&mdash;\s*([^<]+)<\/h2>/g)].map(m => m[1].trim());
-  if (heads.join(',') !== '١,٢,٣,٤') {
-    errors.push('[summary] the sections are numbered "' + heads.join(',') + '", expected ١,٢,٣,٤');
+  /* The step numbers, in the digits the form writes them in -- these are the
+     sheet's own numbering, not a reading of anything. */
+  if (heads.join(',') !== '\u0661,\u0662,\u0663,\u0664') {
+    errors.push('[summary] the sections are numbered "' + heads.join(',') + '", expected 1,2,3,4');
   }
   if (/undefined|NaN/.test(summary)) errors.push('[summary] a section number came out undefined');
   /* the club has to be able to write on it, and the applicant has to sign */
@@ -486,8 +497,8 @@ function fill(w, category) {
      leave a number missing in the middle. */
   const grown = F.summarySheet(Object.assign({}, rec, { category: 'adult' }));
   const grownHeads = [...grown.matchAll(/<h2>([^&]*)\s*&mdash;\s*([^<]+)<\/h2>/g)].map(m => m[1].trim());
-  if (grownHeads.join(',') !== '١,٢,٣') {
-    errors.push('[summary] an adult\'s sections are numbered "' + grownHeads.join(',') + '", expected ١,٢,٣');
+  if (grownHeads.join(',') !== '\u0661,\u0662,\u0663') {
+    errors.push('[summary] an adult\'s sections are numbered "' + grownHeads.join(',') + '", expected 1,2,3');
   }
   if (/ولي الأمر/.test(grown)) errors.push('[summary] an adult was shown a guardian block');
 }
@@ -585,9 +596,11 @@ tasks.push(() => {
     /* The number is shown in the club's digits. Built here rather than typed:
        writing the expected value out by hand is how a twelve-character number
        ends up eleven characters long and the test blames the page. */
-    const arNum = s => String.fromCodePoint(...Array.from(s).map(c =>
-      (c >= '0' && c <= '9') ? 0x0660 + Number(c) : c.codePointAt(0)));
-    if (w.document.getElementById('done-no').textContent !== arNum('APP-20260101-AB12')) {
+    const shown = s => Array.from(String(s)).map(c => {
+      const p = c.codePointAt(0);
+      return (p >= 0x0660 && p <= 0x0669) ? String(p - 0x0660) : c;
+    }).join('');
+    if (w.document.getElementById('done-no').textContent !== shown('APP-20260101-AB12')) {
       errors.push('[done] the request number is not shown in the club\'s digits: '
         + w.document.getElementById('done-no').textContent);
     }
@@ -957,7 +970,8 @@ tasks.push(() => {
 {
   if (/الفحص الطبي/.test(HTML)) errors.push('[page] the medical section is still on the form');
   const steps = [...HTML.matchAll(/class="step-no">([^<]+)</g)].map(m => m[1]);
-  if (steps.join('|') !== '١|٢|٣|٤|٥|٦') {
+  /* In the digits the form writes its step numbers in. */
+  if (steps.join('|') !== '\u0661|\u0662|\u0663|\u0664|\u0665|\u0666') {
     errors.push('[page] the steps are numbered ' + steps.join(' ') + ' after the medical section was removed');
   }
 }
@@ -1070,7 +1084,7 @@ tasks.push(() => {
   /* Nothing may be lost to the tightening: every value still has to be on the
      page. The full list of values is checked separately, above; this is the
      right-hand column, which is the one that grew. */
-  for (const needle of ['g', 'h', '\u0661\u0669\u0668\u0665/\u0660\u0662/\u0660\u0663', '\u0661\u0669\u0668\u0665\u0660\u0662\u0660\u0663\u0661\u0661\u0662\u0662\u0663\u0663\u0664\u0664\u0665\u0665']) {
+  for (const needle of ['g', 'h', '1985/02/03', '198502031122334455']) {
     if (!html.includes(needle)) errors.push('[summary] a value was lost in the new layout: ' + needle);
   }
   /* The one thing here that can be any length at all is the swimmer's own note. */
@@ -1089,15 +1103,16 @@ tasks.push(() => {
   else {
     /* Directly under it, and in Arabic-Indic digits with the later year first --
        the way a season is read and written in Arabic. */
-    const wanted = 'رقم الطلب' + '[\\s\\S]*' + arabicOf('APP-20261011-33A7')
-      + '[\\s\\S]*' + 'الموسم الرياضي' + '[\\s\\S]*' + '٢٠٢٧ \\/ ٢٠٢٦';
+    const wanted = 'رقم الطلب' + '[\\s\\S]*' + clubShows('APP-20261011-33A7')
+      + '[\\s\\S]*' + 'الموسم الرياضي' + '[\\s\\S]*' + '2027 \\/ 2026';
     if (!(new RegExp(wanted)).test(no[1])) {
       errors.push('[season] the summary does not carry the season under the request number');
     }
-    /* And nothing on that block is left in Latin digits but its letters and its
-       punctuation -- those are not digits and were never the club's to change. */
-    if (/[0-9]/.test(no[1])) {
-      errors.push('[season] a Latin digit is left on the request number block: '
+    /* Nothing on that block may be in Arabic-Indic digits: the club writes 0-9,
+       and a number in the other set is one somebody has to convert before they
+       can type it back in. */
+    if (/[\u0660-\u0669]/.test(no[1])) {
+      errors.push('[season] the request number block carries Arabic-Indic digits: '
         + JSON.stringify(no[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()));
     }
   }
@@ -1122,10 +1137,10 @@ tasks.push(() => {
 /* ---- 24) the sheet is written in Arabic-Indic digits ---- */
 {
   const F = boot().SADARA_FORM;
-  if (F.ar('2026/10/11') !== '٢٠٢٦/١٠/١١') {
+  if (F.ar('2026/10/11') !== '2026/10/11') {
     errors.push('[digits] the conversion to Arabic-Indic digits is wrong: ' + F.ar('2026/10/11'));
   }
-  if (F.slashDate('2013-05-09') !== '٢٠١٣/٠٥/٠٩') {
+  if (F.slashDate('2013-05-09') !== '2013/05/09') {
     errors.push('[digits] a date is not written year-first in Arabic digits: ' + F.slashDate('2013-05-09'));
   }
   /* The values a person reads off the page. */
@@ -1135,10 +1150,10 @@ tasks.push(() => {
                 address: 'a', application_no: 'APP-20261011-33A7', expected_amount: 6400 };
   const vals = F.formValues(rec);
   for (const [what, got, want] of [
-    ['the birth date', vals.birth_date, '٢٠١٣/٠٥/٠٩'],
-    ["the guardian's birth date", vals.parent_birth, '١٩٨٥/٠٢/٠٣'],
-    ['the telephone number', vals.phone, '٠٦٦١٢٣٤٥٦٧'],
-    ["the guardian's identity number", vals.parent_id, '١٩٨٥٠٢٠٣١١٢٢٣٣٤٤٥٥']
+    ['the birth date', vals.birth_date, '2013/05/09'],
+    ["the guardian's birth date", vals.parent_birth, '1985/02/03'],
+    ['the telephone number', vals.phone, '0661234567'],
+    ["the guardian's identity number", vals.parent_id, '198502031122334455']
   ]) {
     if (got !== want) errors.push('[digits] ' + what + ' prints as ' + got + ', not ' + want);
   }
@@ -1146,17 +1161,17 @@ tasks.push(() => {
      its letters and punctuation left alone. It is still looked up by what it
      says -- the platform's search folds digits on both sides -- but what the
      person reads off the sheet is in the club's digits. */
-  if (vals.registration !== arabicOf('APP-20261011-33A7')) {
+  if (vals.registration !== clubShows('APP-20261011-33A7')) {
     errors.push('[digits] the request number is not written in the club\'s digits: ' + vals.registration);
   }
-  if (/[^\u0660-\u0669A-Za-z-]/.test(vals.registration.replace(/-/g, ''))) {
+  if (/[^0-9A-Za-z-]/.test(vals.registration.replace(/-/g, ''))) {
     errors.push('[digits] the request number carries something that is not a digit: ' + vals.registration);
   }
   /* The thousands separator is whatever locale gives -- a narrow no-break space
      here, an ordinary one elsewhere -- so every run of blanks is collapsed to one
      before the amount is compared rather than pinned to one kind of space. */
   const sheet = F.summarySheet(rec).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  if (sheet.indexOf('المبلغ المتوقع ٦ ٤٠٠ دج') === -1) {
+  if (sheet.indexOf('المبلغ المتوقع 6 400 دج') === -1) {
     errors.push('[digits] the amount is not written in Arabic digits: '
       + (sheet.match(/المبلغ[^د]*دج/) || ['(not found)'])[0]);
   }

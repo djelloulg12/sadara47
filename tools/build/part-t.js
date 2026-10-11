@@ -74,7 +74,7 @@ function receiptSheet(a) {
   const today = new Date();
   const methodLabel = { cash: 'نقدًا', postal_check: 'صك بريدي', postal_transfer: 'حوالة بريدية', online: 'أونلاين' };
   const method = methodLabel[a.payment_method] || methodLabel.cash;
-  const receiptNo = (a.application_no || 'APP') + '-REC';
+  const receiptNo = clubDigits(a.application_no || 'APP') + '-REC';
   const row = l => '<tr><td>' + esc(l.label) + (l.detail ? '<br><small>' + esc(l.detail) + '</small>' : '') +
     '</td><td class="num">' + esc(money(l.amount)) + '</td></tr>';
   return '<section class="pk-page pk-receipt">' +
@@ -84,12 +84,12 @@ function receiptSheet(a) {
         '<div class="pk-stamp"><b>وصل</b><span dir="ltr">' + esc(receiptNo) + '</span></div>' +
       '</header>' +
       '<div class="pk-meta">' +
-        '<span>رقم الطلب</span><b dir="ltr">' + esc(a.application_no || '—') + '</b>' +
-        '<span>تاريخ الاستلام</span><b>' + esc(arDigits(today.toISOString().slice(0, 10).replace(/-/g, '/'))) + '</b>' +
+        '<span>رقم الطلب</span><b dir="ltr">' + esc(clubDigits(a.application_no || '—')) + '</b>' +
+        '<span>تاريخ الاستلام</span><b>' + esc(clubDigits(today.toISOString().slice(0, 10).replace(/-/g, '/'))) + '</b>' +
         '<span>الاسم واللقب</span><b>' + esc(appName(a) || '—') + '</b>' +
         '<span>الصفة</span><b>' + esc(catLabel(a.category === 'minor' ? 'minor' : 'adult')) + '</b>' +
         '<span>الفوج / المنشأة</span><b>' + esc(a.facility || '—') + '</b>' +
-        '<span>الهاتف</span><b dir="ltr">' + esc(arDigits(a.phone || '—')) + '</b>' +
+        '<span>الهاتف</span><b dir="ltr">' + esc(clubDigits(a.phone || '—')) + '</b>' +
       '</div>' +
       '<table class="pk-table"><thead><tr><th>البيان</th><th>المبلغ (دج)</th></tr></thead><tbody>' +
         lines.map(row).join('') +
@@ -107,7 +107,7 @@ function receiptSheet(a) {
       '<footer class="pk-foot">' +
         '<span>تُوقّع نسختان: واحدة للنادي وأخرى للولي/المنخرط.</span>' +
         '<span>ترفع النسخة الموقّعة إلى المنصة بعد الدخول بحساب المحاسب أو المسيّر.</span>' +
-        '<span>' + esc(CLUB.address) + ' · <span dir="ltr">' + esc(arDigits(CLUB.phone)) + '</span></span>' +
+        '<span>' + esc(CLUB.address) + ' · <span dir="ltr">' + esc(clubDigits(CLUB.phone)) + '</span></span>' +
       '</footer>' +
     '</div>' +
   '</section>';
@@ -184,7 +184,7 @@ function packetDocument(app, what) {
       : only === 'regs' ? '\u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u062f\u0627\u062e\u0644\u064a.'
         : '\u0627\u0644\u0627\u0633\u062a\u0645\u0627\u0631\u0629 \u0627\u0644\u0631\u0633\u0645\u064a\u0629.';
   return '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">' +
-    '<title>\u062d\u0632\u0645\u0629 \u062a\u0633\u062c\u064a\u0644 \u2014 ' + esc(CLUB_AR) + ' \u2014 ' + esc(arDigits(app.application_no || '')) + '</title>' +
+    '<title>\u062d\u0632\u0645\u0629 \u062a\u0633\u062c\u064a\u0644 \u2014 ' + esc(CLUB_AR) + ' \u2014 ' + esc(clubDigits(app.application_no || '')) + '</title>' +
     '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
     '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=block" rel="stylesheet">' +
     '<style>' + packetCSS() + '</style></head><body>' +
@@ -225,7 +225,7 @@ function registrationDoneModal(a) {
   box.innerHTML = '<div class="modal done-modal">' +
     '<div class="done-mark">✓</div>' +
     '<h2>تم استلام الطلب</h2>' +
-    '<p class="done-no">رقم الطلب <b dir="ltr">' + esc(a.application_no || '—') + '</b></p>' +
+    '<p class="done-no">رقم الطلب <b dir="ltr">' + esc(clubDigits(a.application_no || '—')) + '</b></p>' +
     '<p class="done-amount">المبلغ المستحق <b>' + esc(money(total)) + '</b> <small>' + esc(moneyWords(total)) + '</small></p>' +
     '<div class="done-steps">' +
       '<div><i>1</i><span>اضغط «طباعة الحزمة» لتحصل على الاستمارة الرسمية ووصل الاستلام والنظام الداخلي.</span></div>' +

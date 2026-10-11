@@ -37,21 +37,29 @@ w.eval(APP + '\n;window.__t={get state(){return state},render:render,action:acti
 w.__t.state.user = { id: 1, name: 'رئيس', role: 'admin' };
 
 
-/* What the club writes a number as. Built from the number rather than typed out:
-   three sets of digits that all look the same is how an expectation ends up the
-   wrong length and the check blames the sheet. */
-function arabicOf(v) {
-  return Array.from(String(v)).map(c =>
-    (c >= '0' && c <= '9') ? String.fromCodePoint(0x0660 + Number(c)) : c).join('');
+/* What the club reads: Latin digits, with anything that arrives in
+   Arabic-Indic folded, because that is what the page does before it prints.
+   Built from the value rather than typed out -- three sets of digits that all look
+   the same is how an expectation ends up the wrong length and the check blames
+   the sheet. */
+function clubShows(v) {
+  return Array.from(String(v)).map(c => {
+    const p = c.codePointAt(0);
+    return (p >= 0x0660 && p <= 0x0669) ? String(p - 0x0660) : c;
+  }).join('');
 }
 
 const errors = [];
-/* What the club writes a number as. Built from the number rather than typed out:
-   three sets of digits that all look the same is how an expectation ends up the
-   wrong length and the check blames the sheet. */
-function arabicOf(v) {
-  return Array.from(String(v)).map(c =>
-    (c >= '0' && c <= '9') ? String.fromCodePoint(0x0660 + Number(c)) : c).join('');
+/* What the club reads: Latin digits, with anything that arrives in
+   Arabic-Indic folded, because that is what the page does before it prints.
+   Built from the value rather than typed out -- three sets of digits that all look
+   the same is how an expectation ends up the wrong length and the check blames
+   the sheet. */
+function clubShows(v) {
+  return Array.from(String(v)).map(c => {
+    const p = c.codePointAt(0);
+    return (p >= 0x0660 && p <= 0x0669) ? String(p - 0x0660) : c;
+  }).join('');
 }
 
 
@@ -67,8 +75,8 @@ function arabicOf(v) {
   let sheet = '';
   try { sheet = w.__t.overlaySheet(applicant); } catch (e) { errors.push('overlaySheet threw: ' + e.message); }
   const pairs = [['background image','assets/form-registration-01.jpg'],['first name','\u0623\u0645\u064a\u0646'],
-    ['surname','\u0628\u0644\u0639\u064a\u062f'],['birth date','\u0662\u0660\u0661\u0662/\u0660\u0664/\u0661\u0667'],['blood','O+'],
-    ['phone','\u0660\u0666\u0666\u0661\u0660\u0660\u0660\u0660\u0660\u0661'],['guardian','\u0643\u0631\u064a\u0645'],['guardian id','\u0661\u0669\u0667\u0660\u0660\u0661\u0661\u0661\u0662\u0662\u0663\u0663\u0664'],
+    ['surname','\u0628\u0644\u0639\u064a\u062f'],['birth date','2012/04/17'],['blood','O+'],
+    ['phone','0661000001'],['guardian','\u0643\u0631\u064a\u0645'],['guardian id','1970011122334'],
     ['pool','\u0627\u0644\u0645\u0633\u0628\u062d \u0627\u0644\u062c\u0648\u0627\u0631\u064a \u0628\u0648\u0647\u0631\u0627\u0648\u0629']];
   for (const [label, needle] of pairs) if (!sheet.includes(needle)) errors.push('official overlay missing [' + label + ']');
   if (/undefined|NaN/.test(sheet)) errors.push('official overlay contains undefined/NaN');
@@ -88,7 +96,7 @@ function arabicOf(v) {
   const serial = byId.registration;
   const pool = byId.facility;
   if (!serial) errors.push('no spot for the registration number');
-  else if (serial.text !== arabicOf(applicant.application_no)) {
+  else if (serial.text !== clubShows(applicant.application_no)) {
     errors.push('the registration number is not printed whole in the club\'s digits: '
       + JSON.stringify(serial.text));
   } else {
@@ -133,9 +141,9 @@ function arabicOf(v) {
      that cannot be typed back in. */
   const printed = sheet.replace(/<[^>]+>/g, ' ');
   for (const [what, want] of [
-    ['the birth date', '٢٠١٢/٠٤/١٧'],
-    ['the telephone number', '٠٦٦١٠٠٠٠٠١'],
-    ["the guardian's identity number", '١٩٧٠٠١١١٢٢٣٣٤']
+    ['the birth date', '2012/04/17'],
+    ['the telephone number', '0661000001'],
+    ["the guardian's identity number", '1970011122334']
   ]) {
     if (!sheet.includes(want)) errors.push('the printed form has no ' + what
       + ' in Arabic digits: ' + want);
@@ -146,13 +154,15 @@ function arabicOf(v) {
   /* The serial on the sheet must be the applicant's request number and nothing
      else -- whole, in the club's digits, with its letters and punctuation left
      alone. A number cut short is a number the club cannot look up. */
-  if (!serial || serial.text !== arabicOf(applicant.application_no)) {
+  if (!serial || serial.text !== clubShows(applicant.application_no)) {
     errors.push('the registration number on the sheet is not the request number in the club\'s digits: '
       + JSON.stringify(serial && serial.text));
   }
-  /* And nothing anywhere on the sheet is left in Latin digits but its letters. */
-  if (/[0-9]/.test(printed.replace(/\d+(\.\d+)?mm/g, '').replace(/style="[^"]*"/g, ''))) {
-    errors.push('a Latin digit is still printed on a sheet');
+  /* Nothing on the sheet may be left in Arabic-Indic digits: the club writes
+     0-9, and a number in the other set is a number somebody has to convert before
+     they can type it back in. */
+  if (/[\u0660-\u0669]/.test(printed)) {
+    errors.push('a sheet carries Arabic-Indic digits, which the club does not write');
   }
 
   /* The card keeps a photograph, the season it was issued for, and the number,
@@ -167,11 +177,11 @@ function arabicOf(v) {
       errors.push('under the photograph the card reads ' + order.join(' > ') + '; it should be photo > season > number');
     }
   }
-  const SEASON_AR = '٢٠٢٧ / ٢٠٢٦';
+  const SEASON_AR = '2027 / 2026';
   if (!card.includes(SEASON_AR)) {
     errors.push('the card does not carry the season in Arabic digits, later year first');
   }
-  if (!card.includes('SDR-٠٠٤٢')) {
+  if (!card.includes('SDR-0042')) {
     errors.push('the card number is not printed in the club\'s digits');
   }
   if (!APP.includes('2027 / 2026')) {

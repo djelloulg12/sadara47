@@ -36,7 +36,7 @@ function attachScanModal(app) {
   box.innerHTML = '<div class="modal attach-modal">' +
     '<button class="close" data-action="close" aria-label="إغلاق">×</button>' +
     '<div class="modal-heading"><span class="logo">📄</span><h2>رفع النسخة الموقّعة</h2>' +
-    '<p>طلب <b dir="ltr">' + esc(app.application_no || app.id) + '</b> — ' + esc(appName(app)) + '</p></div>' +
+    '<p>طلب <b dir="ltr">' + esc(clubDigits(app.application_no || app.id)) + '</b> — ' + esc(appName(app)) + '</p></div>' +
     (app.scan_name ? '<p class="scan-current">مرفوع مسبقًا: <b>' + esc(app.scan_name) + '</b></p>' : '') +
     '<label>الاستمارة الموقّعة (PDF أو صورة)<input id="scan-file" type="file" accept="application/pdf,image/*"></label>' +
     '<label>ملاحظات<input id="scan-note" placeholder="مثال: وقّع عليها المحاسب بتاريخ 12/10"></label>' +
@@ -62,7 +62,7 @@ function receiptModal(app) {
   box.innerHTML = '<div class="modal receipt-modal">' +
     '<button class="close" data-action="close" aria-label="إغلاق">×</button>' +
     '<div class="modal-heading"><span class="logo">🧾</span><h2>وصل استلام المستحقات</h2>' +
-    '<p>طلب <b dir="ltr">' + esc(app.application_no || app.id) + '</b> — ' + esc(appName(app)) + '</p></div>' +
+    '<p>طلب <b dir="ltr">' + esc(clubDigits(app.application_no || app.id)) + '</b> — ' + esc(appName(app)) + '</p></div>' +
     '<table class="receipt-table"><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody>' +
       lines.map(l => '<tr><td>' + esc(l.label) + '</td><td class="num">' + esc(money(l.amount)) + '</td></tr>').join('') +
       '<tr class="pk-total"><td>الإجمالي</td><td class="num">' + esc(money(total)) + '</td></tr>' +

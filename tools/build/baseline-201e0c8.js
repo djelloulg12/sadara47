@@ -63,7 +63,7 @@ function dashboard() {
 function pageTitle(p){return ({home:'نظرة عامة',applications:'طلبات التسجيل',subscriptions:'إدارة الاشتراكات',users:'إدارة السباحين',schedule:'البرنامج الأسبوعي',attendance:'سجل الحضور',notices:'الإعلانات والتنبيهات',card:'بطاقات الانخراط',settings:'الإعدادات'}[p]||'نظرة عامة');}
 function pageView(p){ if(p==='applications')return applicationsPage(); if(p==='subscriptions')return subscriptionsPage(); if(p==='users')return usersPage(); if(p==='schedule')return schedulePage(); if(p==='attendance')return attendancePage(); if(p==='notices')return noticesPage(); if(p==='card')return cardPage(); if(p==='settings')return settingsPage(); return overview(); }
 function subscriptionsPage(){return `<div class="toolbar"><span class="page-description">الأسعار والخدمات التي يمكن لرئيس الجمعية تعديلها.</span><button class="btn btn-primary" data-action="refresh-data">↻ تحديث</button></div><div class="stats-grid subscription-grid">${state.subscriptions.map(s=>`<div class="stat-card"><span class="stat-icon blue">▣</span><small>${s.duration}</small><strong>${s.amount} دج</strong><b>${s.name}</b></div>`).join('')}</div><section class="panel"><div class="panel-head"><div><h3>الخدمات الإضافية المحسوبة آليًا</h3><p>النقل 900 دج · البدلة الرياضية 2500 دج</p></div></div><p class="page-description">يمكن تعديل الاشتراك والخدمات داخل كل طلب، ويعاد احتساب المبلغ وتسجيل القرار في سجل المراجعة.</p></section>`;}
-function overview(){ return `<section class="welcome"><div><span>الخميس، 02 أكتوبر 2026</span><h2>صباح الخير، محمد 👋</h2><p>إليك ملخص أداء النادي لهذا اليوم.</p></div><button class="btn btn-primary" data-page="users">+ إضافة سباح</button></section><div class="stats-grid"><div class="stat-card"><span class="stat-icon blue">♙</span><small>إجمالي السباحين</small><strong>${state.swimmers.length+117}</strong><em class="up">↑ 12% <i>من الشهر الماضي</i></em></div><div class="stat-card"><span class="stat-icon mint">✓</span><small>حضور اليوم</small><strong>92%</strong><em class="up">↑ 4.5% <i>من الأسبوع الماضي</i></em></div><div class="stat-card"><span class="stat-icon gold">▣</span><small>بطاقات نشطة</small><strong>108</strong><em class="neutral">مستقر <i>هذا الشهر</i></em></div><div class="stat-card"><span class="stat-icon red">!</span><small>طلبات معلقة</small><strong>06</strong><em class="down">↓ 2 <i>من الأسبوع الماضي</i></em></div></div><div class="content-grid"><section class="panel chart-panel"><div class="panel-head"><div><h3>نسبة الحضور</h3><p>آخر 7 أيام</p></div><select><option>هذا الأسبوع</option><option>هذا الشهر</option></select></div><div class="chart"><div class="chart-labels"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div><div class="bars">${[72,88,67,93,81,96,92].map((n,i)=>`<div class="bar-wrap"><div class="bar" style="height:${n}%"><b>${n}%</b></div><small>${['السبت','الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','اليوم'][i]}</small></div>`).join('')}</div></div></section><section class="panel"><div class="panel-head"><div><h3>آخر الإعلانات</h3><p>تحديثات النادي الأخيرة</p></div><a class="link" data-page="notices">عرض الكل</a></div>${state.notices.map(n=>`<div class="notice-row"><span class="notice-dot"></span><div><b>${esc(n.title)}</b><p>${esc(n.text)}</p><small>${n.date}</small></div></div>`).join('')}</section></div><section class="panel quick-panel"><div class="panel-head"><div><h3>الوصول السريع</h3><p>أكثر العمليات استخدامًا</p></div></div><div class="quick-actions"><button data-page="attendance">✓ <span>تسجيل الحضور</span></button><button data-page="users">♙ <span>إدارة السباحين</span></button><button data-page="schedule">▦ <span>عرض البرنامج</span></button><button data-page="card">▣ <span>طباعة بطاقة</span></button></div></section>`; }
+function overview(){ return `<section class="welcome"><div><span>الخميس، 02 أكتوبر 2026</span><h2>صباح الخير، محمد 👋</h2><p>إليك ملخص أداء النادي لهذا اليوم.</p></div><button class="btn btn-primary" data-page="users">+ إضافة سباح</button></section><div class="stats-grid"><div class="stat-card"><span class="stat-icon blue">♙</span><small>إجمالي السباحين</small><strong>${state.swimmers.length+117}</strong><em class="up">↑ 12% <i>من الشهر الماضي</i></em></div><div class="stat-card"><span class="stat-icon mint">✓</span><small>حضور اليوم</small><strong>92%</strong><em class="up">↑ 4.5% <i>من الأسبوع الماضي</i></em></div><div class="stat-card"><span class="stat-icon gold">▣</span><small>بطاقات نشطة</small><strong>108</strong><em class="neutral">مستقر <i>هذا الشهر</i></em></div><div class="stat-card"><span class="stat-icon red">!</span><small>طلبات معلقة</small><strong>06</strong><em class="down">↓ 2 <i>من الأسبوع الماضي</i></em></div></div><div class="content-grid"><section class="panel chart-panel"><div class="panel-head"><div><h3>نسبة الحضور</h3><p>آخر ٧ أيام</p></div><select><option>هذا الأسبوع</option><option>هذا الشهر</option></select></div><div class="chart"><div class="chart-labels"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div><div class="bars">${[72,88,67,93,81,96,92].map((n,i)=>`<div class="bar-wrap"><div class="bar" style="height:${n}%"><b>${n}%</b></div><small>${['السبت','الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','اليوم'][i]}</small></div>`).join('')}</div></div></section><section class="panel"><div class="panel-head"><div><h3>آخر الإعلانات</h3><p>تحديثات النادي الأخيرة</p></div><a class="link" data-page="notices">عرض الكل</a></div>${state.notices.map(n=>`<div class="notice-row"><span class="notice-dot"></span><div><b>${esc(n.title)}</b><p>${esc(n.text)}</p><small>${n.date}</small></div></div>`).join('')}</section></div><section class="panel quick-panel"><div class="panel-head"><div><h3>الوصول السريع</h3><p>أكثر العمليات استخدامًا</p></div></div><div class="quick-actions"><button data-page="attendance">✓ <span>تسجيل الحضور</span></button><button data-page="users">♙ <span>إدارة السباحين</span></button><button data-page="schedule">▦ <span>عرض البرنامج</span></button><button data-page="card">▣ <span>طباعة بطاقة</span></button></div></section>`; }
 function usersPage(){return `<div class="toolbar"><div class="search">⌕<input placeholder="ابحث عن سباح..." id="search"></div><button class="btn btn-primary" data-action="add-swimmer">+ إضافة سباح</button></div><section class="panel table-panel"><div class="panel-head"><div><h3>قائمة السباحين</h3><p>${state.swimmers.length} سجلات تجريبية — الموسم 2026/2027</p></div><button class="filter">تصفية ▾</button></div><div class="table-scroll"><table><thead><tr><th>السباح</th><th>رقم الانخراط</th><th>المجموعة</th><th>الهاتف</th><th>الحالة</th><th></th></tr></thead><tbody>${state.swimmers.map(s=>`<tr><td><span class="table-avatar">${s.name[0]}</span><b>${esc(s.name)}</b></td><td>${s.id}</td><td>${s.group}</td><td dir="ltr">${s.phone}</td><td><span class="status ${s.status==='نشط'?'success':'pending'}">${s.status}</span></td><td><button class="row-more">•••</button></td></tr>`).join('')}</tbody></table></div></section>`;}
 function schedulePage(){const rows=[['السبت','16:00 - 17:30','المبتدئون','المدرب سليم'],['الأحد','17:00 - 18:30','المتوسطون','المدرب سليم'],['الإثنين','16:00 - 18:00','المتقدمون','المدربة نادية'],['الثلاثاء','17:00 - 18:30','المبتدئون','المدرب سليم'],['الخميس','16:00 - 18:00','المتقدمون','المدربة نادية']];return `<div class="toolbar"><div class="week-switch"><button>‹</button><b>05 — 11 أكتوبر 2026</b><button>›</button></div><button class="btn btn-primary">+ إضافة حصة</button></div><section class="schedule-grid">${['السبت','الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة'].map(day=>{const r=rows.find(x=>x[0]===day);return `<div class="day-column"><h3>${day}<small>${r?'حصة واحدة':'راحة'}</small></h3>${r?`<article class="session"><span class="session-time">${r[1]}</span><strong>${r[2]}</strong><small>مسبح الصدارة</small><em>${r[3]}</em></article>`:'<div class="empty-day">لا توجد حصص</div>'}</div>`}).join('')}</section>`;}
 function attendancePage(){return `<div class="attendance-summary"><div><b>نسبة الحضور اليوم</b><strong>92%</strong></div><div><b>حاضر</b><strong class="green">110</strong></div><div><b>غائب</b><strong class="red-text">7</strong></div><div><b>متأخر</b><strong class="orange">3</strong></div></div><section class="panel table-panel"><div class="panel-head"><div><h3>حضور حصة اليوم</h3><p>الخميس، 02 أكتوبر 2026 · مجموعة المتقدمين</p></div><button class="btn btn-primary" data-action="mark-all">تأكيد الحضور</button></div><div class="table-scroll"><table><thead><tr><th>السباح</th><th>المجموعة</th><th>وقت الدخول</th><th>الحالة</th><th>تعديل</th></tr></thead><tbody>${state.swimmers.map((s,i)=>`<tr><td><span class="table-avatar">${s.name[0]}</span><b>${s.name}</b></td><td>${s.group}</td><td>${i===2?'—':'16:'+(i+2)+'5'}</td><td><span class="status ${i===2?'pending':'success'}">${i===2?'لم يسجل':'حاضر'}</span></td><td><button class="check-btn">${i===2?'تسجيل':'✓'}</button></td></tr>`).join('')}</tbody></table></div></section>`;}
@@ -334,13 +334,13 @@ const pad2=n=>String(n).padStart(2,'0');
 const isoDay=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 const todayISO=()=>isoDay(new Date());
 const longDate=(d=new Date())=>`${AR_DAYS[d.getDay()]}، ${slashDate(d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()))}`;
-const money=v=>`${arDigits(Number(v||0).toLocaleString('en-US'))} دج`;
+const money=v=>`${clubDigits(Number(v||0).toLocaleString('en-US'))} دج`;
 const sum=(list,f)=>list.reduce((t,x)=>t+(Number(typeof f==='function'?f(x):x[f])||0),0);
 const stateLabel=s=>s==='approved'?'مقبول':s==='rejected'?'مرفوض':s==='paid'?'مدفوع':s==='cancelled'?'ملغى':'قيد المراجعة';
 const planName=code=>(state.subscriptions||[]).find(p=>p.code===code)?.name||code||'—';
 const catLabel=c=>c==='minor'?'أصاغر':c==='adult'?'أكابر':c==='coach'?'مدرب':c||'—';
 const appName=a=>a.application_type==='coach'?(a.coach_name||'مدرب'):`${a.first_name_ar||''} ${a.last_name_ar||''}`.trim()||a.application_no||'—';
-const appContact=a=>a.application_type==='coach'?(a.coach_phone||a.coach_email||''):(a.phone||'');
+const appContact=a=>clubDigits(a.application_type==='coach'?(a.coach_phone||a.coach_email||''):(a.phone||''));
 const emptyRow=(cols,text)=>`<tr><td colspan="${cols}" class="empty-cell">${esc(text)}</td></tr>`;
 function firstName(){const n=(state.user?.name||'').trim();return n?n.split(/\s+/)[0]:'عضو النادي';}
 function groups(){return state.groups||[];}
@@ -357,14 +357,14 @@ function printArea(source,options={}){
   const head=document.createElement('header');
   head.className='print-head';
   head.innerHTML='<div class="print-head-main"><b>'+esc(CLUB.name)+' — '+esc(CLUB.unit)+'</b><span class="print-head-title">'+esc(options.title||'تقرير')+'</span>'+(options.sub?'<span class="print-head-sub">'+esc(options.sub)+'</span>':'')+'</div>'
-    +'<div class="print-head-side"><span>الموسم '+esc(CLUB.season)+'</span><span>'+esc(slashDate(options.date||longDate()))+'</span></div>';
+    +'<div class="print-head-side"><span>الموسم '+esc(clubDigits(CLUB.season))+'</span><span>'+esc(slashDate(options.date||longDate()))+'</span></div>';
   const body=document.createElement('div');
   body.className='print-body'+(options.variant?' print-'+options.variant:'');
   while(node.firstChild) body.appendChild(node.firstChild);
   host.appendChild(head);
   host.appendChild(body);
   if(options.notes) host.insertAdjacentHTML('beforeend','<div class="print-notes">'+options.notes+'</div>');
-  host.insertAdjacentHTML('beforeend','<footer class="print-foot"><span>'+esc(CLUB.address)+' — هاتف: <span dir="ltr">'+esc(arDigits(CLUB.phone))+'</span></span><span>'+esc(CLUB.email)+'</span></footer>');
+  host.insertAdjacentHTML('beforeend','<footer class="print-foot"><span>'+esc(CLUB.address)+' — هاتف: <span dir="ltr">'+esc(clubDigits(CLUB.phone))+'</span></span><span>'+esc(CLUB.email)+'</span></footer>');
   $('#app').appendChild(host);
   document.body.classList.add('printing');
   let done=false;
@@ -387,7 +387,7 @@ function printBtn(action,label){return '<button class="btn btn-outline" data-act
 function buildMembersTable(list,extraHead,extraCell){
   if(!list.length) return '<p class="empty-cell">لا يوجد سباحون مسجلون في هذه القائمة.</p>';
   return '<table class="print-table"><thead><tr><th>#</th><th>الاسم واللقب</th><th>رقم الانخراط</th><th>الفوج</th><th>الهاتف</th><th>الحالة</th>'+(extraHead||'')+'<th>التوقيع</th></tr></thead><tbody>'
-    +list.map((s,i)=>'<tr><td>'+(i+1)+'</td><td><b>'+esc(s.name||'')+'</b></td><td dir="ltr">'+esc(arDigits(s.id||''))+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(arDigits(s.phone||'—'))+'</td><td><span class="status '+(s.status==='نشط'?'success':'pending')+'">'+esc(s.status||'—')+'</span></td>'+(extraCell?'<td>'+extraCell(s)+'</td>':'')+'<td class="sign-cell"></td></tr>').join('')
+    +list.map((s,i)=>'<tr><td>'+(i+1)+'</td><td><b>'+esc(s.name||'')+'</b></td><td dir="ltr">'+esc(clubDigits(s.id||''))+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(clubDigits(s.phone||'—'))+'</td><td><span class="status '+(s.status==='نشط'?'success':'pending')+'">'+esc(s.status||'—')+'</span></td>'+(extraCell?'<td>'+extraCell(s)+'</td>':'')+'<td class="sign-cell"></td></tr>').join('')
     +'</tbody></table>';
 }
 function printGroupRoster(groupId){
@@ -396,7 +396,7 @@ function printGroupRoster(groupId){
   const list=swimmersOf(g.name);
   const box=document.createElement('section');
   box.className='roster';
-  box.innerHTML='<div class="roster-head"><div><h3>قائمة فوج '+esc(g.name)+'</h3><p>المدرب المشرف: '+esc(g.coach||'—')+' · البرنامج: '+esc(g.schedule||'—')+'</p></div><div class="roster-count"><b>'+list.length+'</b><small>سباح</small></div></div>'
+  box.innerHTML='<div class="roster-head"><div><h3>قائمة فوج '+esc(g.name)+'</h3><p>المدرب المشرف: '+esc(g.coach||'—')+' · البرنامج: '+esc(g.schedule||'—')+'</p></div><div class="roster-count"><b>'+clubDigits(list.length)+'</b><small>سباح</small></div></div>'
     +buildMembersTable(list,'<th>الحالة اليوم</th>',s=>{const a=attendanceOf(s.id);return '<span class="status '+(a?(a.status==='present'?'success':'pending'):'pending')+'">'+(a?ATTENDANCE_LABELS[a.status]||a.status:'لم يُسجّل')+'</span>';});
   printArea(box,{title:'قائمة الفوج',sub:g.name,variant:'roster'});
 }
@@ -414,7 +414,7 @@ function printAttendanceSheet(){
   const list=state.swimmers||[];
   const box=document.createElement('section');
   box.className='roster';
-  box.innerHTML='<div class="roster-head"><div><h3>كشف حضور حصة '+esc(slashDate(todayISO()))+'</h3><p>مسبح الصدارة · '+esc(slashDate(todayISO()))+'</p></div><div class="roster-count"><b>'+list.length+'</b><small>سباح</small></div></div>'
+  box.innerHTML='<div class="roster-head"><div><h3>كشف حضور حصة '+esc(slashDate(todayISO()))+'</h3><p>مسبح الصدارة · '+esc(slashDate(todayISO()))+'</p></div><div class="roster-count"><b>'+clubDigits(list.length)+'</b><small>سباح</small></div></div>'
     +(list.length?buildMembersTable(list,'<th>الحالة</th><th>وقت الدخول</th>',s=>{const a=attendanceOf(s.id);return '<span class="status '+(a?(a.status==='present'?'success':'pending'):'pending')+'">'+(a?ATTENDANCE_LABELS[a.status]||a.status:'لم يُسجّل')+'</span><br><small>'+esc(a&&a.at?String(a.at).slice(11,16):'—')+'</small>';}):'<p class="empty-cell">لا يوجد سباحة مسجلون.</p>');
   printArea(box,{title:'كشف الحضور',sub:longDate(),variant:'roster'});
 }
@@ -440,7 +440,7 @@ function printRegistrationFormA4(){
   const box=document.createElement('section');
   box.className='roster';
   box.innerHTML='<table class="print-table"><thead><tr><th>#</th><th>الاسم واللقب</th><th>رقم الانخراط</th><th>الفوج</th><th>الهاتف</th><th>الحالة</th></tr></thead><tbody>'
-    +(list.length?list.map((s,i)=>'<tr><td>'+(i+1)+'</td><td><b>'+esc(s.name||'')+'</b></td><td dir="ltr">'+esc(arDigits(s.id||''))+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(arDigits(s.phone||'—'))+'</td><td><span class="status success">سارية</span></td></tr>').join(''):emptyRow(6,'لا توجد بطاقات سارية.'))
+    +(list.length?list.map((s,i)=>'<tr><td>'+(i+1)+'</td><td><b>'+esc(s.name||'')+'</b></td><td dir="ltr">'+esc(clubDigits(s.id||''))+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(clubDigits(s.phone||'—'))+'</td><td><span class="status success">سارية</span></td></tr>').join(''):emptyRow(6,'لا توجد بطاقات سارية.'))
     +'</tbody></table>';
   printArea(box,{title:'استمارة انخراط — قائمة السباحين السارية',variant:'roster'});
 }
@@ -497,18 +497,18 @@ function pageOverview(){
   const cards=activeCards().length;
   const week=weeklyAttendance();
   const maxRate=week.reduce((m,d)=>Math.max(m,d.value||0),100);
-  return '<section class="welcome"><div><span>'+esc(longDate())+'</span><h2>مرحبًا، '+esc(firstName())+' 👋</h2><p>إليك ملخص أداء النادي لهذا اليوم.</p></div>'
+  return '<section class="welcome"><div><span>'+esc(slashDate(longDate()))+'</span><h2>مرحبًا، '+esc(firstName())+' 👋</h2><p>إليك ملخص أداء النادي لهذا اليوم.</p></div>'
     +'<button class="btn btn-primary" data-action="add-swimmer">+ إضافة سباح</button></section>'
     +'<div class="stats-grid">'
-    +'<div class="stat-card"><span class="stat-icon blue">♙</span><small>إجمالي السباحين</small><strong>'+sw.length+'</strong><em class="neutral">'+(sw.filter(s=>s.status==='نشط').length)+' <i>نشط</i></em></div>'
-    +'<div class="stat-card"><span class="stat-icon mint">✓</span><small>حضور اليوم</small><strong>'+(rate===null?'—':rate+'%')+'</strong><em class="neutral">'+Object.keys(state.attendance).length+' <i>تسجيل اليوم</i></em></div>'
-    +'<div class="stat-card"><span class="stat-icon gold">▣</span><small>بطاقات نشطة</small><strong>'+cards+'</strong><em class="neutral">'+esc(CLUB.season)+' <i>الموسم</i></em></div>'
-    +'<div class="stat-card"><span class="stat-icon red">!</span><small>طلبات معلقة</small><strong>'+pad2(pending)+'</strong><em class="neutral">'+money(collectedAmount())+' <i>محصّل</i></em></div>'
+    +'<div class="stat-card"><span class="stat-icon blue">♙</span><small>إجمالي السباحين</small><strong>'+clubDigits(sw.length)+'</strong><em class="neutral">'+clubDigits(sw.filter(s=>s.status==='نشط').length)+' <i>نشط</i></em></div>'
+    +'<div class="stat-card"><span class="stat-icon mint">✓</span><small>حضور اليوم</small><strong>'+(rate===null?'—':clubDigits(rate)+'%')+'</strong><em class="neutral">'+clubDigits(Object.keys(state.attendance).length)+' <i>تسجيل اليوم</i></em></div>'
+    +'<div class="stat-card"><span class="stat-icon gold">▣</span><small>بطاقات نشطة</small><strong>'+clubDigits(cards)+'</strong><em class="neutral">'+esc(clubDigits(CLUB.season))+' <i>الموسم</i></em></div>'
+    +'<div class="stat-card"><span class="stat-icon red">!</span><small>طلبات معلقة</small><strong>'+clubDigits(pad2(pending))+'</strong><em class="neutral">'+money(collectedAmount())+' <i>محصّل</i></em></div>'
     +'</div>'
     +'<div class="content-grid">'
-    +'<section class="panel chart-panel"><div class="panel-head"><div><h3>نسبة الحضور</h3><p>آخر 7 أيام — من سجل الحضور</p></div><a class="link" data-page="attendance">إدارة السجل ←</a></div>'
+    +'<section class="panel chart-panel"><div class="panel-head"><div><h3>نسبة الحضور</h3><p>آخر ٧ أيام — من سجل الحضور</p></div><a class="link" data-page="attendance">إدارة السجل ←</a></div>'
     +'<div class="chart"><div class="chart-labels"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div><div class="bars">'
-    +week.map(d=>'<div class="bar-wrap'+(d.isToday?' is-today':'')+'"><div class="bar'+(d.value===null?' empty':'')+'" style="height:'+Math.max(d.value||0,2)+'%"><b>'+(d.value===null?'—':d.value+'%')+'</b></div><small>'+esc(d.label)+'</small></div>').join('')
+    +week.map(d=>'<div class="bar-wrap'+(d.isToday?' is-today':'')+'"><div class="bar'+(d.value===null?' empty':'')+'" style="height:'+Math.max(d.value||0,2)+'%"><b>'+(d.value===null?'—':clubDigits(d.value)+'%')+'</b></div><small>'+esc(d.label)+'</small></div>').join('')
     +'</div></div></section>'
     +'<section class="panel"><div class="panel-head"><div><h3>آخر الإعلانات</h3><p>تحديثات النادي الأخيرة</p></div><a class="link" data-page="notices">عرض الكل</a></div>'
     +((state.notices||[]).length?state.notices.slice(0,4).map(n=>'<div class="notice-row"><span class="notice-dot"></span><div><b>'+esc(n.title)+'</b><p>'+esc(n.text)+'</p><small>'+esc(slashDate(n.date||''))+'</small></div></div>').join(''):'<p class="empty-cell">لا توجد إعلانات.</p>')
@@ -557,13 +557,13 @@ function pageApplications(){
     +printBtn('print-applications','طباعة القائمة')
     +'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button>'
     +'</div></div>';
-  const body='<section class="panel table-panel"><div class="panel-head"><div><h3>طلبات التسجيل والمدربين</h3><p>'+rows.length+' من '+list.length+' طلب — ملف المدربين لا يفتحه إلا رئيس النادي</p></div></div>'
+  const body='<section class="panel table-panel"><div class="panel-head"><div><h3>طلبات التسجيل والمدربين</h3><p>'+clubDigits(rows.length)+' من '+clubDigits(list.length)+' طلب — ملف المدربين لا يفتحه إلا رئيس النادي</p></div></div>'
     +'<div class="table-scroll"><table><thead><tr><th>رقم الطلب</th><th>رقم التسجيل</th><th>المتقدم</th><th>النوع</th><th>الاشتراك</th><th>المبلغ</th><th>الوثائق</th><th>الحالة</th><th>القرار</th><th></th></tr></thead><tbody>'
-    +(rows.length?rows.map(a=>'<tr><td dir="ltr">'+esc(a.application_no||a.id)+'</td>'
+    +(rows.length?rows.map(a=>'<tr><td dir="ltr">'+esc(clubDigits(a.application_no||a.id))+'</td>'
       /* The number the club reads off the card and the applicant is told at the
          counter. Beside the request number rather than instead of it: one is what
          the platform filed, the other is what the member is. */
-      +'<td dir="ltr">'+(a.registration_id?'<b>'+esc(arDigits(a.registration_id))+'</b>':'<small>—</small>')+'</td>'
+      +'<td dir="ltr">'+(a.registration_id?'<b>'+esc(clubDigits(a.registration_id))+'</b>':'<small>—</small>')+'</td>'
       +'<td><b>'+esc(appName(a))+'</b><br><small dir="ltr">'+esc(appContact(a)||'—')+'</small></td>'
       +'<td>'+esc(catLabel(a.application_type==='coach'?'coach':a.category))+'</td>'
       +'<td>'+esc(a.application_type==='coach'?'—':planName(a.subscription_code))+'<br><small>'+(a.transport?'النقل ':'')+(a.uniform?'البدلة':'')+'</small></td>'
@@ -619,10 +619,10 @@ function pageUsers(){
     +'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button>'
     +'<button class="btn btn-primary" data-action="add-swimmer">+ إضافة سباح</button>'
     +'</div></div>'
-    +'<section class="panel table-panel"><div class="panel-head"><div><h3>قائمة السباحين</h3><p>'+list.length+' من '+(state.swimmers||[]).length+' سجل — الموسم '+esc(CLUB.season)+'</p></div></div>'
+    +'<section class="panel table-panel"><div class="panel-head"><div><h3>قائمة السباحين</h3><p>'+clubDigits(list.length)+' من '+(state.swimmers||[]).length+' سجل — الموسم '+esc(clubDigits(CLUB.season))+'</p></div></div>'
     +'<div class="table-scroll"><table><thead><tr><th>السباح</th><th>رقم الانخراط</th><th>الفوج</th><th>الهاتف</th><th>الحالة</th><th>الحضور اليوم</th><th></th></tr></thead><tbody>'
     +(list.length?list.map(s=>{const a=attendanceOf(s.id);return '<tr><td><span class="table-avatar">'+esc((s.name||'?')[0])+'</span><b>'+esc(s.name||'')+'</b></td>'
-      +'<td dir="ltr">'+esc(arDigits(s.id||''))+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(arDigits(s.phone||'—'))+'</td>'
+      +'<td dir="ltr">'+esc(clubDigits(s.id||''))+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(clubDigits(s.phone||'—'))+'</td>'
       +'<td><span class="status '+(s.status==='نشط'?'success':'pending')+'">'+esc(s.status||'—')+'</span></td>'
       +'<td>'+(a?'<span class="status '+(a.status==='present'?'success':a.status==='late'?'late':'absent')+'">'+esc(ATTENDANCE_LABELS[a.status]||a.status)+'</span>':'<small>لم يُسجّل</small>')+'</td>'
       +'<td class="row-actions"><button class="check-btn" data-action="edit-swimmer" data-id="'+esc(s.id)+'">تعديل</button> <button class="check-btn no" data-action="delete-swimmer" data-id="'+esc(s.id)+'">حذف</button></td></tr>';}).join(''):emptyRow(7,'لا يوجد سباحون مطابقون.'))
@@ -638,7 +638,7 @@ function weekRange(offset){
   saturday.setDate(base.getDate()-backToSaturday+shift);
   const friday=new Date(saturday);
   friday.setDate(saturday.getDate()+5);
-  return {start:saturday,end:friday,label:pad2(saturday.getDate())+' — '+pad2(friday.getDate())+' '+AR_MONTHS[friday.getMonth()]+' '+friday.getFullYear()};
+  return {start:saturday,end:friday,label:clubDigits(pad2(saturday.getDate()))+' — '+clubDigits(pad2(friday.getDate()))+' '+AR_MONTHS[friday.getMonth()]+' '+clubDigits(friday.getFullYear())};
 }
 function pageSchedule(){
   const offset=state.weekOffset||0;
@@ -651,8 +651,8 @@ function pageSchedule(){
     const d=new Date(week);
     d.setDate(week.getDate()+i);
     const list=byDay[day]||byDay[day.replace('الإثنين','الاثنين')]||[];
-    return '<div class="day-column"><h3>'+esc(day)+'<small>'+pad2(d.getDate())+' '+AR_MONTHS[d.getMonth()]+' · '+(list.length?list.length+' حصة':'راحة')+'</small></h3>'
-      +(list.length?list.map(s=>'<article class="session"><span class="session-time">'+esc(s.time_range||'')+'</span><strong>'+esc(s.group_name||'')+'</strong><small>'+esc(s.pool||'مسبح الصدارة')+'</small><em>'+esc(s.coach||'')+'</em>'
+    return '<div class="day-column"><h3>'+esc(day)+'<small>'+clubDigits(pad2(d.getDate()))+' '+AR_MONTHS[d.getMonth()]+' · '+(list.length?list.length+' حصة':'راحة')+'</small></h3>'
+      +(list.length?list.map(s=>'<article class="session"><span class="session-time">'+esc(clubDigits(s.time_range||''))+'</span><strong>'+esc(s.group_name||'')+'</strong><small>'+esc(s.pool||'مسبح الصدارة')+'</small><em>'+esc(s.coach||'')+'</em>'
         +'<div class="session-actions"><button class="row-more" data-action="edit-session" data-id="'+esc(s.id)+'">تعديل</button><button class="row-more danger" data-action="delete-session" data-id="'+esc(s.id)+'">حذف</button></div></article>').join('')
         :'<div class="empty-day">لا توجد حصص</div>')
       +'</div>';
@@ -663,29 +663,29 @@ function pageSchedule(){
     +'<section class="schedule-grid">'+cols+'</section>'
     +'<section class="panel print-a4"><div class="panel-head"><div><h3>جدول الحصص الأسبوعي</h3><p>نسخة منظمة للطباعة على ورق A4</p></div></div>'
     +'<div class="table-scroll"><table><thead><tr><th>اليوم</th><th>التوقيت</th><th>الفوج</th><th>المدرب</th><th>المسبح</th></tr></thead><tbody>'
-    +(sessions.length?sessions.map(s=>'<tr><td><b>'+esc(s.day_name||'')+'</b></td><td dir="ltr">'+esc(s.time_range||'')+'</td><td>'+esc(s.group_name||'')+'</td><td>'+esc(s.coach||'')+'</td><td>'+esc(s.pool||'مسبح الصدارة')+'</td></tr>').join(''):emptyRow(5,'لا توجد حصص مبرمجة. استخدم زر "إضافة حصة".'))
+    +(sessions.length?sessions.map(s=>'<tr><td><b>'+esc(s.day_name||'')+'</b></td><td dir="ltr">'+esc(clubDigits(s.time_range||''))+'</td><td>'+esc(s.group_name||'')+'</td><td>'+esc(s.coach||'')+'</td><td>'+esc(s.pool||'مسبح الصدارة')+'</td></tr>').join(''):emptyRow(5,'لا توجد حصص مبرمجة. استخدم زر "إضافة حصة".'))
     +'</tbody></table></div></section>';
 }
 
 function pageAttendance(){
   const list=state.swimmers||[];
   const rate=attendanceRate();
-  const count=s=>list.filter(x=>{const a=attendanceOf(x.id);return a&&a.status===s;}).length;
+  const count=s=>list.filter(x=>{const a=attendanceOf(x.id);return a&&a.status===s;}).length; const shownCount = n => clubDigits(count(n));;
   const group=state.attendanceGroup||'all';
   const shown=group==='all'?list:swimmersOf(group);
   const opts=['present','late','absent'];
-  return '<div class="attendance-summary"><div><b>نسبة الحضور اليوم</b><strong>'+(rate===null?'—':rate+'%')+'</strong></div>'
-    +'<div><b>حاضر</b><strong class="green">'+count('present')+'</strong></div>'
-    +'<div><b>غائب</b><strong class="red-text">'+count('absent')+'</strong></div>'
-    +'<div><b>متأخر</b><strong class="orange">'+count('late')+'</strong></div></div>'
+  return '<div class="attendance-summary"><div><b>نسبة الحضور اليوم</b><strong>'+(rate===null?'—':clubDigits(rate)+'%')+'</strong></div>'
+    +'<div><b>حاضر</b><strong class="green">'+shownCount('present')+'</strong></div>'
+    +'<div><b>غائب</b><strong class="red-text">'+shownCount('absent')+'</strong></div>'
+    +'<div><b>متأخر</b><strong class="orange">'+shownCount('late')+'</strong></div></div>'
     +'<div class="toolbar"><div class="toolbar-group">'
     +'<select class="filter" id="attendance-group"><option value="all">كل الأفواج</option>'+groups().map(g=>'<option'+(g.name===group?' selected':'')+'>'+esc(g.name)+'</option>').join('')+'</select>'
     +printBtn('print-attendance','طباعة كشف الحضور')
     +'<button class="btn btn-outline" data-action="mark-all-present">✓ تأكيد الجميع</button>'
     +'<button class="btn btn-outline" data-action="reset-attendance">↺ تصفير</button>'
     +'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button>'
-    +'</div><span class="page-description">'+esc(longDate())+' · '+esc(slashDate(todayISO()))+'</span></div>'
-    +'<section class="panel table-panel"><div class="panel-head"><div><h3>حضور حصة اليوم</h3><p>'+shown.length+' سباح · اضغط على الحالة لتغييرها</p></div></div>'
+    +'</div><span class="page-description">'+esc(slashDate(longDate()))+' · '+esc(slashDate(todayISO()))+'</span></div>'
+    +'<section class="panel table-panel"><div class="panel-head"><div><h3>حضور حصة اليوم</h3><p>'+clubDigits(shown.length)+' سباح · اضغط على الحالة لتغييرها</p></div></div>'
     +'<div class="table-scroll"><table><thead><tr><th>السباح</th><th>الفوج</th><th>وقت الدخول</th><th>الحالة</th><th>تغيير الحالة</th></tr></thead><tbody>'
     +(shown.length?shown.map(s=>{const a=attendanceOf(s.id);const cur=a?a.status:'';return '<tr><td><span class="table-avatar">'+esc((s.name||'?')[0])+'</span><b>'+esc(s.name||'')+'</b></td>'
       +'<td>'+esc(s.group||'—')+'</td><td dir="ltr">'+(a&&a.at?esc(String(a.at).slice(11,16)||'—'):'—')+'</td>'
@@ -734,9 +734,9 @@ function pageSettings(){
     +'<label>اسم النادي<input id="club-name" value="'+esc(CLUB.name)+'"></label>'
     +'<label>الفوج<input id="club-unit" value="'+esc(CLUB.unit)+'"></label>'
     +'<label>العنوان<input id="club-address" value="'+esc(CLUB.address)+'"></label>'
-    +'<label>الهاتف<input id="club-phone" dir="ltr" value="'+esc(arDigits(CLUB.phone))+'"></label>'
+    +'<label>الهاتف<input id="club-phone" dir="ltr" value="'+esc(clubDigits(CLUB.phone))+'"></label>'
     +'<label>البريد الإلكتروني<input id="club-email" dir="ltr" value="'+esc(CLUB.email)+'"></label>'
-    +'<label>الموسم الرياضي<input id="club-season" value="'+esc(CLUB.season)+'"></label>'
+    +'<label>الموسم الرياضي<input id="club-season" value="'+esc(clubDigits(CLUB.season))+'"></label>'
     +'</div>'
     +'<p class="page-description">رابط الصفحة الرسمية: <a class="link" href="'+esc(CLUB.facebook)+'" target="_blank" rel="noopener noreferrer" dir="ltr">'+esc(CLUB.facebook)+'</a></p></section>'
     +'<section class="panel settings"><div class="panel-head"><div><h3>وثائق تسجيل المدربين</h3><p>حدد الوثائق التي يجب أن يرفعها كل متقدم قبل إرسال طلبه.</p></div>'
@@ -807,13 +807,13 @@ function roleHome(role){
     +'<p>'+(role==='coach'?'سجّل حضور السباحين ووتابع أفواجك لحظة بلحظة.':role==='parent'?'تابع حضور أبنائك وبطاقاتهم واشتراكاتهم.':me?'هذه بطاقتك وحضورك في فوج السباحة.':'آخر أخبار النادي وبرامجه بين يديك.')+'</p></div>'
     +'<div class="role-mark">'+({coach:'🏊‍♂️',parent:'👨‍👩‍👧',swimmer_adult:'🏊',swimmer_minor:'🏊',member:'⭐'}[role]||'⭐')+'</div></section>'
     +'<div class="role-cards">'
-    +'<article><span class="stat-icon blue">▦</span><small>الحصة القادمة</small><strong>'+esc(upcoming?(upcoming.day_name||'—'):'—')+'</strong><p>'+esc(upcoming?(upcoming.time_range||''):'لا توجد حصة مبرمجة')+'</p></article>'
-    +'<article><span class="stat-icon mint">✓</span><small>'+(role==='coach'?'نسبة الحضور':me?'حضوري':'بطاقات نشطة')+'</small><strong>'+(role==='coach'?(rate===null?'—':rate+'%'):(role==='member'?cards:(me?myAttendance().filter(a=>a.status==='present').length:'—')))+'</strong><p>'+(role==='coach'?'تسجيلات اليوم':'هذا الموسم')+'</p></article>'
+    +'<article><span class="stat-icon blue">▦</span><small>الحصة القادمة</small><strong>'+esc(upcoming?(upcoming.day_name||'—'):'—')+'</strong><p>'+esc(clubDigits(upcoming?(upcoming.time_range||''):'لا توجد حصة مبرمجة'))+'</p></article>'
+    +'<article><span class="stat-icon mint">✓</span><small>'+(role==='coach'?'نسبة الحضور':me?'حضوري':'بطاقات نشطة')+'</small><strong>'+(role==='coach'?(rate===null?'—':clubDigits(rate)+'%'):(role==='member'?cards:(me?myAttendance().filter(a=>a.status==='present').length:'—')))+'</strong><p>'+(role==='coach'?'تسجيلات اليوم':'هذا الموسم')+'</p></article>'
     +'<article><span class="stat-icon gold">▣</span><small>رقم الانخراط</small><strong class="role-no">'+esc(me?me.id:'—')+'</strong><p>'+esc(me?me.group:'غير مربوط بحساب')+'</p></article>'
     +'</div>'
     +'<div class="role-grid"><section class="panel"><div class="panel-head"><div><h3>'+(role==='coach'?'حصصي التدريبية':me?'آخر حصوري':'آخر إعلانات النادي')+'</h3><p>معلومات محدثة من إدارة النادي</p></div></div>'
     +(sessions.length&&role!=='member'
-      ?'<div class="role-list">'+sessions.slice(0,5).map(s=>'<div><b>'+esc(s.day_name||'')+' · '+esc(s.time_range||'')+'</b><span>'+esc(s.group_name||'')+' · '+esc(s.pool||'مسبح الصدارة')+' · '+esc(s.coach||'')+'</span></div>').join('')+'</div>'
+      ?'<div class="role-list">'+sessions.slice(0,5).map(s=>'<div><b>'+esc(s.day_name||'')+' · '+esc(clubDigits(s.time_range||''))+'</b><span>'+esc(s.group_name||'')+' · '+esc(s.pool||'مسبح الصدارة')+' · '+esc(s.coach||'')+'</span></div>').join('')+'</div>'
       :notes.length?'<div class="role-list">'+notes.map(n=>'<div><b>'+esc(n.title)+'</b><span>'+esc(n.text)+'</span></div>').join('')+'</div>'
       :'<p class="empty-cell">لا توجد بيانات لعرضها بعد.</p>')
     +'</section>'
@@ -826,10 +826,10 @@ function roleHome(role){
 }
 function roleSchedule(){
   const sessions=mySessions();
-  return '<section class="panel"><div class="panel-head"><div><h3>البرنامج الأسبوعي</h3><p>'+sessions.length+' حصة — الموسم '+esc(CLUB.season)+'</p></div>'
+  return '<section class="panel"><div class="panel-head"><div><h3>البرنامج الأسبوعي</h3><p>'+clubDigits(sessions.length)+' حصة — الموسم '+esc(clubDigits(CLUB.season))+'</p></div>'
     +printBtn('print-role-schedule','طباعة البرنامج')+'</div>'
     +(sessions.length?'<div class="table-scroll"><table><thead><tr><th>اليوم</th><th>التوقيت</th><th>الفوج</th><th>المدرب</th><th>المسبح</th></tr></thead><tbody>'
-      +sessions.map(s=>'<tr><td><b>'+esc(s.day_name||'')+'</b></td><td dir="ltr">'+esc(s.time_range||'')+'</td><td>'+esc(s.group_name||'')+'</td><td>'+esc(s.coach||'')+'</td><td>'+esc(s.pool||'مسبح الصدارة')+'</td></tr>').join('')
+      +sessions.map(s=>'<tr><td><b>'+esc(s.day_name||'')+'</b></td><td dir="ltr">'+esc(clubDigits(s.time_range||''))+'</td><td>'+esc(s.group_name||'')+'</td><td>'+esc(s.coach||'')+'</td><td>'+esc(s.pool||'مسبح الصدارة')+'</td></tr>').join('')
       +'</tbody></table></div>':'<p class="empty-cell">لا توجد حصص مبرمجة لفوجك بعد.</p>')
     +'</section>';
 }
@@ -838,11 +838,11 @@ function roleAttendance(){
   if(role==='coach'||role==='parent'){
     const list=role==='coach'?(state.swimmers||[]):[mySwimmer()].filter(Boolean);
     const rate=attendanceRate(list);
-    return '<div class="attendance-summary"><div><b>نسبة الحضور اليوم</b><strong>'+(rate===null?'—':rate+'%')+'</strong></div>'
-      +'<div><b>حاضر</b><strong class="green">'+list.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='present';}).length+'</strong></div>'
-      +'<div><b>غائب</b><strong class="red-text">'+list.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='absent';}).length+'</strong></div>'
-      +'<div><b>متأخر</b><strong class="orange">'+list.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='late';}).length+'</strong></div></div>'
-      +'<div class="toolbar"><span class="page-description">'+esc(longDate())+'</span><div class="toolbar-group">'
+    return '<div class="attendance-summary"><div><b>نسبة الحضور اليوم</b><strong>'+(rate===null?'—':clubDigits(rate)+'%')+'</strong></div>'
+      +'<div><b>حاضر</b><strong class="green">'+clubDigits(list.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='present';}).length)+'</strong></div>'
+      +'<div><b>غائب</b><strong class="red-text">'+clubDigits(list.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='absent';}).length)+'</strong></div>'
+      +'<div><b>متأخر</b><strong class="orange">'+clubDigits(list.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='late';}).length)+'</strong></div></div>'
+      +'<div class="toolbar"><span class="page-description">'+esc(slashDate(longDate()))+'</span><div class="toolbar-group">'
       +printBtn('print-role-attendance','طباعة الكشف')+(role==='coach'?'<button class="btn btn-primary" data-action="mark-all-present">✓ تأكيد الجميع</button>':'')+'</div></div>'
       +'<section class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>السباح</th><th>الفوج</th><th>الحالة</th>'+(role==='coach'?'<th>تغيير الحالة</th>':'')+'</tr></thead><tbody>'
       +(list.length?list.map(s=>{const a=attendanceOf(s.id);const cur=a?a.status:'';return '<tr><td><b>'+esc(s.name||'')+'</b></td><td>'+esc(s.group||'—')+'</td>'
@@ -853,11 +853,11 @@ function roleAttendance(){
   }
   const rows=myAttendance();
   const rate=attendanceRate(mySwimmer()?[mySwimmer()]:[]);
-  return '<div class="attendance-summary"><div><b>نسبة حضوري</b><strong>'+(rate===null?'—':rate+'%')+'</strong></div>'
+  return '<div class="attendance-summary"><div><b>نسبة حضوري</b><strong>'+(rate===null?'—':clubDigits(rate)+'%')+'</strong></div>'
     +'<div><b>حصص حضرتها</b><strong class="green">'+rows.filter(a=>a.status==='present').length+'</strong></div>'
     +'<div><b>غياب</b><strong class="red-text">'+rows.filter(a=>a.status==='absent').length+'</strong></div>'
     +'<div><b>تأخر</b><strong class="orange">'+rows.filter(a=>a.status==='late').length+'</strong></div></div>'
-    +'<div class="toolbar"><span class="page-description">سجل حضورك في الموسم '+esc(CLUB.season)+'</span>'+printBtn('print-role-attendance','طباعة السجل')+'</div>'
+    +'<div class="toolbar"><span class="page-description">سجل حضورك في الموسم '+esc(clubDigits(CLUB.season))+'</span>'+printBtn('print-role-attendance','طباعة السجل')+'</div>'
     +'<section class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>اليوم</th><th>الحالة</th></tr></thead><tbody>'
     +(rows.length?rows.map(a=>{const d=new Date(a.date);return '<tr><td dir="ltr">'+esc(slashDate(a.date))+'</td><td>'+esc(isNaN(d)?slashDate(a.date):AR_DAYS[d.getDay()])+'</td>'
       +'<td><span class="status '+(a.status==='present'?'success':a.status==='late'?'late':'absent')+'">'+esc(ATTENDANCE_LABELS[a.status]||a.status)+'</span></td></tr>';}).join(''):emptyRow(3,'لا يوجد سجل حضور بعد.'))
@@ -871,7 +871,7 @@ function roleCards(){
     +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-role-card">🖨 طباعة بطاقة</button>'
     +'<button class="btn btn-outline" data-action="print-all-cards">🖨 كل البطاقات</button></div></div>'
     +'<div class="membership-card"><span>'+esc(CLUB.name)+'</span><b>🏊</b><strong>بطاقة العضو</strong>'
-    +'<small>'+esc(me.group||CLUB.unit)+' · '+esc(CLUB.season)+'</small><div><i>'+esc(me.name||'')+'</i><i dir="ltr">'+esc(me.id||'')+'</i></div></div></section>'
+    +'<small>'+esc(me.group||CLUB.unit)+' · '+esc(clubDigits(CLUB.season))+'</small><div><i>'+esc(me.name||'')+'</i><i dir="ltr">'+esc(me.id||'')+'</i></div></div></section>'
     +'<section class="card-print-grid single">'+cardMarkup(me,0)+'</section>';
 }
 function roleNotices(){
@@ -886,7 +886,7 @@ function roleApplications(){
   return '<div class="toolbar"><span class="page-description">طلبات التسجيل والاشتراكات الخاصة بك.</span>'
     +'<div class="toolbar-group">'+printBtn('print-role-applications','طباعة')+'<button class="btn btn-primary" data-action="register-desk">+ طلب تسجيل جديد</button></div></div>'
     +'<section class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>رقم الطلب</th><th>الرياضي</th><th>الاشتراك</th><th>المبلغ</th><th>الحالة</th></tr></thead><tbody>'
-    +(mine.length?mine.map(a=>'<tr><td dir="ltr">'+esc(a.application_no||a.id)+'</td><td><b>'+esc(appName(a))+'</b></td><td>'+esc(planName(a.subscription_code))+'</td>'
+    +(mine.length?mine.map(a=>'<tr><td dir="ltr">'+esc(clubDigits(a.application_no||a.id))+'</td><td><b>'+esc(appName(a))+'</b></td><td>'+esc(planName(a.subscription_code))+'</td>'
       +'<td>'+esc(money(a.expected_amount))+'</td><td><span class="status '+(a.status==='approved'?'success':'pending')+'">'+esc(stateLabel(a.status))+'</span></td></tr>').join('')
       :emptyRow(5,'لا توجد طلبات. استخدم زر "طلب تسجيل جديد".'))
     +'</tbody></table></div></section>';
@@ -927,7 +927,7 @@ function swimmerModal(s){
     +'<label>الاسم واللقب *<input id="sw-name" value="'+esc(s?.name||'')+'"></label>'
     +'<label>رقم الانخراط<input id="sw-no" dir="ltr" value="'+esc(s?.id||'')+'"'+(isEdit?' disabled':'')+' placeholder="يُولَّد تلقائيًا"></label>'
     +'<label>الفوج<select id="sw-group">'+groupOptions(s?.group)+'</select></label>'
-    +'<label>الهاتف<input id="sw-phone" dir="ltr" value="'+esc(arDigits(s?.phone||''))+'"></label>'
+    +'<label>الهاتف<input id="sw-phone" dir="ltr" value="'+esc(clubDigits(s?.phone||''))+'"></label>'
     +'<label>الحالة<select id="sw-status"><option value="نشط"'+(s?.status==='نشط'?' selected':'')+'>نشط</option><option value="موقوف"'+(s?.status==='موقوف'?' selected':'')+'>موقوف</option><option value="بانتظار"'+(s?.status==='بانتظار'?' selected':'')+'>بانتظار</option></select></label>'
     +'</div>',
     'save-swimmer',s?' data-id="'+esc(s.id)+'"':'');
@@ -970,12 +970,12 @@ action=async function(a,el){
   if(a==='print-groups'){printGroupsSheet();return}
   if(a==='print-group'){printGroupRoster(el.dataset.group);return}
   if(a==='print-role-card'){const me=mySwimmer();if(me)printSingleCard(me.id);else showToast('حسابك غير مربوط ببطاقة انخراط.','error');return}
-  if(a==='print-role-schedule'){printTable('البرنامج الأسبوعي',['اليوم','التوقيت','الفوج','المدرب','المسبح'],mySessions().map(s=>'<tr><td><b>'+esc(s.day_name||'')+'</b></td><td dir="ltr">'+esc(s.time_range||'')+'</td><td>'+esc(s.group_name||'')+'</td><td>'+esc(s.coach||'')+'</td><td>'+esc(s.pool||'مسبح الصدارة')+'</td></tr>'),'الموسم '+CLUB.season);return}
+  if(a==='print-role-schedule'){printTable('البرنامج الأسبوعي',['اليوم','التوقيت','الفوج','المدرب','المسبح'],mySessions().map(s=>'<tr><td><b>'+esc(s.day_name||'')+'</b></td><td dir="ltr">'+esc(clubDigits(s.time_range||''))+'</td><td>'+esc(s.group_name||'')+'</td><td>'+esc(s.coach||'')+'</td><td>'+esc(s.pool||'مسبح الصدارة')+'</td></tr>'),'الموسم '+CLUB.season);return}
   if(a==='print-role-attendance'){
     if(state.user?.role==='coach'){printAttendanceSheet();return}
     printTable('سجل الحضور',['التاريخ','اليوم','الحالة'],myAttendance().map(x=>{const d=new Date(x.date);return '<tr><td dir="ltr">'+esc(slashDate(x.date))+'</td><td>'+esc(isNaN(d)?slashDate(x.date):AR_DAYS[d.getDay()])+'</td><td><span class="status success">'+esc(ATTENDANCE_LABELS[x.status]||x.status)+'</span></td></tr>';}),'الموسم '+CLUB.season);return}
   if(a==='print-role-notices'){printTable('إعلانات النادي',['العنوان','النص','النوع','التاريخ'],(state.notices||[]).map(n=>'<tr><td><b>'+esc(n.title)+'</b></td><td>'+esc(n.text)+'</td><td>'+esc(n.type||'')+'</td><td>'+esc(slashDate(n.date||''))+'</td></tr>')) ;return}
-  if(a==='print-role-applications'){const phone=String(state.user?.phone||'').replace(/\s/g,'');printTable('طلبات التسجيل',['رقم الطلب','الرياضي','الاشتراك','المبلغ','الحالة'],(state.applications||[]).filter(x=>String(x.phone||'').replace(/\s/g,'')===phone).map(x=>'<tr><td dir="ltr">'+esc(x.application_no||x.id)+'</td><td><b>'+esc(appName(x))+'</b></td><td>'+esc(planName(x.subscription_code))+'</td><td>'+esc(money(x.expected_amount))+'</td><td><span class="status success">'+esc(stateLabel(x.status))+'</span></td></tr>'));return}
+  if(a==='print-role-applications'){const phone=String(state.user?.phone||'').replace(/\s/g,'');printTable('طلبات التسجيل',['رقم الطلب','الرياضي','الاشتراك','المبلغ','الحالة'],(state.applications||[]).filter(x=>String(x.phone||'').replace(/\s/g,'')===phone).map(x=>'<tr><td dir="ltr">'+esc(clubDigits(x.application_no||x.id))+'</td><td><b>'+esc(appName(x))+'</b></td><td>'+esc(planName(x.subscription_code))+'</td><td>'+esc(money(x.expected_amount))+'</td><td><span class="status success">'+esc(stateLabel(x.status))+'</span></td></tr>'));return}
 
   /* ---------- الوثائق ---------- */
   if(a==='open-coach-doc'){
@@ -1110,7 +1110,7 @@ action=async function(a,el){
   if(a==='mark-all-present'){
     const list=state.swimmers||[];
     if(!list.length){showToast('لا يوجد سباحون لتسجيل حضورهم.','error');return}
-    if(!confirm('تسجيل حضور '+list.length+' سباح اليوم؟'))return;
+    if(!confirm('تسجيل حضور '+clubDigits(list.length)+' سباح اليوم؟'))return;
     let done=0;
     for(const s of list){
       try{await api('/api/attendance','POST',{member_id:s.id,swimmer_id:s.id,status:'present'});done++}catch(_){}

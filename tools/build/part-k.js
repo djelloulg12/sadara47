@@ -43,9 +43,8 @@ const FORM_SPOTS = [
   { id: 'address',            y: 104.65, x0: 62.3, colon: 178.3 },
   { id: 'blood_group',        y: 114.45, x0: 62.1,  colon: 178.3 },
   { id: 'phone',              y: 124.25, x0: 62.3,  colon: 178.3 },
-  { id: 'parent_name',        y: 208.78, x0: 105.7, colon: 152.9 },
+  { id: 'parent_name',        y: 208.78, x0: 102.4, colon: 152.9 },
   { id: 'parent_birth',       y: 208.78, x0: 32.9,  colon: 71.9 },
-  { id: 'parent_last_name',   y: 208.78, x0: 4.2,   colon: 31.5 },
   { id: 'parent_id',          y: 217.70, x0: 106.0, colon: 149.4 },
   { id: 'card_issued_at',     y: 217.70, x0: 40.0,  colon: 73.3 },
   { id: 'card_place',         y: 217.70, x0: 4.2,   colon: 31.5 },
@@ -74,20 +73,20 @@ function formValues(a){
      -- the way the club writes them. A reference number is the exception and is
      left alone: it is the one thing a person has to read back and look up. */
   const slashDate = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))
-    ? arDigits(String(d).split('-').join('/')) : arDigits(String(d || ''));
+    ? clubDigits(String(d).split('-').join('/')) : clubDigits(String(d || ''));
   return {
     /* The pool, on the line the scan draws for it. */
     facility: v('facility'),
     /* A registration number is the club's own until one is issued; before that
        it is the number of the request. The last eight characters of a request
        number were never a number anyone could look up. */
-    registration: arDigits(v('membership_no') || v('application_no')),
+    registration: clubDigits(v('membership_no') || v('application_no')),
     first_name: v('first_name_ar'),
     last_name: v('last_name_ar'),
     birth_date: slashDate(a && a.birth_date),
     address: v('address'),
-    blood_group: arDigits(v('blood_group')),
-    phone: arDigits(v('phone')),
+    blood_group: clubDigits(v('blood_group')),
+    phone: clubDigits(v('phone')),
     /* There is no doctor value. It used to be the swimmer's own name, written
        into the line reserved for the doctor who certifies them, and on a document
        the club keeps that is the wrong name in the wrong place. The scan has no
@@ -98,10 +97,14 @@ function formValues(a){
        so the given name and the surname are separate blanks, exactly as the
        identity block at the top separates الإسم from اللقب. Nationality has no
        blank of its own on this form, so nothing is written for it. */
-    parent_name: v('guardian_first_name'),
+    /* One box for the name, carrying both names: the form prints
+       `اسمه` and `اللقب` over a single rule. A surname in a box of
+       its own reads as though the name were split -- and put a family
+       name where the person expects to read a date. */
+    parent_name: [v('guardian_first_name'), v('guardian_last_name')]
+      .filter(Boolean).join(' '),
     parent_birth: slashDate(v('guardian_birth_date')),
-    parent_last_name: v('guardian_last_name'),
-    parent_id: arDigits(v('guardian_national_id')),
+    parent_id: clubDigits(v('guardian_national_id')),
     card_issued_at: slashDate(v('card_issue_date')),
     card_place: v('card_issue_place'),
     authorised_for: v('guardian_child')
