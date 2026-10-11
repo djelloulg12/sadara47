@@ -20,6 +20,7 @@
   'use strict';
 
   var FORM_BG = '/assets/form-registration-01.jpg';
+  var REGS_BG = '/assets/internal-regulations.jpg';
   var PAGE_W = 210, PAGE_H = 297;          // A4 in millimetres
   var PHOTO_BOX = { x: 22.1, y: 67.6, w: 36.4, h: 42.5 };
   var SPOT_GAP = 1.6;                      // clear paper between the colon and the value
@@ -28,7 +29,15 @@
   /* id, the printed rule it sits on, where that rule starts, and the left edge
      of the colon that ends its label -- all in millimetres from the page edge. */
   var FORM_SPOTS = [
-    { id: 'membership',         y: 61.95, x0: 90.8,  colon: 193.5 },
+    /* The top line carries two labels: "مسبح :" at the right, "رقم التسجيل:" at
+       the left. They shared one box, measured onto the pool's line, so the
+       registration number printed beside the word مسبح and its own place stayed
+       empty. Measured off the scan: the pool's line runs 90-190 mm and begins a
+       millimetre after the pool's colon, and the margin left of رقم التسجيل: is
+       empty. So the pool takes the line, and the number takes the far left of
+       the same line, which is where it is being asked to go. */
+    { id: 'facility',          y: 61.95, x0: 90.8,  colon: 191.1 },
+    { id: 'registration',      y: 61.95, x0: 2.0,   colon: 35.6 },
     { id: 'first_name',         y: 75.25, x0: 62.3,  colon: 178.3 },
     { id: 'last_name',          y: 85.05, x0: 62.3,  colon: 178.3 },
     { id: 'birth_date',         y: 94.85, x0: 62.3,  colon: 178.3 },
@@ -91,7 +100,11 @@
     rec = rec || {};
     var v = function (k) { return rec[k] ? rec[k] : ''; };
     return {
-      membership: v('membership_no') || v('application_no'),
+      /* The pool, on the line the scan draws for it. */
+    facility: v('facility'),
+    /* A registration number is the club's own until one is issued; before that
+       it is the number of the request. */
+    registration: v('membership_no') || v('application_no'),
       first_name: v('first_name_ar'),
       last_name: v('last_name_ar'),
       birth_date: dayFirst(rec.birth_date),
@@ -108,6 +121,31 @@
       card_place: '',
       authorised_for: rec.guardian_child || ((v('first_name_ar') + ' ' + v('last_name_ar')).trim())
     };
+  }
+
+  /* Every value is drawn tight against its colon, as the rest of this form is.
+     That leaves one failure: a value too long for its box is cut at the edge
+     rather than run over the printed wording -- a request number, or a pool the
+     manager has renamed to something longer than the one measured here.
+
+     The box is the one thing that cannot give, because it is the size of a line
+     printed on the scan. So the letter size gives instead, measured on the page
+     that is about to print. Guessing a size in advance only moves the problem to
+     the next pool the club renames. */
+  function fitSpots(root) {
+    var nodes = (root || document).querySelectorAll('.f-spot');
+    var view = (root && root.defaultView) || window;
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      if (!node.textContent) continue;
+      node.style.fontSize = '';
+      var size = parseFloat(view.getComputedStyle(node).fontSize) || 16;
+      for (var guard = 0; guard < 24 && size > 6; guard++) {
+        if (node.scrollWidth <= node.clientWidth + 0.5) break;
+        size -= 0.5;
+        node.style.fontSize = size.toFixed(2) + 'px';
+      }
+    }
   }
 
   /* ---------------- page 1: the club's own card ---------------- */
@@ -273,6 +311,19 @@
       + '</section>';
   }
 
+  /* ---------------- page 3: the club's own rules ---------------- */
+
+  /* It goes out exactly as the club issued it: one A4 page with the scan filling
+     it edge to edge. No heading, no season line, no "sign here" stamp, no
+     signature row and no padding -- every one of those would print on top of the
+     document and make it no longer the original. It comes after the form so the
+     person signing at the club has what they are signing in front of them. */
+  function regulationsSheet() {
+    return '<section class="r-page">'
+      + '<img class="r-img" src="' + esc(REGS_BG) + '" alt="النظام الداخلي">'
+      + '</section>';
+  }
+
   /* ---------------- the printed document ---------------- */
   function printCSS() {
     return ''
@@ -339,6 +390,12 @@
       + '.s-foot{margin-top:auto;padding-top:4mm;border-top:1px solid #cfe2e6;font-size:8.5pt;color:#5c7b85;text-align:center}'
       + '.s-foot small{display:block;margin-top:1mm;font-size:8pt;color:#9db4bb}'
 
+      /* --- the club's own rules, one page, edge to edge --- */
+      + '.r-page{position:relative;width:210mm;height:297mm;overflow:hidden;background:#fff;'
+      +   'page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid}'
+      + '.r-page:last-of-type{page-break-after:auto;break-after:auto}'
+      + '.r-img{position:absolute;top:0;left:0;width:210mm;height:297mm;object-fit:fill;display:block}'
+
       /* on screen the sheets are shown as paper, one under the other */
       + '@media screen{body{background:#e9eef3;padding:10px;display:flex;flex-direction:column;align-items:center;gap:14px}'
       +   '.f-page,.s-page{box-shadow:0 10px 34px #0b3b4633;border-radius:2px;margin:0}'
@@ -346,7 +403,12 @@
       + '.f-hint{max-width:210mm;background:#fff;border:1px solid #cfe2e6;border-radius:10px;padding:10px 14px;'
       +   'font-size:12px;color:#16414d;margin-bottom:6px;text-align:center}'
       + '.f-hint b{color:#0a6f78}}'
-      + '@media print{.f-page,.s-page{width:210mm;margin:0}}';
+      + '@media print{.f-page,.s-page{width:210mm;margin:0}'
+      /* The bar above the form tells the person what to do with it: sign it and
+         bring it in. It is an instruction for the screen, not part of the
+         document, and left in the print it lands at the top of page one over
+         the club's own heading. */
+      +   '.f-hint{display:none}}'
   }
 
   function documentHTML(rec, options) {
@@ -354,7 +416,7 @@
     var title = options.title || ('استمارة التسجيل — ' + CLUB.ar);
     var hint = options.hint === false ? '' :
       '<div class="f-hint"><b>استمارة مكتملة.</b> '
-      + 'الصفحة الأولى استمارة النادي الرسمية، والثانية ملخّص البيانات. '
+      + 'الصفحة الأولى استمارة النادي الرسمية، والثانية ملخّص البيانات، والثالثة النظام الداخلي. '
       + 'وقّع الاستمارة ثم أحضرها إلى النادي. '
       + '<span dir="ltr">' + esc(rec && rec.application_no ? rec.application_no : '') + '</span></div>';
     return '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">'
@@ -367,6 +429,7 @@
       + hint
       + overlaySheet(rec)
       + summarySheet(rec)
+      + regulationsSheet()
       + '</body></html>';
   }
 
@@ -388,6 +451,12 @@
 
     var go = function () {
       try {
+        /* Measured here, on the document that is about to print and after the
+           webfont has arrived: a value that fits in the fallback face can be cut
+           off in the real one. The frame is written from here and is same-origin,
+           so the page is reached directly rather than through a script put into
+           the document. */
+        fitSpots(doc);
         frame.contentWindow.focus();
         frame.contentWindow.print();
       } catch (e) {
@@ -432,14 +501,17 @@
     FORM_SPOTS: FORM_SPOTS,
     GUARDIAN_SPOT: GUARDIAN_SPOT,
     CLUB: CLUB,
+    REGS_BG: REGS_BG,
     esc: esc,
     dayFirst: dayFirst,
     isAdult: isAdult,
     spotStyle: spotStyle,
     formValues: formValues,
     formPhotoData: formPhotoData,
+    fitSpots: fitSpots,
     overlaySheet: overlaySheet,
     summarySheet: summarySheet,
+    regulationsSheet: regulationsSheet,
     printCSS: printCSS,
     documentHTML: documentHTML,
     printRegistration: printRegistration

@@ -1766,7 +1766,14 @@ const PAGE_W = 210, PAGE_H = 297;   // A4 in millimetres
    place of issue have no line on the scan wide enough to hold them, so nothing
    is written over printed wording. */
 const FORM_SPOTS = [
-  { id: 'membership',         y: 61.95, x0: 90.8,  colon: 193.5 },
+  /* The top line of the scan carries two labels: "مسبح :" at the right and
+     "رقم التسجيل:" at the left. They had one box between them, measured onto
+     the pool's line -- so the registration number printed beside the word مسبح
+     and its own place stayed empty. The pool line runs 90-190 mm and begins a
+     millimetre after the pool's colon; the registration number takes the empty
+     margin at the far left, on the same line. */
+  { id: 'facility',          y: 61.95, x0: 90.8,  colon: 191.1 },
+  { id: 'registration',      y: 61.95, x0: 2.0,   colon: 35.6 },
   { id: 'first_name',         y: 75.25, x0: 62.3,  colon: 178.3 },
   { id: 'last_name',          y: 85.05, x0: 62.3,  colon: 178.3 },
   { id: 'birth_date',         y: 94.85, x0: 62.3,  colon: 178.3 },
@@ -1803,7 +1810,12 @@ function formValues(a){
   const dayFirst = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))
     ? String(d).split('-').reverse().join('/') : String(d || '');
   return {
-    membership: v('membership_no', a && a.application_no ? String(a.application_no).slice(-8) : ''),
+    /* The pool, on the line the scan draws for it. */
+    facility: v('facility'),
+    /* A registration number is the club's own until one is issued; before that
+       it is the number of the request. The last eight characters of a request
+       number were never a number anyone could look up. */
+    registration: v('membership_no') || v('application_no'),
     first_name: v('first_name_ar'),
     last_name: v('last_name_ar'),
     birth_date: dayFirst(a && a.birth_date),
@@ -1959,6 +1971,28 @@ function overlaySheet(a){
     + spots
     + '</section>';
 }
+/* Every value is drawn tight against its colon, as the rest of this form is.
+   That leaves one failure: a value too long for its box is cut at the edge
+   rather than run over the printed wording -- a request number, or a pool the
+   manager has renamed to something longer than the one measured here.
+
+   The box is the one thing that cannot give, because it is the size of a line
+   printed on the scan. So the letter size gives instead, measured on the page
+   that is about to print. Guessing a size in advance only moves the problem to
+   the next pool the club renames. */
+function fitSpots(root){
+  const nodes = (root || document).querySelectorAll('.f-spot');
+  for (const node of nodes) {
+    if (!node.textContent) continue;
+    node.style.fontSize = '';
+    let size = parseFloat(getComputedStyle(node).fontSize) || 16;
+    for (let guard = 0; guard < 24 && size > 6; guard++) {
+      if (node.scrollWidth <= node.clientWidth + 0.5) break;
+      size -= 0.5;
+      node.style.fontSize = size.toFixed(2) + 'px';
+    }
+  }
+}
 function officialFormCSS(){
   return '' +
 '@page{size:A4 portrait;margin:0}' +
@@ -1977,7 +2011,7 @@ function officialFormCSS(){
   'font-size:12.5pt;line-height:1.05;font-weight:700;color:#0b3b46;' +
   'padding-bottom:.3mm;white-space:nowrap;overflow:hidden;direction:rtl;text-align:right;' +
   'background:transparent;border:0;outline:0;box-shadow:none}' +
-'@media print{.f-page{width:210mm;height:297mm;margin:0}}' +
+'@media print{.f-page{width:210mm;height:297mm;margin:0}.f-hint{display:none}}' +
 '@media screen{body{background:#e9eef3;padding:10px;display:flex;flex-direction:column;align-items:center;gap:14px}' +
   '.f-page{box-shadow:0 10px 34px #0b3b4633;border-radius:2px}' +
   '.f-hint{max-width:210mm;background:#fff;border:1px solid #cfe2e6;border-radius:10px;padding:10px 14px;font-size:12px;color:#16414d;margin-bottom:6px}' +
@@ -2003,8 +2037,14 @@ function printOfficialForms(list){
   const go = () => {
     try {
       const ready = w.document.fonts && w.document.fonts.ready ? w.document.fonts.ready : Promise.resolve();
-      ready.then(() => setTimeout(() => { try { w.focus(); w.print(); } catch (_) {} }, 260));
-    } catch (_) { setTimeout(() => { try { w.print(); } catch (_) {} }, 700); }
+      /* Measured after the webfont has arrived, because a value that fits in the
+         fallback face can be cut off in the real one -- and the page is written
+         from here, so it is reached directly rather than through a script put
+         into the document. */
+      ready.then(() => setTimeout(() => {
+        try { fitSpots(w.document); w.focus(); w.print(); } catch (_) {}
+      }, 260));
+    } catch (_) { setTimeout(() => { try { fitSpots(w.document); w.print(); } catch (_) {} }, 700); }
   };
   try {
     if (w.document.readyState === 'complete') setTimeout(go, 950);
@@ -2491,8 +2531,11 @@ function printPacket(app, what) {
   const go = () => {
     try {
       const fonts = win.document.fonts && win.document.fonts.ready ? win.document.fonts.ready : Promise.resolve();
-      fonts.then(() => setTimeout(() => { try { win.focus(); win.print(); } catch (_) {} }, 320));
-    } catch (_) { setTimeout(() => { try { win.print(); } catch (_) {} }, 800); }
+      /* The form is the first page of this packet, so its values are measured
+         here too -- after the webfont has arrived, since a value that fits in
+         the fallback face can be cut off in the real one. */
+      fonts.then(() => setTimeout(() => { try { fitSpots(win.document); win.focus(); win.print(); } catch (_) {} }, 320));
+    } catch (_) { setTimeout(() => { try { fitSpots(win.document); win.print(); } catch (_) {} }, 800); }
   };
   setTimeout(go, 950);
   return true;

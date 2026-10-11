@@ -23,6 +23,28 @@ function overlaySheet(a){
     + spots
     + '</section>';
 }
+/* Every value is drawn tight against its colon, as the rest of this form is.
+   That leaves one failure: a value too long for its box is cut at the edge
+   rather than run over the printed wording -- a request number, or a pool the
+   manager has renamed to something longer than the one measured here.
+
+   The box is the one thing that cannot give, because it is the size of a line
+   printed on the scan. So the letter size gives instead, measured on the page
+   that is about to print. Guessing a size in advance only moves the problem to
+   the next pool the club renames. */
+function fitSpots(root){
+  const nodes = (root || document).querySelectorAll('.f-spot');
+  for (const node of nodes) {
+    if (!node.textContent) continue;
+    node.style.fontSize = '';
+    let size = parseFloat(getComputedStyle(node).fontSize) || 16;
+    for (let guard = 0; guard < 24 && size > 6; guard++) {
+      if (node.scrollWidth <= node.clientWidth + 0.5) break;
+      size -= 0.5;
+      node.style.fontSize = size.toFixed(2) + 'px';
+    }
+  }
+}
 function officialFormCSS(){
   return '' +
 '@page{size:A4 portrait;margin:0}' +
@@ -41,7 +63,7 @@ function officialFormCSS(){
   'font-size:12.5pt;line-height:1.05;font-weight:700;color:#0b3b46;' +
   'padding-bottom:.3mm;white-space:nowrap;overflow:hidden;direction:rtl;text-align:right;' +
   'background:transparent;border:0;outline:0;box-shadow:none}' +
-'@media print{.f-page{width:210mm;height:297mm;margin:0}}' +
+'@media print{.f-page{width:210mm;height:297mm;margin:0}.f-hint{display:none}}' +
 '@media screen{body{background:#e9eef3;padding:10px;display:flex;flex-direction:column;align-items:center;gap:14px}' +
   '.f-page{box-shadow:0 10px 34px #0b3b4633;border-radius:2px}' +
   '.f-hint{max-width:210mm;background:#fff;border:1px solid #cfe2e6;border-radius:10px;padding:10px 14px;font-size:12px;color:#16414d;margin-bottom:6px}' +
@@ -67,8 +89,14 @@ function printOfficialForms(list){
   const go = () => {
     try {
       const ready = w.document.fonts && w.document.fonts.ready ? w.document.fonts.ready : Promise.resolve();
-      ready.then(() => setTimeout(() => { try { w.focus(); w.print(); } catch (_) {} }, 260));
-    } catch (_) { setTimeout(() => { try { w.print(); } catch (_) {} }, 700); }
+      /* Measured after the webfont has arrived, because a value that fits in the
+         fallback face can be cut off in the real one -- and the page is written
+         from here, so it is reached directly rather than through a script put
+         into the document. */
+      ready.then(() => setTimeout(() => {
+        try { fitSpots(w.document); w.focus(); w.print(); } catch (_) {}
+      }, 260));
+    } catch (_) { setTimeout(() => { try { fitSpots(w.document); w.print(); } catch (_) {} }, 700); }
   };
   try {
     if (w.document.readyState === 'complete') setTimeout(go, 950);

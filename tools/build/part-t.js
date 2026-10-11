@@ -204,8 +204,11 @@ function printPacket(app, what) {
   const go = () => {
     try {
       const fonts = win.document.fonts && win.document.fonts.ready ? win.document.fonts.ready : Promise.resolve();
-      fonts.then(() => setTimeout(() => { try { win.focus(); win.print(); } catch (_) {} }, 320));
-    } catch (_) { setTimeout(() => { try { win.print(); } catch (_) {} }, 800); }
+      /* The form is the first page of this packet, so its values are measured
+         here too -- after the webfont has arrived, since a value that fits in
+         the fallback face can be cut off in the real one. */
+      fonts.then(() => setTimeout(() => { try { fitSpots(win.document); win.focus(); win.print(); } catch (_) {} }, 320));
+    } catch (_) { setTimeout(() => { try { fitSpots(win.document); win.print(); } catch (_) {} }, 800); }
   };
   setTimeout(go, 950);
   return true;

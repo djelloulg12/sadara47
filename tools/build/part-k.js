@@ -29,7 +29,14 @@ const PAGE_W = 210, PAGE_H = 297;   // A4 in millimetres
    place of issue have no line on the scan wide enough to hold them, so nothing
    is written over printed wording. */
 const FORM_SPOTS = [
-  { id: 'membership',         y: 61.95, x0: 90.8,  colon: 193.5 },
+  /* The top line of the scan carries two labels: "مسبح :" at the right and
+     "رقم التسجيل:" at the left. They had one box between them, measured onto
+     the pool's line -- so the registration number printed beside the word مسبح
+     and its own place stayed empty. The pool line runs 90-190 mm and begins a
+     millimetre after the pool's colon; the registration number takes the empty
+     margin at the far left, on the same line. */
+  { id: 'facility',          y: 61.95, x0: 90.8,  colon: 191.1 },
+  { id: 'registration',      y: 61.95, x0: 2.0,   colon: 35.6 },
   { id: 'first_name',         y: 75.25, x0: 62.3,  colon: 178.3 },
   { id: 'last_name',          y: 85.05, x0: 62.3,  colon: 178.3 },
   { id: 'birth_date',         y: 94.85, x0: 62.3,  colon: 178.3 },
@@ -66,7 +73,12 @@ function formValues(a){
   const dayFirst = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))
     ? String(d).split('-').reverse().join('/') : String(d || '');
   return {
-    membership: v('membership_no', a && a.application_no ? String(a.application_no).slice(-8) : ''),
+    /* The pool, on the line the scan draws for it. */
+    facility: v('facility'),
+    /* A registration number is the club's own until one is issued; before that
+       it is the number of the request. The last eight characters of a request
+       number were never a number anyone could look up. */
+    registration: v('membership_no') || v('application_no'),
     first_name: v('first_name_ar'),
     last_name: v('last_name_ar'),
     birth_date: dayFirst(a && a.birth_date),

@@ -833,6 +833,77 @@ tasks.push(() => {
   }
 }
 
+/* ---- 20) the printed packet: form, summary, then the club's own rules ---- */
+{
+  const w = boot();
+  const F = w.SADARA_FORM;
+  const html = F.documentHTML({ application_no: 'APP-20261011-TEST' });
+  const pages = [...html.matchAll(/class="(f-page|s-page|r-page)"/g)].map(m => m[1]);
+  if (pages.join('>') !== 'f-page>s-page>r-page') {
+    errors.push('[print] the packet is [' + pages.join(' > ') + ']; it should be the form, '
+      + 'the summary, then the rules');
+  }
+  if (!/class="r-img" src="[^"]*internal-regulations\.jpg"/.test(html)) {
+    errors.push('[print] the rules page is not the club\'s own document');
+  }
+  /* The bar above the form tells the person to sign it and bring it in. It is an
+     instruction for the screen, not part of the document: left in the print it
+     lands at the top of page one, over the club's own heading.
+     The print block is read from where it starts rather than by matching to the
+     first closing brace -- there are rules inside it, and stopping at the first
+     one would read a selector and call it the block. */
+  const css = F.printCSS();
+  const at = css.indexOf('@media print{');
+  if (at === -1) errors.push('[print] the print rules are missing altogether');
+  else if (!/\.f-hint\{display:none\}/.test(css.slice(at))) {
+    errors.push('[print] the instruction bar is still printed at the top of page one');
+  }
+  /* The stylesheet is assembled by joining strings, and a stray "+" in front of
+     a comment makes it `'...' + + '...'` -- which is not a syntax error, it is a
+     number, and it silently swallows every rule after it. Caught here rather than
+     on a printed page. */
+  if (/NaN|undefined/.test(css)) {
+    const bad = /[^}]*?(NaN|undefined)[^;]*/.exec(css);
+    errors.push('[print] the stylesheet was assembled wrong: ' + (bad ? bad[0].trim() : '?'));
+  }
+}
+
+/* ---- 21) a value too long for its line is measured down, not cut off ---- */
+{
+  const F = boot().SADARA_FORM;
+  /* A value is drawn tight against its colon, as every field on this form is,
+     so a long one is cut at the edge of its box rather than allowed to run over
+     the printed wording. jsdom has no layout and cannot measure a glyph, so what
+     is checked here is that the measurement exists and happens before the page is
+     sent to the printer -- the browser does the rest. */
+  if (typeof F.fitSpots !== 'function') {
+    errors.push('[print] nothing measures a long value down to the size of its box');
+  }
+  /* printRegistration lives in print.js, not in the page script beside it. */
+  if (!/function printRegistration[\s\S]*?fitSpots\(doc\);[\s\S]*?\.print\(\)/.test(PRINT)) {
+    errors.push('[print] the page reaches the printer without being measured first');
+  }
+  if (!/\.f-spot\{[^}]*overflow:hidden/.test(F.printCSS())) {
+    errors.push('[print] a box that could run over the printed wording, with nothing to stop it');
+  }
+  /* The pool and the registration number were sharing one box, measured onto the
+     pool's line: the number printed beside the word مسبح and its own place stayed
+     empty. Each is checked on the line the scan actually draws. */
+  const spots = F.FORM_SPOTS.filter(s => s.id === 'facility' || s.id === 'registration');
+  if (spots.length !== 2) errors.push('[print] the top line has ' + spots.length + ' boxes for two labels');
+  const pool = spots.find(s => s.id === 'facility');
+  const reg = spots.find(s => s.id === 'registration');
+  if (pool && (Math.abs(pool.colon - 191.1) > 0.2 || Math.abs(pool.x0 - 90.8) > 0.2)) {
+    errors.push('[print] the pool is not on the line the scan draws for it');
+  }
+  if (reg && reg.colon > 37 || reg && reg.x0 < 1) {
+    errors.push('[print] the registration number is not at the far left of the top line');
+  }
+  if (pool && reg && pool.y !== reg.y) {
+    errors.push('[print] the registration number and the pool are not on the same line');
+  }
+}
+
 /* ---- run the settling checks in order ---- */
 tasks.reduce((chain, task) => chain.then(task), Promise.resolve()).then(() => {
   if (errors.length) { console.log('PROBLEMS:\n  - ' + [...new Set(errors)].join('\n  - ')); process.exit(1); }
