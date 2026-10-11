@@ -273,11 +273,14 @@
   const nextRegistrationId = async (kind, poolNo) => {
     const year = yearOf();
     const pool = Math.max(0, Math.min(99, Number(poolNo) || 0));
-    const counter = db.collection('counters').doc('registration_' + year + '_' + pool);
-    const seq = await counter.runTransaction(async tx => {
-      const snap = await tx.get(counter);
+    const ref = db.collection('counters').doc('registration_' + year + '_' + pool);
+    /* The transaction belongs to the database, not to the document: the compat
+       build the site loads has no runTransaction on a reference, and calling it
+       there fails every registration rather than one. */
+    const seq = await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
       const next = (snap.exists ? Number(snap.data().value) || 0 : 0) + 1;
-      tx.set(counter, { value: next, year, pool, kind: idLetter(kind), updated_at: firebase.firestore.FieldValue.serverTimestamp() });
+      tx.set(ref, { value: next, year, pool, kind: idLetter(kind), updated_at: firebase.firestore.FieldValue.serverTimestamp() });
       return next;
     });
     return idLetter(kind) + year + String(pool) + String(seq).padStart(4, '0');

@@ -62,6 +62,9 @@ function makeFirestore() {
         doc(id) {
           return {
             id,
+            /* Which collection this reference belongs to, so a transaction can be
+               handed a reference and still find the document it names. */
+            _name: name,
             set: async (value, opts) => {
               /* A claim is written once. Writing it again is what the rules turn
                  away, and that refusal IS the uniqueness check -- so the mock
@@ -72,18 +75,7 @@ function makeFirestore() {
               DATA[name][id] = opts && opts.merge ? Object.assign({}, DATA[name][id], value) : value;
             },
             get: async () => ({ exists: !!DATA[name][id], data: () => DATA[name][id], id }),
-            delete: async () => { calls.push(['delete', name, id]); delete DATA[name][id]; },
-            /* The counter is read and raised together, so two registrations at
-               the same moment cannot both be handed the same number. */
-            runTransaction: async (fn) => {
-              calls.push(['transaction', name, id]);
-              const snap = { exists: !!DATA[name][id], data: () => DATA[name][id] };
-              const tx = {
-                get: async () => snap,
-                set: (ref, value) => { DATA[name][ref.id] = value; }
-              };
-              return fn(tx);
-            }
+            delete: async () => { calls.push(['delete', name, id]); delete DATA[name][id]; }
           };
         },
         add: async (value) => {
@@ -109,6 +101,17 @@ function makeFirestore() {
         set: (ref, v) => ops.push(['set', ref.id, v]),
         commit: async () => { ops.forEach(o => calls.push(o)); }
       };
+    },
+    /* The counter is read and raised together, so two registrations at the same
+       moment cannot both be handed the same number. The transaction belongs to
+       the database, not to the document: the build the site loads has it here and
+       a mock that put it on the reference would let a wrong call through. */
+    runTransaction: async (fn) => {
+      calls.push(['transaction']);
+      return fn({
+        get: async (ref) => ({ exists: !!DATA[ref._name][ref.id], data: () => DATA[ref._name][ref.id] }),
+        set: (ref, value) => { DATA[ref._name][ref.id] = value; }
+      });
     }
   };
   return db;
