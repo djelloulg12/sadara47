@@ -257,6 +257,12 @@ action=async function(a,el){
         authMessage('طلبك قيد الدراسة. سيُعلمك النادي بالنتيجة عند إقفال الطلب.','');return}
       if(gate.gate==='rejected'){
         authMessage('لم يُقبل طلب التسجيل. السبب: '+(gate.reason||gate.message||'غير مذكور'),'error');return}
+      if(gate.gate==='merged'){
+        /* Not a refusal. The password was right, and saying otherwise sends the
+           person to a password-reset page for a password that was never wrong.
+           "Some other account" is not something anybody can act on either, so the
+           one that remains is named. */
+        authMessage('هذا الحساب دُمج في حساب آخر. '+(gate.reason||'استعمل الحساب الذي بقي.'),'error');return}
       if(gate.gate==='unknown'){
         authMessage('حالة الطلب غير معروفة. تواصل مع إدارة النادي. ('+gate.message+')','error');return}
       if(!res.ok){authMessage(loginFailure(data),'error');return}

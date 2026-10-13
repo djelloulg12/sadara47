@@ -64,7 +64,15 @@
          the account may be used at all, and one column cannot answer both
          questions at once. */
       status: profile.request_status || '',
-      rejection_reason: profile.rejection_reason || ''
+      rejection_reason: profile.rejection_reason || '',
+      /* Both roles, when a merge found that one person is more than one thing: a
+         father who is a swimmer and the parent of three minors. The role the rules
+         read stays as it was -- merging must not make anybody a manager -- and
+         the rest are written down beside it rather than lost. */
+      roles: Array.isArray(profile.roles) ? profile.roles : (profile.role ? [profile.role] : []),
+      national_id: profile.national_id || '',
+      merged_into: profile.merged_into || '',
+      merged_name: profile.merged_name || ''
     };
   };
 
@@ -78,6 +86,20 @@
   const PENDING = ['pending', 'قيد المعالجة', 'قيد الدراسة', 'قيد الانتظار'];
 
   const loginGate = profile => {
+    /* An account that has become another account. Not refused as though it were
+       wrong -- answered, with the account it became, so the person knows which
+       door to use rather than being told nothing. Silence here would cost the
+       club a telephone call and the family an afternoon. */
+    if (profile && profile.merged_into) {
+      const into = String(profile.merged_name || '').trim();
+      return {
+        gate: 'merged',
+        message: 'هذا الحساب دُمج في حساب آخر.',
+        into: profile.merged_into,
+        into_name: into,
+        reason: into ? ('استعمل الآن حساب «' + into + '».') : 'استعمل الحساب الذي بقي.'
+      };
+    }
     const status = String((profile && profile.status) || '').trim();
     if (!status) return { gate: 'open', message: '' };
     if (ACCEPTED.indexOf(status.toLowerCase()) !== -1) return { gate: 'open', message: '' };
@@ -752,86 +774,195 @@
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
         const list = await db.collection('users').get();
         const owners = await ownerAddresses();
-        return jsonResponse(list.docs.map(d => {
+        return jsonResponse(list.docs.filter(d => !(d.data() || {}).merged_into).map(d => {
           const f = d.data() || {};
           return {
+            /* The roles beside the one the rules read, so a person who is both a
+               swimmer and a parent is not shown as one of them. */
+            roles: Array.isArray(f.roles) ? f.roles : (f.role ? [f.role] : []),
             id: d.id, name: f.name || '', email: f.email || '',
             role: f.role || 'member', owner: owners.indexOf(f.email) !== -1,
             joined: f.created_at && f.created_at.toDate ? f.created_at.toDate().toISOString().slice(0, 10) : ''
           };
         }));
       }
-      /* The accounts that are the same person.
+      /* ---------------- the accounts that are one person ----------------
 
-         Three things count, because a duplicate does not look like one: the same
-         chosen user name, the same national identity number, and the same name
-         with the same day of birth -- two accounts made out of one form, which is
-         what happens when somebody registers twice on two phones.
+         Four links, and the fourth is the one the club actually needed.
 
-         Reported as groups with the accounts in them, and the oldest one marked as
-         the one to keep. Which of a pair to remove is the manager's answer and not
-         the machine's; the oldest is offered because it is the one that has been
-         in use longest, and the row says which it is. */
+         The same chosen user name; the same national identity number; the same
+         name with the same day of birth -- two accounts made out of one form. And
+         then the one the accounts do not carry between themselves at all: the
+         guardian's card number. A father's own account holds it as his identity
+         number, and each of his children's requests holds it as the guardian's. So
+         the accounts of one family are found through the card that says whose
+         children they are, and a father who is himself a swimmer comes out in the
+         same group as the guardian account his children were filed under -- which
+         is the case no amount of comparing accounts with each other would find.
+
+         Each group is reported with the reason on the row, because "duplicate" on
+         its own says nothing about which two of five accounts are the same person.
+         The oldest is offered as the one to keep: it is the one that has been in
+         use longest, and which one was the mistake is the manager's answer. */
       if (path === '/api/accounts/duplicates' && method === 'GET') {
         const gate = await managerView('فحص الحسابات المكررة لرئيس النادي فقط');
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
         const list = await db.collection('users').get();
         const owners = await ownerAddresses();
         const seen = new Map();
+        const accounts = new Map();
         for (const d of list.docs) {
           const f = d.data() || {};
           const when = f.created_at && f.created_at.toDate ? f.created_at.toDate().getTime() : 0;
-          const put = (kind, value) => {
-            const key = kind + ':' + normId(value);
-            if (!key.endsWith(':')) return;
-            if (!seen.has(key)) seen.set(key, []);
-            seen.get(key).push({
-              id: d.id, name: f.name || '', email: f.email || '',
-              role: f.role || 'member', owner: owners.indexOf(f.email) !== -1,
-              when
-            });
-          };
-          put('user name', f.username);
-          put('identity number', f.national_id);
-          if (f.name && f.birth_date) put('name and day of birth', f.name + '|' + f.birth_date);
+          /* A merged account is not a separate person any more. It is still on
+             file -- that is the point -- but it is not offered to be merged again,
+             and it does not appear in the club's list of people. */
+          if (f.merged_into) continue;
+          accounts.set(d.id, f);
+          seen.set('uid:' + d.id, [{
+            id: d.id, name: f.name || '', email: f.email || '',
+            username: f.username || '', role: f.role || 'member',
+            owner: owners.indexOf(f.email) !== -1, when,
+            requests: 0, swimmers: 0
+          }]);
         }
+        const put = (kind, value, uid) => {
+          const key = kind + ':' + normId(value);
+          if (key.endsWith(':') || !accounts.has(uid)) return;
+          const group = seen.get(key) || [];
+          if (group.some(a => a.id === uid)) return;
+          group.push(Object.assign({}, seen.get('uid:' + uid)[0]));
+          seen.set(key, group);
+        };
+        /* What the person holds, so a group can be read before it is acted on. */
+        const apps = await db.collection('applications').get();
+        const sw = await db.collection('swimmers').get();
+        const appOf = apps.docs.map(d => ({ id: d.id, f: d.data() || {} }));
+        const swOf = sw.docs.map(d => ({ id: d.id, f: d.data() || {} }));
+        for (const uid of accounts.keys()) {
+          const mine = seen.get('uid:' + uid)[0];
+          mine.requests = appOf.filter(a => String(a.f.applicant_uid || '') === uid).length;
+          mine.swimmers = swOf.filter(x => String(x.f.applicant_uid || '') === uid).length;
+        }
+        /* What each account says about itself. The same number is put in two
+           groups -- as an identity number and as the guardian's card -- because a
+           person is found by the number whoever writes it on, and the father holds
+           it as his own while his children's requests hold it as the guardian's.
+           One number, two places it is written, one group. */
+        for (const uid of accounts.keys()) {
+          const f = accounts.get(uid);
+          put('user name', f.username, uid);
+          put('identity number', f.national_id, uid);
+          put('guardian card', f.national_id, uid);
+          if (f.name && f.birth_date) put('name and day of birth', f.name + '|' + f.birth_date, uid);
+        }
+        /* And now the other end of it: a request filed by somebody names the card
+           of the person the child belongs to, and that card is the father's. So a
+           family whose father files nothing at all is still found -- which is the
+           usual case, since the father is the swimmer and the children are the
+           applicants. */
+        for (const a of appOf) {
+          const uid = String(a.f.applicant_uid || '');
+          if (!uid || !accounts.has(uid)) continue;
+          put('guardian card', a.f.guardian_national_id, uid);
+        }
+
         const groups = [];
-        for (const [key, accounts] of seen) {
-          if (accounts.length < 2) continue;
-          accounts.sort((a, b) => a.when - b.when);
+        const done = new Set();
+        for (const [key, members] of seen) {
+          if (key.startsWith('uid:') || members.length < 2) continue;
+          const ids = members.map(a => a.id).sort().join(',');
+          if (done.has(ids)) continue;
+          done.add(ids);
+          members.sort((a, b) => a.when - b.when);
           groups.push({
             reason: key.split(':')[0],
             by: key.slice(key.indexOf(':') + 1),
-            keep: accounts[0].id,
-            accounts
+            keep: members[0].id,
+            accounts: members
           });
         }
-        return jsonResponse({ groups: groups, checked: list.size });
+        const merged = list.docs.filter(d => (d.data() || {}).merged_into)
+          .map(d => {
+            const f = d.data() || {};
+            return { id: d.id, name: f.name || '', email: f.email || '', into: f.merged_into };
+          });
+        return jsonResponse({ groups: groups, merged: merged, checked: accounts.size });
       }
-      if (path === '/api/accounts' && method === 'DELETE') {
-        const gate = await managerView('حذف حساب لرئيس النادي فقط');
+
+      /* The merge itself. One account survives; the others are marked as having
+         become it, and everything that belonged to them is re-pointed so nothing
+         is lost with them.
+
+         The survivor's own role is not touched. Merging must not make anybody a
+         manager, and the other role is written down beside it rather than instead
+         of it -- a father who is a swimmer and the parent of three minors is both,
+         and whichever of the two accounts happened to come first should not decide
+         which of those he is. */
+      if (path === '/api/accounts/merge' && method === 'POST') {
+        const gate = await managerView('دمج الحسابات لرئيس النادي فقط');
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
-        const uid = String(body.id || '');
-        if (!uid) return jsonResponse({ error: 'معرّف الحساب مطلوب' }, 400);
-        if (String(gate.profile.id) === uid) {
-          return jsonResponse({ error: 'لا يمكنك حذف حسابك أنت — لا يبقى أحد يدخل.' }, 400);
+        const keep = String(body.keep || '');
+        const remove = (Array.isArray(body.remove) ? body.remove : []).map(String).filter(Boolean);
+        if (!keep) return jsonResponse({ error: 'الحساب الذي يُبقى عليه مطلوب' }, 400);
+        if (!remove.length) return jsonResponse({ error: 'لم يُحدَّد حساب لدمجه' }, 400);
+        if (remove.indexOf(keep) !== -1) return jsonResponse({ error: 'لا يُدمج الحساب في نفسه' }, 400);
+
+        const owners = await ownerAddresses();
+        const keepSnap = await db.collection('users').doc(keep).get();
+        if (!keepSnap.exists) return jsonResponse({ error: 'الحساب الذي يُبقى عليه غير موجود' }, 404);
+        const keepData = keepSnap.data() || {};
+
+        const moved = { requests: 0, swimmers: 0, accounts: [], roles: [] };
+        const roles = [keepData.role || 'member'].concat(Array.isArray(keepData.roles) ? keepData.roles : []);
+
+        for (const uid of remove) {
+          if (String(gate.profile.id) === uid) {
+            return jsonResponse({ error: 'لا يمكنك دمج حسابك أنت — لا يبقى أحد يدخل.' }, 400);
+          }
+          const snap = await db.collection('users').doc(uid).get();
+          if (!snap.exists) continue;
+          const f = snap.data() || {};
+          if (owners.indexOf(f.email) !== -1) {
+            return jsonResponse({ error: 'حساب صاحب النادي لا يُدمج من هنا.' }, 400);
+          }
+          if (f.merged_into) {
+            return jsonResponse({ error: 'هذا الحساب مُدمج من قبل في ' + String(f.merged_into) + '.' }, 400);
+          }
+          if (Array.isArray(f.roles)) roles.push(...f.roles);
+          else if (f.role) roles.push(f.role);
+
+          /* What the person did moves with them: their requests and, if they are a
+             swimmer, the card they were given. A request that stayed behind would
+             be a request the family can no longer follow, which is the thing the
+             merge is for. */
+          const apps = await db.collection('applications').where('applicant_uid', '==', uid).get();
+          for (const d of apps.docs) {
+            await d.ref.set({ applicant_uid: keep }, { merge: true });
+            moved.requests++;
+          }
+          const cards = await db.collection('swimmers').where('applicant_uid', '==', uid).get();
+          for (const d of cards.docs) {
+            await d.ref.set({ applicant_uid: keep }, { merge: true });
+            moved.swimmers++;
+          }
+          /* The profile is not thrown away: it is marked. A person who signs in
+             with that address is told what happened and which account to use,
+             rather than landing on a page that says nothing. */
+          await snap.ref.set({
+            merged_into: keep,
+            merged_at: firebase.firestore.FieldValue.serverTimestamp(),
+            merged_name: keepData.name || keepData.email || ''
+          }, { merge: true });
+          moved.accounts.push({ id: uid, name: f.name || f.email || uid });
         }
-        const snap = await db.collection('users').doc(uid).get();
-        if (!snap.exists) return jsonResponse({ error: 'هذا الحساب غير موجود.' }, 404);
-        const f = snap.data() || {};
-        if ((await ownerAddresses()).indexOf(f.email) !== -1) {
-          return jsonResponse({ error: 'هذا حساب صاحب النادي. احذفه من إعدادات المالك لا من هنا.' }, 400);
-        }
-        await snap.ref.delete();
-        return jsonResponse({
-          ok: true, id: uid,
-          /* Said plainly, because a browser cannot remove the account at the
-             provider and calling it a deletion would be a claim this did not make.
-             What is removed is the profile: nothing the rules will open, so nothing
-             this person can reach. */
-          note: 'حُذف ملف الحساب. يبقى بإمكان صاحب كلمة المرور الدخول والعثور على لا شيء.'
-        });
+
+        const uniqueRoles = roles.filter((r, i, all) => all.indexOf(r) === i);
+        await keepSnap.ref.set({ roles: uniqueRoles }, { merge: true });
+        moved.roles = uniqueRoles;
+        return jsonResponse({ ok: true, keep: keep, moved: moved });
       }
+
       if (path === '/api/accounts' && method === 'PUT') {
         const gate = await managerView('تعديل الصلاحيات لرئيس النادي فقط');
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
@@ -1174,6 +1305,11 @@
               group_name: src.group_name || src.level || 'المبتدئون',
               national_id: src.national_id || '',
               status: 'active', from_application: no,
+              /* Whose account this came from. Beside `from_application`, which
+                 says the request; this says the door it was filed through, and it
+                 is what lets a family's members be found from the one account at
+                 the centre of them -- and moved when that account is merged. */
+              applicant_uid: src.applicant_uid || '',
               created_at: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
           }

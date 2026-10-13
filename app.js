@@ -252,6 +252,12 @@ action=async function(a,el){
         authMessage('طلبك قيد الدراسة. سيُعلمك النادي بالنتيجة عند إقفال الطلب.','');return}
       if(gate.gate==='rejected'){
         authMessage('لم يُقبل طلب التسجيل. السبب: '+(gate.reason||gate.message||'غير مذكور'),'error');return}
+      if(gate.gate==='merged'){
+        /* Not a refusal. The password was right, and saying otherwise sends the
+           person to a password-reset page for a password that was never wrong.
+           "Some other account" is not something anybody can act on either, so the
+           one that remains is named. */
+        authMessage('هذا الحساب دُمج في حساب آخر. '+(gate.reason||'استعمل الحساب الذي بقي.'),'error');return}
       if(gate.gate==='unknown'){
         authMessage('حالة الطلب غير معروفة. تواصل مع إدارة النادي. ('+gate.message+')','error');return}
       if(!res.ok){authMessage(loginFailure(data),'error');return}
@@ -3851,33 +3857,63 @@ boot = async function () {
 
      The reason each group is a group is on the row, because "duplicate" on its
      own says nothing about which two of five accounts are the same person. The
-     account to keep is marked rather than the ones to remove, so the manager is
-     choosing which one was the mistake -- which is their answer and not the
-     machine's. */
+     account to keep is marked rather than the ones to merge away, so the manager
+     is choosing which one was the mistake -- which is their answer and not the
+     machine's.
+
+     What each account holds is on its row too, because the question before a
+     merge is "what moves": three requests and two cards under this one is a very
+     different decision from none. */
+  /* Why two accounts are one person, in the club's words. The adapter sends a key
+     rather than a sentence, because a key is something code can compare; the
+     words belong here, where they are shown -- the same place the roles are
+     translated. An unrecognised key is printed as it came rather than dropped: a
+     reason nobody recognised is still a reason, and it says more than nothing. */
+  const DUP_REASON = {
+    'user name': 'اسم المستخدم',
+    'identity number': 'رقم التعريف الوطني',
+    'name and day of birth': 'الاسم وتاريخ الميلاد',
+    'guardian card': 'بطاقة الولي'
+  };
+  const dupReason = key => DUP_REASON[key] || key;
+
   const findings = (data) => {
     const groups = (data && data.groups) || [];
-    if (!groups.length) {
-      return '<div class="dup-clear">لا توجد حسابات مكررة. فُحص '
-        + clubDigits((data && data.checked) || 0) + ' حساب.</div>';
-    }
+    const gone = (data && data.merged) || [];
+    const held = a => {
+      const bits = [];
+      if (a.requests) bits.push(clubDigits(a.requests) + ' طلب');
+      if (a.swimmers) bits.push(clubDigits(a.swimmers) + ' بطاقة سباح');
+      return bits.length ? bits.join(' · ') : 'لا شيء';
+    };
+    const kept = g => (g.accounts || []).find(x => String(x.id) === String(g.keep)) || {};
     const rows = groups.map((g, n) => {
       const items = (g.accounts || []).map(a => {
         const keep = String(a.id) === String(g.keep);
         return '<div class="requirement-row account-row' + (keep ? ' is-keep' : '') + '">'
           + '<div class="account-who"><b>' + esc(a.name || a.email || 'حساب')
-          + (keep ? ' <small class="owner-mark">الأقدم — يُحفظ</small>' : '') + '</b>'
-          + '<span>' + esc(a.email || '') + ' · ' + esc(label(a.role)) + '</span></div>'
+          + (keep ? ' <small class="owner-mark">يُحفظ</small>' : '') + '</b>'
+          + '<span>' + esc(a.email || '') + ' · ' + esc(label(a.role)) + ' · ' + esc(held(a)) + '</span></div>'
           + (keep ? '<span></span>'
-            : '<button class="check-btn no" data-action="remove-duplicate-account" data-id="'
-              + esc(a.id) + '" data-name="' + esc(a.name || a.email || '') + '">حذف</button>')
+            : '<button class="check-btn no" data-action="merge-account" data-id="' + esc(a.id)
+              + '" data-keep="' + esc(g.keep) + '" data-keep-name="' + esc(kept(g).name || '')
+              + '" data-name="' + esc(a.name || a.email || '') + '" data-held="' + esc(held(a)) + '">دمج</button>')
           + '</div>';
       }).join('');
-      return '<div class="dup-group"><h4>' + clubDigits(n + 1) + '. ' + esc(g.reason)
+      return '<div class="dup-group"><h4>' + clubDigits(n + 1) + '. ' + esc(dupReason(g.reason))
         + ' — <code>' + esc(g.by || '') + '</code></h4>' + items + '</div>';
     }).join('');
-    return '<p class="hint">وُجدت ' + clubDigits(groups.length) + ' مجموعة، من '
-      + clubDigits(data.checked) + ' حساب. احذف ما هو مكرر واحتفظ بالأقدم.</p>'
-      + rows;
+    const done = gone.length
+      ? '<p class="hint">حسابات دُمجت سابقًا: ' + gone.map(a => esc(a.name || a.email || '')).join('، ')
+        + '. لا تزال في ملفّات النادي، ومن يتكلّم بكلمة مرور إحداها يجد حسابه الآخر بالاسم.</p>'
+      : '';
+    if (!groups.length) {
+      return done + '<div class="dup-clear">لا توجد حسابات مكررة. فُحص '
+        + clubDigits((data && data.checked) || 0) + ' حساب.</div>';
+    }
+    return done + '<p class="hint">وُجدت ' + clubDigits(groups.length) + ' مجموعة، من '
+      + clubDigits(data.checked) + ' حساب. اضغط «دمج» لتُلدمج المجموعة في الحساب المُعلَّم عليه «يُحفظ»؛ '
+      + 'ينتقل ما كان للحساب الآخر معه، ولا يُحذف شيء.</p>' + rows;
   };
 
   const panel = (list, me) => {
@@ -3917,14 +3953,18 @@ boot = async function () {
   pageSettings = function () {
     /* What the check found is kept, so it is still there after a redraw -- a
        finding that disappears when the page is redrawn is a finding somebody has
-       to ask for again. */
+       to ask for again.
+
+       Built into the string being returned, not reached for in the document: this
+       page is assembled as text and put into the page afterwards, so a box looked
+       up here does not exist yet, and looking found nothing -- the check ran, the
+       answers arrived, and the panel came back empty until somebody pressed the
+       button a second time. */
     let base = coreAccountsSettings() + panel(state.accounts, state.user && state.user.id);
     if (state.duplicateAccounts) {
-      const box = document.getElementById('duplicate-accounts');
-      if (box) {
-        box.hidden = false;
-        box.innerHTML = findings(state.duplicateAccounts);
-      }
+      base = base.replace(
+        '<div id="duplicate-accounts" hidden></div>',
+        '<div id="duplicate-accounts">' + findings(state.duplicateAccounts) + '</div>');
     }
     return base;
   };
@@ -3951,8 +3991,6 @@ boot = async function () {
       const data = await res.json().catch(() => ({}));
       state.duplicateAccounts = data && Array.isArray(data.groups) ? data : { groups: [], checked: 0 };
     } catch (_) { state.duplicateAccounts = { groups: [], checked: 0 }; }
-    const box = document.getElementById('duplicate-accounts');
-    if (box) { box.hidden = false; box.innerHTML = findings(state.duplicateAccounts); }
   }
 
   const coreSyncAccounts = syncApi;
@@ -3975,22 +4013,28 @@ boot = async function () {
         : 'لا توجد حسابات مكررة.', groups.length ? 'error' : 'ok');
       return;
     }
-    if(a==='remove-duplicate-account'){
-      /* Asked first, and by name. A button that removes an account on one click,
-         next to a list of five rows, is a button somebody will press on the wrong
-         row. */
+    if(a==='merge-account'){
+      /* Asked first, and saying exactly what moves. "Merge two accounts" does not
+         say whether the requests filed under the other one come with it -- and
+         they do, so the confirmation says so by name, before anything happens
+         rather than after. */
       const who = el.dataset.name || 'هذا الحساب';
-      if (!confirm('حذف حساب «' + who + '»؟\n\nيحذف ملف الحساب فقط: يبقى بإمكان صاحب كلمة المرور الدخول بالعثور على لا شيء.\nلا يمكن التراجع.')) return;
-      const res = await api('/api/accounts', 'DELETE', { id: el.dataset.id });
-      if (!res || res.error) { showToast((res && res.error) || 'تعذّر حذف الحساب.', 'error'); return; }
+      const keep = el.dataset.keepName || 'الحساب المحتفظ به';
+      const what = el.dataset.held || '';
+      const moved = what && what !== 'لا شيء' ? '\n\nينتقل معه: ' + what + '.' : '';
+      const stays = '\n\nلا يُحذف الحساب القديم: من يتكلّم بكلمة مروره يجد حسابه الآخر بالاسم.'
+        + '\nلا يمكن التراجع.';
+      if (!confirm('دمج حساب «' + who + '» في «' + keep + '»؟' + moved + stays)) return;
+      const res = await api('/api/accounts/merge', 'POST', { keep: el.dataset.keep, remove: [el.dataset.id] });
+      if (!res || res.error) { showToast((res && res.error) || 'تعذّر الدمج.', 'error'); return; }
       state.accounts = (state.accounts || []).filter(x => String(x.id) !== String(el.dataset.id));
       save();
       await loadDuplicates();
       render();
-      /* Said as what it was: the profile is gone, so nothing the rules open is
-         reachable. Calling it a deletion of the account would be a claim this
-         did not make. */
-      showToast(res.note || 'حُذف ملف الحساب.', 'ok');
+      const m = res.moved || {};
+      showToast('دُمج «' + who + '» في «' + keep + '».'
+        + (m.requests ? ' نُقلت ' + m.requests + ' طلبًا.' : '')
+        + (m.swimmers ? ' ونُقلت ' + m.swimmers + ' بطاقة سباح.' : ''), 'ok');
       return;
     }
     if(a==='reload-accounts'){

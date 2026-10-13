@@ -190,6 +190,99 @@ let auditPosted = false;
   }
 }
 
+/* The accounts panel, and the two things it must and must not offer.
+
+   A check for this because the panel was built for removing accounts and then
+   changed to merging them, and the old control was easy to leave in place: it
+   sits on the same row, does almost the same thing, and looks perfectly
+   reasonable. Two controls that differ only in what they destroy is how the wrong
+   one gets pressed at the counter rather than in a test.
+
+   So the finding is asserted three ways: the button says what it does, the reason
+   is in the club's language rather than the code's, and there is no control left
+   that removes anybody. */
+
+const accounts_panel = () => {
+  const w = boot({
+    user: { role: 'admin', id: 'u1' },
+    accounts: [
+      { id: 'u1', name: 'صاحب النادي', email: 'a@b.dz', role: 'admin', owner: true },
+      { id: 'dad', name: 'بلعيد', email: 'dad@x.dz', role: 'swimmer_adult' },
+      { id: 'k1', name: 'مريم', email: 'k1@x.dz', role: 'parent' }
+    ],
+    duplicateAccounts: {
+      checked: 3,
+      merged: [{ id: 'k2', name: 'آدم', email: 'k2@x.dz', into: 'dad' }],
+      groups: [{
+        reason: 'guardian card', by: '0999123456789', keep: 'dad',
+        accounts: [
+          { id: 'dad', name: 'بلعيد', email: 'dad@x.dz', role: 'swimmer_adult', requests: 0, swimmers: 0 },
+          { id: 'k1', name: 'مريم', email: 'k1@x.dz', role: 'parent', requests: 1, swimmers: 1 }
+        ]
+      }]
+    }
+  });
+  w.__t.state.page = 'settings';
+  w.__t.render();
+
+  const panel = w.document.getElementById('accounts-panel');
+  if (!panel) { errors.push('[accounts] the accounts panel is not on the settings page'); return; }
+  const box = w.document.getElementById('duplicate-accounts');
+
+  if (!panel.querySelector('[data-action="check-duplicate-accounts"]')) {
+    errors.push('[accounts] there is no button to check for duplicated accounts');
+  }
+
+  /* The findings have to be on the page without the button being pressed a second
+     time: this page is built as a string and put into the page afterwards, and
+     reaching into the document for a box that does not exist yet finds nothing --
+     which showed as a check that ran, answered, and left the panel empty. */
+  if (!box) { errors.push('[accounts] the findings have nowhere to be shown'); return; }
+  if (box.querySelectorAll('.dup-group').length !== 1) {
+    errors.push('[accounts] the family the check found is not shown on the panel: '
+      + box.querySelectorAll('.dup-group').length + ' groups');
+  }
+
+  /* What it does, said on the row. */
+  const merges = box.querySelectorAll('[data-action="merge-account"]');
+  if (merges.length !== 1) {
+    errors.push('[accounts] the finding offers ' + merges.length + ' merges; one account is the one kept and one is not');
+  }
+  const btn = merges[0];
+  if (btn.dataset.keep !== 'dad' || btn.dataset.id !== 'k1') {
+    errors.push('[accounts] the merge button does not say which two accounts it merges');
+  }
+  /* What moves is on the button, because "merge two accounts" does not say whether
+     the request filed under the other one comes with it. */
+  if (!btn.dataset.held || btn.dataset.held.indexOf('طلب') === -1) {
+    errors.push('[accounts] the merge button does not say what moves with the account');
+  }
+
+  /* The reason, in the club's words. The adapter sends a key on purpose, so a key
+     printed raw is how this looks when nobody translated it. */
+  const head = box.querySelector('.dup-group h4');
+  if (!head) { errors.push('[accounts] a group of duplicates carries no reason'); }
+  else if (/[A-Za-z]{4,}/.test(head.textContent)) {
+    errors.push('[accounts] the reason a group is a group is still in code: ' + head.textContent.trim());
+  }
+
+  /* And nothing here removes anybody. */
+  if (box.querySelector('[data-action="remove-duplicate-account"]')) {
+    errors.push('[accounts] the panel still offers to remove an account');
+  }
+  if (box.querySelectorAll('[data-action="merge-account"]').length !== box.querySelectorAll('button').length) {
+    errors.push('[accounts] the findings carry a control other than merging');
+  }
+
+  /* What was merged before stays on file and is said so, because "what happened to
+     it" is the question somebody asks in six months. */
+  if (box.textContent.indexOf('آدم') === -1) {
+    errors.push('[accounts] an account that was merged before is not named anywhere on the panel');
+  }
+};
+
+pending.push(Promise.resolve().then(accounts_panel));
+
 /* ---- the printed sheet for the requests ---- */
 /* The printed sheet for the requests.
 

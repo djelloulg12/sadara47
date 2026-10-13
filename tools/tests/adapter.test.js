@@ -54,6 +54,25 @@ function makeFirestore() {
   const denied = code => { const e = new Error('Missing or insufficient permissions.'); e.code = 'permission-denied'; return e; };
   const db = {
     collection(name) {
+      /* One reference maker, used by a single document and by a query's rows, so
+         the mock cannot say a document is writable in one direction and not the
+         other -- which is what happened: the merge writes through a snapshot when
+         it marks an account and through a query when it re-points a request, and
+         only the second had been given one. */
+      const refOf = (id) => ({
+        id,
+        _name: name,
+        set: async (value, opts) => {
+          /* A request may be created once and not created a second time: that
+             refusal IS how a name is made unique, and a mock that overwrote
+             silently would make uniqueness untestable and untrue. */
+          if (name === 'applications' && DATA[name][id] && !(opts && opts.merge)) throw denied();
+          calls.push(['set', name, id, value]);
+          DATA[name][id] = opts && opts.merge ? Object.assign({}, DATA[name][id], value) : value;
+        },
+        get: async () => ({ exists: !!DATA[name][id], data: () => DATA[name][id], id, ref: refOf(id) }),
+        delete: async () => { calls.push(['delete', name, id]); delete DATA[name][id]; }
+      });
       const api = {
         where(field, op, value) {
           if (op !== '==') throw new Error('the mock only answers equality: ' + op);
@@ -61,24 +80,9 @@ function makeFirestore() {
           api.__where = [field, value];
           return api;
         },
-        doc(id) {
-          return {
-            id,
-            /* Which collection this reference belongs to, so a transaction can be
-               handed a reference and still find the document it names. */
-            _name: name,
-            set: async (value, opts) => {
-              /* A request may be created once and not created a second time: that
-                 refusal IS how a name is made unique, and a mock that overwrote
-                 silently would make uniqueness untestable and untrue. */
-              if (name === 'applications' && DATA[name][id] && !(opts && opts.merge)) throw denied();
-              calls.push(['set', name, id, value]);
-              DATA[name][id] = opts && opts.merge ? Object.assign({}, DATA[name][id], value) : value;
-            },
-            get: async () => ({ exists: !!DATA[name][id], data: () => DATA[name][id], id }),
-            delete: async () => { calls.push(['delete', name, id]); delete DATA[name][id]; }
-          };
-        },
+        /* Which collection this reference belongs to, so a transaction can be
+           handed a reference and still find the document it names. */
+        doc(id) { return refOf(id); },
         add: async (value) => {
           const id = name + '_' + Object.keys(DATA[name]).length;
           calls.push(['add', name, id, value]);
@@ -86,9 +90,15 @@ function makeFirestore() {
           return { id };
         },
         get: async () => {
-          const all = Object.keys(DATA[name]).map(id => ({ id, data: () => DATA[name][id] }));
+          /* A document carries the reference it can be written through, as
+             Firestore's does. The merge re-points a request's applicant with
+             exactly that -- it holds the query and not the id -- so a mock without
+             it throws and the check cannot be written at all. */
+          const all = Object.keys(DATA[name]).map(id => ({
+            id, data: () => DATA[name][id], ref: refOf(id)
+          }));
           const w = api.__where;
-          return { docs: w ? all.filter(d => d.data()[w[0]] === w[1]) : all };
+          return { docs: w ? all.filter(d => d.data()[w[0]] === w[1]) : all, size: all.length };
         }
       };
       api.limit = () => api;
@@ -820,6 +830,185 @@ test('the database holds one form of a number and a date', async () => {
     errors.push('an impossible date was corrected into a real one: '
       + JSON.stringify(stored && stored.birth_date));
   }
+});
+
+/* Four accounts that are one family.
+
+   The club's own case: a father who is himself a swimmer, and three children each
+   registered from a phone of their own before the form understood that one
+   guardian has several swimmers. Four accounts. One person and his household.
+
+   And the merge, checked by what it leaves behind rather than by what it returns:
+   the requests re-pointed, the cards re-pointed, both roles written down, the old
+   address answered at the door by name, and the account gone from the club's list
+   of people while still on file.
+
+   A merge that deleted instead would pass every count here and lose the three
+   requests, which is why they are counted. */
+
+const FAMILY_NID = '0999123456789';
+const daysAgo = n => ({ toDate: () => new Date(Date.UTC(2026, 2, n)) });
+
+async function withFamily(fn) {
+  const saved = { users: DATA.users, applications: DATA.applications, swimmers: DATA.swimmers,
+                  config: DATA.config, facilities: DATA.facilities };
+  DATA.users = {
+    u1: { name: 'رئيس النادي', role: 'president', email: 'u1@x.dz' },
+    u2: { name: 'مدرب', role: 'coach', email: 'u2@x.dz' },
+    dad: { name: 'بلعيد الأخيرة', role: 'swimmer_adult', email: 'dad@x.dz',
+           national_id: FAMILY_NID, created_at: daysAgo(1) },
+    k1: { name: 'مريم', role: 'parent', email: 'k1@x.dz', created_at: daysAgo(9) },
+    k2: { name: 'يوسف', role: 'parent', email: 'k2@x.dz', created_at: daysAgo(7) },
+    k3: { name: 'آدم', role: 'parent', email: 'k3@x.dz', created_at: daysAgo(5) },
+    owner1: { name: 'صاحب النادي', role: 'admin', email: 'owner@x.dz', created_at: daysAgo(3) }
+  };
+  DATA.applications = {
+    r1: { applicant_uid: 'k1', guardian_national_id: FAMILY_NID, application_no: 'APP-1' },
+    r2: { applicant_uid: 'k2', guardian_national_id: FAMILY_NID, application_no: 'APP-2' },
+    r3: { applicant_uid: 'k3', guardian_national_id: FAMILY_NID, application_no: 'APP-3' }
+  };
+  DATA.swimmers = {
+    m1: { applicant_uid: 'k1', name: 'مريم' },
+    m2: { applicant_uid: 'k2', name: 'يوسف' }
+  };
+  DATA.config = { owners: { emails: ['owner@x.dz'] } };
+  /* Awaited, or the finally runs the moment fn returns its promise -- and every
+     await inside the test happens afterwards, against data already put back. */
+  try { return await fn(); } finally { Object.assign(DATA, saved); }
+}
+
+test('a family is found by the guardian card on the requests', async () => {
+  await withFamily(async () => {
+    const w = boot(asUser('u1'));
+    const r = await call(w, '/api/accounts/duplicates');
+    if (!r.ok) { errors.push('the duplicate check failed: ' + JSON.stringify(r.data)); return; }
+
+    const group = (r.data.groups || []).find(g => g.reason === 'guardian card');
+    if (!group) {
+      errors.push('the father and his three children were not found as one family; the groups were: '
+        + JSON.stringify((r.data.groups || []).map(g => g.reason)));
+      return;
+    }
+    /* All four, not three: the check has to reach the account that filed nothing,
+       which is the whole case. */
+    const ids = group.accounts.map(a => a.id).sort();
+    if (ids.join(',') !== 'dad,k1,k2,k3') {
+      errors.push('the family group holds ' + ids.join(',') + ' rather than dad,k1,k2,k3');
+    }
+    /* And the one to keep is the oldest, because it is the one that has been in
+       use longest -- with the reason said on the row, not guessed. */
+    if (group.keep !== 'dad') {
+      errors.push('the account offered to keep is ' + group.keep + ' rather than the oldest');
+    }
+    /* What each one holds, so the question before a merge is answerable. */
+    const held = id => (group.accounts.find(a => a.id === id) || {});
+    if (held('k1').requests !== 1) errors.push('a child account does not report the one request it filed');
+    if (held('k1').swimmers !== 1) errors.push('a child account does not report the one card it became');
+    if (held('dad').requests !== 0) errors.push('the father is reported as filing a request');
+  });
+});
+
+test('two accounts of one person become one, and nothing is lost', async () => {
+  await withFamily(async () => {
+    const w = boot(asUser('u1'));
+    const r = await call(w, '/api/accounts/merge', 'POST', { keep: 'dad', remove: ['k1'] });
+    if (!r.ok) { errors.push('the merge failed: ' + JSON.stringify(r.data)); return; }
+
+    /* The requests move. A request left behind would be one the family can no
+       longer follow, which is the whole reason for merging rather than removing. */
+    if (DATA.applications.r1.applicant_uid !== 'dad') {
+      errors.push('the request filed under the merged account was left behind');
+    }
+    if (DATA.applications.r2.applicant_uid !== 'k2') {
+      errors.push('a request belonging to somebody else was moved as well');
+    }
+    /* And the card. */
+    if (DATA.swimmers.m1.applicant_uid !== 'dad') {
+      errors.push('the card the merged account held was left behind');
+    }
+    /* Both roles written down. A father who is a swimmer and the parent of three
+       minors is both; whichever account came first must not decide which. */
+    const roles = DATA.users.dad.roles || [];
+    if (roles.indexOf('swimmer_adult') === -1 || roles.indexOf('parent') === -1) {
+      errors.push('the roles were not kept both: ' + JSON.stringify(roles));
+    }
+    if (DATA.users.dad.role !== 'swimmer_adult') {
+      errors.push('merging changed what the rules read on the survivor: ' + DATA.users.dad.role);
+    }
+    /* And it is a merge, not a removal: the old account is marked, not destroyed. */
+    if (!DATA.users.k1) errors.push('the merged account was deleted rather than marked');
+    if (DATA.users.k1.merged_into !== 'dad') {
+      errors.push('the merged account does not say which account it became');
+    }
+    if (!DATA.users.k1.merged_name) {
+      errors.push('the merged account does not carry the name the old password will be told about');
+    }
+  });
+});
+
+test('the old password answers with the account to use', async () => {
+  await withFamily(async () => {
+    const w = boot(asUser('k1'));
+    DATA.users.k1.merged_into = 'dad';
+    DATA.users.k1.merged_name = 'بلعيد الأخيرة';
+    const r = await call(w, '/api/session');
+    if (r.data.gate.gate !== 'merged') {
+      errors.push('a merged account answers the door with "' + r.data.gate.gate + '" rather than "merged"');
+    }
+    /* By name, and not as a refusal: "some other account" is not something anybody
+       can act on, and the password they typed was right. */
+    if (r.data.gate.reason.indexOf('بلعيد الأخيرة') === -1) {
+      errors.push('the merged account is not told which account to use, by name');
+    }
+  });
+});
+
+test('a merged account leaves the club list of people', async () => {
+  await withFamily(async () => {
+    const w = boot(asUser('u1'));
+    DATA.users.k1.merged_into = 'dad';
+    const r = await call(w, '/api/accounts');
+    const ids = (r.data || []).map(a => a.id);
+    if (ids.indexOf('k1') !== -1) {
+      errors.push('a merged account is still offered to the club as a person');
+    }
+    if (ids.indexOf('dad') === -1) {
+      errors.push('the account that was merged into has gone from the club list as well');
+    }
+  });
+});
+
+test('a merge refuses what it must', async () => {
+  await withFamily(async () => {
+    const w = boot(asUser('u1'));
+
+    /* The club's own account: merging it away would leave the club with no door. */
+    let r = await call(w, '/api/accounts/merge', 'POST', { keep: 'k1', remove: ['owner1'] });
+    if (r.ok || !/صاحب النادي/.test(r.data.error || '')) {
+      errors.push("the club owner's account was merged away: " + JSON.stringify(r.data));
+    }
+
+    /* And the account doing the merging. */
+    r = await call(w, '/api/accounts/merge', 'POST', { keep: 'k2', remove: ['u1'] });
+    if (r.ok) errors.push('the manager merged their own account away');
+
+    /* An account into itself. */
+    r = await call(w, '/api/accounts/merge', 'POST', { keep: 'k1', remove: ['k1'] });
+    if (r.ok) errors.push('an account was merged into itself');
+
+    /* One already merged: a second attempt must say so rather than appear to
+       succeed and quietly lose the requests. */
+    DATA.users.k2.merged_into = 'dad';
+    r = await call(w, '/api/accounts/merge', 'POST', { keep: 'dad', remove: ['k2'] });
+    if (r.ok || !/مُدمج من قبل/.test(r.data.error || '')) {
+      errors.push('merging an account that was already merged did not say so: ' + JSON.stringify(r.data));
+    }
+
+    /* And a coach may not merge anything at all. */
+    const c = boot(asUser('u2'));
+    r = await call(c, '/api/accounts/merge', 'POST', { keep: 'dad', remove: ['k1'] });
+    if (r.ok) errors.push('a coach merged two accounts together');
+  });
 });
 
 (async () => {
