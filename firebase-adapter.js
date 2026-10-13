@@ -761,6 +761,77 @@
           };
         }));
       }
+      /* The accounts that are the same person.
+
+         Three things count, because a duplicate does not look like one: the same
+         chosen user name, the same national identity number, and the same name
+         with the same day of birth -- two accounts made out of one form, which is
+         what happens when somebody registers twice on two phones.
+
+         Reported as groups with the accounts in them, and the oldest one marked as
+         the one to keep. Which of a pair to remove is the manager's answer and not
+         the machine's; the oldest is offered because it is the one that has been
+         in use longest, and the row says which it is. */
+      if (path === '/api/accounts/duplicates' && method === 'GET') {
+        const gate = await managerView('فحص الحسابات المكررة لرئيس النادي فقط');
+        if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
+        const list = await db.collection('users').get();
+        const owners = await ownerAddresses();
+        const seen = new Map();
+        for (const d of list.docs) {
+          const f = d.data() || {};
+          const when = f.created_at && f.created_at.toDate ? f.created_at.toDate().getTime() : 0;
+          const put = (kind, value) => {
+            const key = kind + ':' + normId(value);
+            if (!key.endsWith(':')) return;
+            if (!seen.has(key)) seen.set(key, []);
+            seen.get(key).push({
+              id: d.id, name: f.name || '', email: f.email || '',
+              role: f.role || 'member', owner: owners.indexOf(f.email) !== -1,
+              when
+            });
+          };
+          put('user name', f.username);
+          put('identity number', f.national_id);
+          if (f.name && f.birth_date) put('name and day of birth', f.name + '|' + f.birth_date);
+        }
+        const groups = [];
+        for (const [key, accounts] of seen) {
+          if (accounts.length < 2) continue;
+          accounts.sort((a, b) => a.when - b.when);
+          groups.push({
+            reason: key.split(':')[0],
+            by: key.slice(key.indexOf(':') + 1),
+            keep: accounts[0].id,
+            accounts
+          });
+        }
+        return jsonResponse({ groups: groups, checked: list.size });
+      }
+      if (path === '/api/accounts' && method === 'DELETE') {
+        const gate = await managerView('حذف حساب لرئيس النادي فقط');
+        if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
+        const uid = String(body.id || '');
+        if (!uid) return jsonResponse({ error: 'معرّف الحساب مطلوب' }, 400);
+        if (String(gate.profile.id) === uid) {
+          return jsonResponse({ error: 'لا يمكنك حذف حسابك أنت — لا يبقى أحد يدخل.' }, 400);
+        }
+        const snap = await db.collection('users').doc(uid).get();
+        if (!snap.exists) return jsonResponse({ error: 'هذا الحساب غير موجود.' }, 404);
+        const f = snap.data() || {};
+        if ((await ownerAddresses()).indexOf(f.email) !== -1) {
+          return jsonResponse({ error: 'هذا حساب صاحب النادي. احذفه من إعدادات المالك لا من هنا.' }, 400);
+        }
+        await snap.ref.delete();
+        return jsonResponse({
+          ok: true, id: uid,
+          /* Said plainly, because a browser cannot remove the account at the
+             provider and calling it a deletion would be a claim this did not make.
+             What is removed is the profile: nothing the rules will open, so nothing
+             this person can reach. */
+          note: 'حُذف ملف الحساب. يبقى بإمكان صاحب كلمة المرور الدخول والعثور على لا شيء.'
+        });
+      }
       if (path === '/api/accounts' && method === 'PUT') {
         const gate = await managerView('تعديل الصلاحيات لرئيس النادي فقط');
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);

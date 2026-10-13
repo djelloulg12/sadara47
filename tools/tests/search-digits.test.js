@@ -22,7 +22,12 @@ const errors = [];
 /* The one line the check is about, taken out of the built file and run on its own
    with the same helpers the page uses. A check that re-implements the thing it is
    checking proves nothing. */
-const line = /const needle=latinDigits\(q\)\.toUpperCase\(\);[\s\S]{0,220}?return hay\.includes\(needle\);/
+/* The helper both searches ask, taken out of the built file and run on its own.
+   It used to be a pair of statements in a function, and this check looked for
+   them there -- so when the folding moved into a helper, this failed while the
+   behaviour it protects was unchanged. Asking whether the thing the searches use
+   finds the number is the stronger question anyway. */
+const line = /function matchesText\([\s\S]{0,420}?return latinDigits\(String\(what[^}]*}/
   .exec(APP);
 if (!line) {
   errors.push('the search does not fold digits on both sides, so a number printed '
@@ -40,11 +45,12 @@ if (!line) {
     : `${a.first_name_ar || ''} ${a.last_name_ar || ''}`.trim() || a.application_no || '-';
   const appContact = a => a.phone || a.email || '';
 
-  /* Wrapped as a function of (the request, what was typed), which is the shape it
-     has on the page. Read straight out of the built file rather than copied, so a
-     change to the search that breaks it is a change this notices. */
-  const find = new Function('latinDigits', 'appName', 'appContact',
-    'return function matchesApp(a, q) {\n' + line[0] + '\n};');
+  /* Read straight out of the built file rather than copied, so a change to the
+     search that breaks it is a change this notices. The shape is the one it has on
+     the page: what a record can be found by, and what was typed. */
+  /* The extracted text is a whole function expression, so it is returned as one.
+     Taking it apart and wrapping it again duplicated the parameter list. */
+  const find = new Function('latinDigits', 'return ' + line[0] + ';');
 
   /* The application the search is being asked about, in the shape the database
      holds it: Latin digits, because that is what is written there. */
@@ -53,7 +59,12 @@ if (!line) {
     application_no: 'APP-20261011-33A7', registration_id: 'E202610001',
     phone: '0661000001'
   };
-  const matchesApp = find(latinDigits, appName, appContact);
+  const matchesText = find(latinDigits);
+
+  /* What the request can be found by -- the same question the page asks of it. */
+  const appHaystack = a => appName(a) + ' ' + a.application_no + ' '
+    + a.registration_id + ' ' + appContact(a);
+  const matchesApp = (a, q) => matchesText(appHaystack(a), q);
 
   const found = [
     ['the number as it is stored', 'APP-20261011-33A7'],

@@ -537,6 +537,31 @@ function weeklyAttendance(){
   }
   return out;
 }
+/* ---------------------- searching ----------------------
+   One question, asked one way, so two searches cannot disagree about what a
+   number typed in one set of digits means.
+
+   A number read off a printed card is in the club's digits; a number typed into a
+   phone keyboard is in Latin. Both are the same number, and both have to find the
+   same person. Case is folded for the same reason: a name typed in capitals is
+   still the name. */
+function matchesText(what, needle){
+  const q=latinDigits(String(needle||'')).trim().toUpperCase();
+  if(!q)return true;
+  return latinDigits(String(what||'')).toUpperCase().includes(q);
+}
+/* What a request can be found by: who, and every number the club reads off it. */
+function appHaystack(a){
+  return appName(a)+' '+(a.application_no||'')+' '+(a.registration_id||'')+' '+(appContact(a)||'');
+}
+/* And a member: the name, every number on the card, the group and the telephone --
+   because the number a coach reads at the gate is the one somebody is certain of,
+   and it has to be one of these. */
+function swimmerHaystack(s){
+  return [s.name,s.first_name_ar,s.last_name_ar,s.id,s.membership_no,s.registration_id,
+          s.phone,s.group,s.group_name,s.blood_group].filter(Boolean).join(' ');
+}
+
 function pendingApplications(){return (state.applications||[]).filter(a=>!a.status||a.status==='pending');}
 function activeCards(){const list=(state.cards||[]).filter(c=>c.status!=='expired'&&c.status!=='cancelled');return list.length?list:(state.swimmers||[]).filter(s=>s.status==='نشط');}
 function collectedAmount(){return sum((state.applications||[]).filter(a=>a.status==='approved'),'expected_amount');}
@@ -611,9 +636,7 @@ function pageApplications(){
        the club's digits -- finds the record it names, and a number pasted in from
        a spreadsheet finds it too. Both are written to the database in one form, so
        this is the only place the two have to meet. */
-    const needle=latinDigits(q).toUpperCase();
-    const hay=latinDigits(appName(a)+' '+(a.application_no||'')+' '+(a.registration_id||'')+' '+(appContact(a)||'')).toUpperCase();
-    return hay.includes(needle);
+    return matchesText(appHaystack(a), q);
   });
   const head='<div class="toolbar"><div class="search">⌕<input placeholder="ابحث بالاسم أو رقم الطلب..." id="app-search" value="'+esc(q)+'"></div>'
     +'<div class="toolbar-group">'
@@ -675,8 +698,7 @@ function pageUsers(){
   const f=state.groupFilter||'all';
   const list=(state.swimmers||[]).filter(s=>{
     if(f!=='all'&&String(s.group||'')!==f)return false;
-    if(!q)return true;
-    return ((s.name||'')+' '+(s.id||'')+' '+(s.phone||'')).includes(q);
+    return matchesText(swimmerHaystack(s), q);
   });
   const groupNames=[...new Set([...(state.swimmers||[]).map(s=>s.group).filter(Boolean),...groups().map(g=>g.name)])];
   return '<div class="toolbar"><div class="search">⌕<input placeholder="ابحث عن سباح..." id="user-search" value="'+esc(q)+'"></div>'
@@ -1027,14 +1049,64 @@ action=async function(a,el){
   /* The count is the count of the sheet. It used to count every request in the
      database while the sheet showed only the open ones -- and the sheet is the
      page, printed, so the two numbers sat next to each other and disagreed. */
-  if(a==='print-applications'){
-    const all=state.applications||[];
-    const open=all.filter(x=>!appDecided(x));
-    printPage('طلبات التسجيل والمدربين',
-      'الطلبات المفتوحة: '+open.length+' — قيد المراجعة أولًا من الأحدث إلى الأقدم، والمرفوض في الأسفل'
-      +(all.length>open.length?(' — و'+(all.length-open.length)+' تم البت فيه'):''));
-    return;
-  }
+/* The requests, as a sheet somebody can file.
+
+   Built rather than printed off the screen. A screen print is for looking at; a
+   list of requests is carried to the counter, marked up, and comes back signed --
+   and none of that survives being a screenshot of a table.
+
+   Three blocks rather than one long table with a column of statuses down the side,
+   because the question a manager reads a printed sheet for is "what still needs
+   deciding", and three headings answer it before any row does. */
+function applicationsSheet(){
+  const all=state.applications||[];
+  const pending=appSorted(all.filter(a=>String(a.status||'pending')==='pending'));
+  const done=appSorted(all.filter(a=>String(a.status||'pending')!=='pending'&&String(a.status||'pending')!=='rejected'));
+  const refused=appSorted(all.filter(a=>String(a.status||'pending')==='rejected'));
+
+  const head=['#','رقم الطلب','رقم التسجيل','الاسم واللقب','الفئة','الاشتراك','المبلغ','الهاتف','الحالة','التوقيع'];
+  const cell=(a,i)=>'<tr><td>'+(i+1)+'</td>'
+    +'<td dir="ltr">'+esc(clubDigits(a.application_no||a.id||''))+'</td>'
+    +'<td dir="ltr">'+(a.registration_id?esc(clubDigits(a.registration_id)):'<small>—</small>')+'</td>'
+    +'<td><b>'+esc(appName(a))+'</b><br><small>'+esc(appContact(a)||'')+'</small></td>'
+    +'<td>'+esc(catLabel(a.application_type==='coach'?'coach':a.category))+'</td>'
+    +'<td>'+esc(a.application_type==='coach'?'—':planName(a.subscription_code))
+      +(a.application_type==='coach'?'':'<br><small>'+((a.transport?'النقل ':'')+(a.uniform?'البدلة':'')).trim()+'</small>')+'</td>'
+    +'<td>'+esc(a.application_type==='coach'?'—':money(a.expected_amount))+'</td>'
+    +'<td dir="ltr">'+(a.application_type==='coach'?esc(clubDigits(a.coach_phone||'')):esc(appContact(a)||'—'))+'</td>'
+    +'<td><span class="status '+((a.status||'pending')==='approved'?'success':(a.status||'pending')==='rejected'?'rejected':'pending')+'">'
+      +esc(stateLabel(a.status))+'</span></td>'
+    +'<td></td></tr>';
+
+  const block=(title,note,list)=>'<section class="roster-block"><div class="roster-head">'
+    +'<div><h3>'+esc(title)+'</h3><p>'+esc(note)+'</p></div>'
+    +'<div class="roster-count"><b>'+clubDigits(list.length)+'</b><small>طلب</small></div></div>'
+    +(list.length
+      ? '<table class="print-table"><thead><tr>'+head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'
+        +list.map(cell).join('')+'</tbody></table>'
+      : '<p class="empty-cell">لا يوجد.</p>')
+    +'</section>';
+
+  const box=document.createElement('section');
+  box.className='roster';
+  const due=pending.reduce((m,a)=>m+(Number(a.expected_amount)||0),0);
+  box.innerHTML='<div class="sheet-summary">'
+    +[['قيد المراجعة',pending.length,'var(--ok)'],['مقبول',done.length,'var(--teal)'],['مرفوض',refused.length,'var(--danger)']]
+      .map(x=>'<div class="sheet-sum"><b style="color:'+x[2]+'">'+clubDigits(x[1])+'</b><small>'+esc(x[0])+'</small></div>').join('')
+    +'<div class="sheet-sum"><b>'+esc(money(due))+'</b><small>المبلغ المنتظر</small></div>'
+    +'</div>'
+    +block('قيد المراجعة','الأحدث أولاً — من الأحدث إلى الأقدم',pending)
+    +block('مقبول','انتقلت إلى قائمة السباحين',done)
+    +block('مرفوض','في الأسفل دائماً، مهما كان تاريخها',refused)
+    +'<div class="sheet-sign"><span>توقيع المسيّر</span><span>التاريخ</span><span>ختم النادي</span></div>';
+  return printArea(box,{
+    title:'طلبات التسجيل', variant:'roster',
+    sub:'الموسم '+CLUB.season+' · '+clubDigits(all.length)+' طلب',
+    notes:'<p>الطلبات المقبولة تنتقل إلى قائمة السباحين. المرفوضة تُبقي سبب الرفض مكتوبًا عند رقم الطلب.</p>'
+  });
+}
+
+  if(a==='print-applications'){applicationsSheet();return}
   if(a==='print-subscriptions'){printPage('الأسعار والخدمات','الموسم '+CLUB.season);return}
   if(a==='print-swimmers'){printPage('قائمة السباحين','الموسم '+CLUB.season);return}
   if(a==='print-schedule'){printPage('البرنامج الأسبوعي',weekRange(state.weekOffset||0).label);return}
@@ -1277,11 +1349,33 @@ function renderPageOnly(){
   const p=state.page;
   const host=document.querySelector('#page-root');
   if(!host)return;
+  /* Whoever is typing keeps their place. The redraw replaces the control they are
+     typing into, so without this the caret goes back to the start and the box
+     loses the focus at the first letter -- and every letter after that goes
+     somewhere else. On a phone that is a box that takes one character at a time
+     with a tap between each, which is the whole reason a search box exists.
+
+     Remembered by id and offset rather than by holding on to the node, because
+     the node is exactly what the redraw throws away. */
+  const active=document.activeElement;
+  const focusId=(active&&active.id)?active.id:'';
+  const caret=(active&&typeof active.selectionStart==='number')?active.selectionStart:-1;
   const map={home:pageOverview,applications:pageApplications,subscriptions:pageSubscriptions,users:pageUsers,schedule:pageSchedule,attendance:pageAttendance,notices:pageNotices,card:pageCards,groups:pageGroups,settings:pageSettings};
   const scrollY=window.scrollY;
   host.innerHTML=(map[p]||pageOverview)();
   document.title=pageTitle(p)+' | '+CLUB.name;
   bind();
+  if(focusId){
+    const again=document.getElementById(focusId);
+    if(again){
+      again.focus();
+      /* Not every control has a caret -- a date, a number, a colour has none, and
+         asking for one on those throws. */
+      if(caret>=0&&typeof again.setSelectionRange==='function'){
+        try{again.setSelectionRange(caret,caret)}catch(_){}
+      }
+    }
+  }
   buildQRCodes();
   window.scrollTo(0,scrollY);
 }
@@ -3753,6 +3847,39 @@ boot = async function () {
   ];
   const label = role => (ROLES.filter(r => r[0] === role)[0] || [role, role])[1];
 
+  /* What the check found, and a way to act on it.
+
+     The reason each group is a group is on the row, because "duplicate" on its
+     own says nothing about which two of five accounts are the same person. The
+     account to keep is marked rather than the ones to remove, so the manager is
+     choosing which one was the mistake -- which is their answer and not the
+     machine's. */
+  const findings = (data) => {
+    const groups = (data && data.groups) || [];
+    if (!groups.length) {
+      return '<div class="dup-clear">لا توجد حسابات مكررة. فُحص '
+        + clubDigits((data && data.checked) || 0) + ' حساب.</div>';
+    }
+    const rows = groups.map((g, n) => {
+      const items = (g.accounts || []).map(a => {
+        const keep = String(a.id) === String(g.keep);
+        return '<div class="requirement-row account-row' + (keep ? ' is-keep' : '') + '">'
+          + '<div class="account-who"><b>' + esc(a.name || a.email || 'حساب')
+          + (keep ? ' <small class="owner-mark">الأقدم — يُحفظ</small>' : '') + '</b>'
+          + '<span>' + esc(a.email || '') + ' · ' + esc(label(a.role)) + '</span></div>'
+          + (keep ? '<span></span>'
+            : '<button class="check-btn no" data-action="remove-duplicate-account" data-id="'
+              + esc(a.id) + '" data-name="' + esc(a.name || a.email || '') + '">حذف</button>')
+          + '</div>';
+      }).join('');
+      return '<div class="dup-group"><h4>' + clubDigits(n + 1) + '. ' + esc(g.reason)
+        + ' — <code>' + esc(g.by || '') + '</code></h4>' + items + '</div>';
+    }).join('');
+    return '<p class="hint">وُجدت ' + clubDigits(groups.length) + ' مجموعة، من '
+      + clubDigits(data.checked) + ' حساب. احذف ما هو مكرر واحتفظ بالأقدم.</p>'
+      + rows;
+  };
+
   const panel = (list, me) => {
     if (!Array.isArray(list)) return '';
     const rows = list.map(a => {
@@ -3778,14 +3905,28 @@ boot = async function () {
       + '<h3>صلاحيات الحسابات</h3>'
       + '<p>من يستطيع الدخول، وما يستطيع أن يفعل. صفك لا يُغيَّر — '
       + 'استعمل حساباً آخر للتجريب.</p>'
-      + '</div><button class="btn btn-outline" data-action="reload-accounts">تحديث</button></div>'
+      + '</div><div class="toolbar-group">'
+      + '<button class="btn btn-outline" data-action="check-duplicate-accounts">فحص الحسابات المكررة</button>'
+      + '<button class="btn btn-outline" data-action="reload-accounts">تحديث</button></div></div>'
       + '<div id="accounts-list">' + (rows || '<p class="hint">لا توجد حسابات.</p>') + '</div>'
+      + '<div id="duplicate-accounts" hidden></div>'
       + '</section>';
   };
 
   const coreAccountsSettings = pageSettings;
   pageSettings = function () {
-    return coreAccountsSettings() + panel(state.accounts, state.user && state.user.id);
+    /* What the check found is kept, so it is still there after a redraw -- a
+       finding that disappears when the page is redrawn is a finding somebody has
+       to ask for again. */
+    let base = coreAccountsSettings() + panel(state.accounts, state.user && state.user.id);
+    if (state.duplicateAccounts) {
+      const box = document.getElementById('duplicate-accounts');
+      if (box) {
+        box.hidden = false;
+        box.innerHTML = findings(state.duplicateAccounts);
+      }
+    }
+    return base;
   };
 
   /* Read through fetch directly, not api(): that helper always sends a body, and
@@ -3802,6 +3943,18 @@ boot = async function () {
     } catch (_) { state.accounts = []; }
   }
 
+  /* Read through fetch directly, like the list: api() always sends a body, and a
+     GET with a body is refused before it leaves. */
+  async function loadDuplicates() {
+    try {
+      const res = await fetch('/api/accounts/duplicates', { credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({}));
+      state.duplicateAccounts = data && Array.isArray(data.groups) ? data : { groups: [], checked: 0 };
+    } catch (_) { state.duplicateAccounts = { groups: [], checked: 0 }; }
+    const box = document.getElementById('duplicate-accounts');
+    if (box) { box.hidden = false; box.innerHTML = findings(state.duplicateAccounts); }
+  }
+
   const coreSyncAccounts = syncApi;
   syncApi = async function () {
     await coreSyncAccounts();
@@ -3812,6 +3965,34 @@ boot = async function () {
 
   const coreActionAccounts = action;
   action = async function (a, el) {
+    if(a==='check-duplicate-accounts'){
+      await loadDuplicates();
+      const box = document.getElementById('duplicate-accounts');
+      if (box) { box.hidden = false; box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+      const groups = (state.duplicateAccounts && state.duplicateAccounts.groups) || [];
+      showToast(groups.length
+        ? 'وُجدت ' + groups.length + ' مجموعة حسابات مكررة.'
+        : 'لا توجد حسابات مكررة.', groups.length ? 'error' : 'ok');
+      return;
+    }
+    if(a==='remove-duplicate-account'){
+      /* Asked first, and by name. A button that removes an account on one click,
+         next to a list of five rows, is a button somebody will press on the wrong
+         row. */
+      const who = el.dataset.name || 'هذا الحساب';
+      if (!confirm('حذف حساب «' + who + '»؟\n\nيحذف ملف الحساب فقط: يبقى بإمكان صاحب كلمة المرور الدخول بالعثور على لا شيء.\nلا يمكن التراجع.')) return;
+      const res = await api('/api/accounts', 'DELETE', { id: el.dataset.id });
+      if (!res || res.error) { showToast((res && res.error) || 'تعذّر حذف الحساب.', 'error'); return; }
+      state.accounts = (state.accounts || []).filter(x => String(x.id) !== String(el.dataset.id));
+      save();
+      await loadDuplicates();
+      render();
+      /* Said as what it was: the profile is gone, so nothing the rules open is
+         reachable. Calling it a deletion of the account would be a claim this
+         did not make. */
+      showToast(res.note || 'حُذف ملف الحساب.', 'ok');
+      return;
+    }
     if(a==='reload-accounts'){
       await loadAccounts();
       if (state.page !== 'settings') { state.page = 'settings'; save(); }

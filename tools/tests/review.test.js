@@ -190,6 +190,204 @@ let auditPosted = false;
   }
 }
 
+/* ---- the printed sheet for the requests ---- */
+/* The printed sheet for the requests.
+
+   It is checked by counting rows rather than by looking at it, because the fault
+   it had cannot be seen on the page: the rows were cells with no row around them,
+   the parser made one row out of the first and lost the boundaries of the rest,
+   and the sheet showed three rows where there were six. The summary band above it
+   said six. Numbers right, headings right, table short, and nothing on the page
+   said a row had gone.
+
+   So the count is the check -- the count against the count in the summary band,
+   which is the two numbers that disagreed. */
+const sheet_fixture = () => {
+  const day = n => ({ toDate: () => new Date('2026-03-' + String(n).padStart(2, '0')) });
+  return {
+    user: { role: 'president', id: 'me' },
+    subscriptions: [{ code: 'quarter', name: 'اشتراك فصلي', amount: 1000 }],
+    extras: { transport: 900, uniform: 2500 },
+    applications: [
+      { id: 'a1', application_no: 'APP-20260312-DDDD', registration_id: 'E202610003', first_name_ar: 'يوسف', last_name_ar: 'بلعيد', category: 'minor', status: 'pending', phone: '0661000009', subscription_code: 'quarter', expected_amount: 1900, created_at: day(12) },
+      { id: 'a2', application_no: 'APP-20260310-BBBB', first_name_ar: 'مريم', last_name_ar: 'قندوز', category: 'minor', status: 'pending', phone: '0661000001', subscription_code: 'quarter', expected_amount: 1000, created_at: day(10) },
+      { id: 'a3', application_no: 'APP-20260308-CCCC', first_name_ar: 'آدم', last_name_ar: 'بلعيد', category: 'adult', status: 'pending', phone: '0661000003', subscription_code: 'quarter', expected_amount: 1000, created_at: day(8) },
+      { id: 'a4', application_no: 'APP-20260220-EEEE', first_name_ar: 'ليلى', last_name_ar: 'قندوز', category: 'adult', status: 'approved', transferred_to: 'APP-20260220-EEEE', phone: '0661000004', expected_amount: 1000, created_at: day(20) },
+      { id: 'a5', application_no: 'APP-20260105-CCCC', first_name_ar: 'نور', last_name_ar: 'بلعيد', category: 'minor', status: 'rejected', phone: '0661000005', created_at: day(5) },
+      { id: 'a6', application_no: 'APP-20260101-AAAA', first_name_ar: 'سفيان', last_name_ar: 'قندوز', category: 'adult', status: 'rejected', phone: '0661000006', created_at: day(1) }
+    ]
+  };
+};
+
+pending.push(Promise.resolve().then(() => {
+  const w = boot(sheet_fixture());
+  w.__t.state.page = 'applications';
+  w.__t.render();
+  w.__t.action('print-applications');
+  const host = w.document.querySelector('.print-host');
+  if (!host) {
+    errors.push('[sheet] printing the requests produced nothing');
+    return;
+  }
+
+  const blocks = [...host.querySelectorAll('.roster-block')];
+  if (blocks.length !== 3) {
+    errors.push('[sheet] the sheet has ' + blocks.length + ' blocks, not three');
+  }
+
+  /* The two numbers that disagreed: the rows and the figures above them. */
+  const rows = host.querySelectorAll('tbody tr').length;
+  const said = [...host.querySelectorAll('.sheet-sum b')].map(n => Number(String(n.textContent).replace(/[^\d]/g, '')));
+  const counted = said.slice(0, 3).reduce((m, n) => m + n, 0);
+  if (rows !== counted) {
+    errors.push('[sheet] the sheet prints ' + rows + ' rows and its own summary says ' + counted);
+  }
+  if (counted !== 6) {
+    errors.push('[sheet] the summary counts ' + counted + ' requests where there are six');
+  }
+
+  /* And the order on paper is the order on the screen: work first, refusals last,
+     and the whole of each newest first. */
+  /* The request numbers of each block, row by row -- which is what "the order on
+     paper" means. It used to be one number per block compared against a list
+     drawn from the head of the first block. */
+  const perBlock = [...host.querySelectorAll('.roster-block')].map(b =>
+    [...b.querySelectorAll('tbody tr')].map(tr => {
+      const cells = [...tr.querySelectorAll('td')];
+      return (cells[1] ? cells[1].textContent.trim() : '');
+    }));
+  const underReview = perBlock[0] || [];
+  if (underReview.join(',') !== 'APP-20260312-DDDD,APP-20260310-BBBB,APP-20260308-CCCC') {
+    errors.push('[sheet] the requests under review are in this order: ' + underReview.join(', '));
+  }
+  const refused = perBlock[2] || [];
+  if (refused.join(',') !== 'APP-20260105-CCCC,APP-20260101-AAAA') {
+    errors.push('[sheet] the refusals are in this order: ' + refused.join(','));
+  }
+  if (refused[refused.length - 1] !== 'APP-20260101-AAAA') {
+    errors.push('[sheet] the oldest refusal is not at the bottom of the sheet');
+  }
+  if (perBlock.length === 3 && perBlock[2][0] && underReview[0] === refused[0]) {
+    errors.push('[sheet] a refusal is mixed in with the requests under review');
+  }
+
+  /* The columns the club reads, and the one it writes in. */
+  const heads = [...host.querySelectorAll('thead th')].map(t => t.textContent.trim());
+  for (const need of ['رقم الطلب', 'رقم التسجيل', 'الاسم واللقب', 'المبلغ', 'الهاتف', 'التوقيع']) {
+    if (heads.indexOf(need) === -1) {
+      errors.push('[sheet] the sheet has no column for ' + need);
+    }
+  }
+  /* And it is signed for: a sheet that goes into a drawer unmarked is a sheet
+     nobody can say was dealt with. */
+  const signs = [...host.querySelectorAll('.sheet-sign span')].map(n => n.textContent.trim());
+  if (signs.length < 3) {
+    errors.push('[sheet] the sheet is not signed for: ' + signs.length + ' lines');
+  }
+}));
+/* ---- the search boxes ---- */
+function typeInto(w, id, text) {
+  /* Focus first, then one character at a time: a check that sets the whole value
+     in one go never sees the caret being thrown away. */
+  const box = w.document.getElementById(id);
+  if (!box) return null;
+  box.focus();
+  for (const ch of text) {
+    const live = w.document.getElementById(id);
+    live.value += ch;
+    live.setSelectionRange(live.value.length, live.value.length);
+    live.dispatchEvent(new w.Event('input', { bubbles: true }));
+  }
+  const after = w.document.getElementById(id);
+  return {
+    held: after.value,
+    focused: w.document.activeElement === after,
+    caret: after.selectionStart
+  };
+}
+
+/* How many rows a table is showing, not counting the "nothing found" row -- which
+   is one row, and reads as a match to anything counting rows. */
+function matchedRows(w) {
+  return [...w.document.querySelectorAll('tbody tr')]
+    .filter(tr => !tr.querySelector('.empty-cell') && !/لا توجد|لا يوجد/.test(tr.textContent))
+    .length;
+}
+
+const search_boxes = () => {
+  const seed = {
+    user: { role: 'president' },
+    applications: [
+      { id: 'a1', application_no: 'APP-20260101-AAAA', first_name_ar: 'مريم', last_name_ar: 'بلعيد', status: 'pending', phone: '0661000001' },
+      { id: 'a2', application_no: 'APP-20260102-BBBB', first_name_ar: 'أمين', last_name_ar: 'قندوز', status: 'pending', phone: '0661000002' }
+    ],
+    swimmers: [
+      { id: 's1', name: 'مريم بلعيد', membership_no: 'E202610001', registration_id: 'E202610001', phone: '0661000001', group: 'المبتدئون' },
+      { id: 's2', name: 'أمين قندوز', membership_no: 'E202610002', registration_id: 'E202610002', phone: '0661000002', group: 'المتقدمون' }
+    ]
+  };
+
+  const go = (w, page, id, text) => {
+    w.__t.state.page = page;
+    w.__t.render();
+    const box = w.document.getElementById(id);
+    if (box) { box.value = ''; box.dispatchEvent(new w.Event('input', { bubbles: true })); }
+    const got = typeInto(w, id, text);
+    if (!got) { errors.push('[search] the ' + page + ' page has no box called ' + id); return null; }
+    return { got, rows: matchedRows(w) };
+  };
+
+  /* The requests box. */
+  const r1 = go(boot(seed), 'applications', 'app-search', 'مريم');
+  if (r1) {
+    if (!r1.got.focused) errors.push('[search] the requests box loses the focus after one letter');
+    if (r1.got.caret !== r1.got.held.length) {
+      errors.push('[search] the caret in the requests box jumped to ' + r1.got.caret
+        + ' instead of staying at the end of what was typed');
+    }
+    if (r1.got.held !== 'مريم') {
+      errors.push('[search] the requests box did not keep what was typed: ' + JSON.stringify(r1.got.held));
+    }
+    if (r1.rows !== 1) errors.push('[search] a name typed a letter at a time found ' + r1.rows + ' requests');
+  }
+
+  /* The swimmers' box, by the number on the card -- the one number a coach reads
+     aloud at the gate. */
+  const r2 = go(boot(seed), 'users', 'user-search', 'E202610002');
+  if (r2) {
+    if (!r2.got.focused) errors.push('[search] the swimmers box loses the focus after one letter');
+    if (r2.got.caret !== r2.got.held.length) {
+      errors.push('[search] the caret in the swimmers box jumped to ' + r2.got.caret);
+    }
+    if (r2.rows !== 1) errors.push('[search] the number on a member\'s card found ' + r2.rows + ' members');
+  }
+
+  /* The same number in the club's digits, as it is printed. One search folded
+     these and the other did not, and which one did depended on the page. */
+  /* The same ten digits the club writes, built rather than typed: a literal here
+     came to nine digits and the check failed for a reason that had nothing to do
+     with the code. */
+  const arabic = '0661000002'.split('').map(d => String.fromCharCode(0x0660 + Number(d))).join('');
+  const r3 = go(boot(seed), 'users', 'user-search', arabic);
+  if (r3 && r3.rows !== 1) {
+    errors.push('[search] a telephone number typed in the club\'s digits found ' + r3.rows + ' members');
+  }
+  const r4 = go(boot(seed), 'applications', 'app-search', arabic);
+  if (r4 && r4.rows !== 1) {
+    errors.push('[search] the same number on the requests page found ' + r4.rows + ' requests');
+  }
+
+  /* And the group, which is a word and not a number, still works. */
+  const r5 = go(boot(seed), 'users', 'user-search', 'متقدم');
+  if (r5 && r5.rows !== 1) errors.push('[search] searching by the group found ' + r5.rows + ' members');
+
+  /* Something that matches nobody says so, rather than showing one row that
+     looks like a match. */
+  const r6 = go(boot(seed), 'users', 'user-search', 'z');
+  if (r6 && r6.rows !== 0) errors.push('[search] a search matching nobody shows ' + r6.rows + ' rows');
+};
+
+pending.push(Promise.resolve().then(search_boxes));
 /* ---- the order of the requests ---- */
 /* The order of the requests, and what accepting one does to it.
 

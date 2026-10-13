@@ -500,3 +500,86 @@ body.printing .print-sheet10{display:block!important}
 .fee-on { display:inline-flex; align-items:center; gap:4px; font-size:.8rem; }
 
 [hidden]{display:none!important}
+
+/* ---------------- الحسابات المكررة ---------------- */
+/* A group is a group: the reason is a heading over it, not a box drawn round it.
+   Five accounts in three groups is the real case, and there somebody is
+   comparing rows across the panel rather than within one box. */
+#duplicate-accounts { margin-top: 16px; }
+.dup-group {
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; margin-bottom: 12px; background: #fbfdfd;
+}
+.dup-group h4 {
+  margin: 0 0 10px; font-size: 14px; color: var(--teal-dark); font-weight: 700;
+}
+.dup-group h4 code {
+  font-family: inherit; font-weight: 600; background: var(--teal-soft);
+  padding: 1px 7px; border-radius: 6px; color: var(--ink);
+}
+/* The account to keep is marked, not the ones to remove: marking the removals
+   makes this a list of things to destroy. */
+.account-row.is-keep { background: #f4faf6; border-radius: 10px; }
+.account-row .check-btn.no { margin-inline-start: auto; }
+.dup-clear {
+  margin-top: 14px; padding: 12px 14px; border-radius: 12px;
+  background: #e7f6ee; color: var(--ok); font-size: 14px; font-weight: 600;
+}
+
+/* ---------------- ورقة الطلبات ---------------- */
+/* Blocks, not one long table: the sheet is filed and carried, and three blocks
+   with headings can be worked through in order and ticked off. A single table
+   with a status column cannot -- every row is a fresh act of reading. */
+.roster-block { break-inside: auto; margin-bottom: 18px; }
+.roster-block .roster-head { break-after: avoid; }
+.roster-block .print-table { break-inside: auto; }
+.roster-block .print-table tr { break-inside: avoid; }
+
+/* The first question about a list of requests is how many are still waiting.
+   Four figures above the table answer it; counting rows does not. */
+.sheet-summary {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;
+  padding-bottom: 12px; border-bottom: 2px solid var(--line);
+}
+.sheet-sum {
+  min-width: 118px; padding: 8px 12px; border: 1px solid var(--line);
+  border-radius: 10px; background: #fbfdfd;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.sheet-sum b { font-size: 19px; font-weight: 800; color: var(--teal-dark); }
+.sheet-sum small { font-size: 12px; color: var(--muted); }
+
+/* A signature line, because a sheet that goes into a drawer unmarked is a sheet
+   nobody can say was dealt with. */
+.sheet-sign {
+  display: flex; gap: 26px; margin-top: 22px; padding-top: 12px;
+  border-top: 1px solid var(--line); break-inside: avoid;
+}
+.sheet-sign span {
+  flex: 1; padding-bottom: 22px; border-bottom: 1px solid var(--muted);
+  font-size: 12.5px; color: var(--muted);
+}
+
+@media print {
+  /* A table with no rules between its rows reads as a grey block at A4 width.
+     These are hairlines, and they are what make it a table. */
+  .roster-block .print-table td,
+  .roster-block .print-table th { border-bottom: 1px solid #d8e2e6 !important; }
+  .roster-block .print-table thead th {
+    border-bottom: 2px solid #9fb6bd !important;
+    background: #f2f7f8 !important;
+  }
+  .roster-block .print-table { font-size: 10.5pt; }
+  .roster-block .print-table td:nth-child(2),
+  .roster-block .print-table td:nth-child(3),
+  .roster-block .print-table td:nth-child(8) { direction: ltr; text-align: left; }
+  /* A request number is one thing. Broken over three lines it is a thing nobody
+     can read aloud at the counter, which is the one thing it is for. Same for an
+     amount: a break between the figures and the currency is the difference
+     between 6,400 دج and two lines of doubt. */
+  .roster-block .print-table td:nth-child(2),
+  .roster-block .print-table td:nth-child(3),
+  .roster-block .print-table td:nth-child(7),
+  .roster-block .print-table td:nth-child(8) { white-space: nowrap; }
+  .sheet-summary { break-inside: avoid; }
+}
