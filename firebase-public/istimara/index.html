@@ -90,7 +90,7 @@
                  are what it shows and what it accepts. -->
             <input id="birth_date" name="birth_date" type="text" required
                    inputmode="numeric" autocomplete="bday" maxlength="12"
-                   placeholder="1998/03/17" class="date-in" aria-describedby="birth_date-hint" />
+                   placeholder="1998/03/17" class="date-in" aria-describedby="birth_date-hint"  data-cal-max="today" />
             <small class="hint" id="birth_date-hint">بصيغة سنة/شهر/يوم — 1998/03/17</small>
           </label>
           <label class="f">
@@ -142,7 +142,7 @@
             <span class="lbl">تاريخ انتهاء البطاقة <i class="req">*</i></span>
             <input id="national_id_expiry" name="national_id_expiry" type="text"
                    inputmode="numeric" class="date-in" maxlength="12" placeholder="2031/04/17"
-                   aria-describedby="national_id_expiry-hint" />
+                   aria-describedby="national_id_expiry-hint"  data-cal-min-year="1980" />
             <small class="hint" id="national_id_expiry-hint">بصيغة سنة/شهر/يوم — 2031/04/17</small>
           </label>
         </div>
@@ -219,7 +219,7 @@
           <label class="f">
             <span class="lbl">تاريخ ميلاد الولي</span>
             <input id="guardian_birth_date" name="guardian_birth_date" type="text"
-                   inputmode="numeric" maxlength="12" placeholder="1975/06/02" class="date-in" />
+                   inputmode="numeric" maxlength="12" placeholder="1975/06/02" class="date-in"  data-cal-max="today" />
           </label>
           <label class="f">
             <span class="lbl">صفة القرابة</span>
@@ -245,13 +245,13 @@
           <label class="f">
             <span class="lbl">تاريخ انتهاء بطاقة الولي <i class="req">*</i></span>
             <input id="guardian_national_id_expiry" name="guardian_national_id_expiry" type="text"
-                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2031/06/02" />
+                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2031/06/02"  data-cal-min-year="1980" />
             <small class="hint">بصيغة سنة/شهر/يوم — 2031/06/02</small>
           </label>
           <label class="f">
             <span class="lbl">تاريخ إصدار بطاقة الولي</span>
             <input id="guardian_card_issued" name="guardian_card_issued" type="text"
-                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2021/06/02" />
+                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2021/06/02"  data-cal-min-year="1980" />
             <small class="hint">اختياري — خانة «الصادرة بتاريخ» في استمارة النادي.</small>
           </label>
         </div>
@@ -264,8 +264,8 @@
 
       <!-- ---------- 3. photo ---------- -->
       <fieldset class="card">
-        <legend><span class="step-no">٣</span> الصورة الشخصية</legend>
-        <p class="card-note">تظهر في إطار «الصورة» على الاستمارة الرسمية وبطاقة الانخراط.</p>
+        <legend><span class="step-no">٣</span> الصورة الشخصية <i class="req">*</i></legend>
+        <p class="card-note">إجبارية — تظهر في إطار «الصورة» على الاستمارة الرسمية وبطاقة الانخراط. صورة واضحة وحديثة، والوجه داخل الإطار.</p>
         <div class="photo-row">
           <div class="photo-preview" id="photo-preview"><span>لا توجد صورة</span></div>
           <div class="photo-actions">
@@ -274,7 +274,7 @@
               <input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" hidden />
             </label>
             <button type="button" class="btn btn-ghost" id="photo-clear" hidden>حذف الصورة</button>
-            <p class="hint">JPG أو PNG أو WebP &mdash; بحد أقصى 3 ميغابايت.</p>
+            <p class="hint">JPG أو PNG أو WebP &mdash; بحد أقصى 3 ميغابايت. يُرسَل ما يكفي لطباعة بطاقة بجودة 300 نقطة في البوصة، لا الصورة الأصلية.</p>
           </div>
         </div>
       </fieldset>
@@ -501,6 +501,7 @@
   <script src="/firebase-config.js"></script>
   <script src="/firebase-adapter.js"></script>
   <script src="print.js"></script>
+  <script src="datepicker.js"></script>
   <script src="algeria.js"></script>
   <script src="istimara.js"></script>
   <script>if ('serviceWorker' in navigator && location.protocol === 'https:')

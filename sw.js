@@ -3,7 +3,7 @@
    ========================================================== */
 /* Bumped whenever what is cached changes: the activate step deletes every cache
    under any other name, so a new name is what retires the old one. */
-const CACHE = 'sadara-v5';
+const CACHE = 'sadara-v6';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/firebase-config.js',
   '/manifest.webmanifest', '/assets/logo.png', '/assets/form-registration-01.jpg',
   '/assets/internal-regulations.jpg', '/assets/registration-card.jpg'];
@@ -20,7 +20,7 @@ const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/firebase-config.j
    them. */
 const FORM_SHELL = ['/istimara/', '/istimara/index.html', '/istimara/istimara.css',
   '/istimara/istimara.js', '/istimara/print.js', '/istimara/algeria.js',
-  '/istimara/communes.json'];
+  '/istimara/datepicker.js', '/istimara/communes.json'];
 
 /* The scans are the only files big enough to be worth serving from the cache on
    sight; they are also the ones the printed form is measured against. */

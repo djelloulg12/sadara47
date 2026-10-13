@@ -152,6 +152,7 @@
   /* On the same object the print helpers are on, so the checks can raise one the
      way the page does rather than reaching past the front door. */
   F.notify = notify;
+  F.setPhoto = acceptPhoto;
 
   /* An error stops being true the moment the person starts fixing what it was
      about, and leaving it on screen says the request is still refused when it is
@@ -531,12 +532,18 @@
     el('photo-clear').hidden = !state.photo;
   }
 
+  /* A photograph that has been read and made small. Named, because this is what
+     both halves of the page do once the reading is done -- and what the checks
+     do, so there is one place that knows what accepting a photograph means. */
+  function acceptPhoto(dataUrl) {
+    state.photo = dataUrl || '';
+    paintPhoto();
+    saveDraft();
+    return state.photo;
+  }
+
   function takePhoto(file) {
-    shrinkPhoto(file).then(function (dataUrl) {
-      state.photo = dataUrl;
-      paintPhoto();
-      saveDraft();
-    }).catch(function (e) {
+    shrinkPhoto(file).then(acceptPhoto).catch(function (e) {
       say(e.message || 'تعذّر تحميل الصورة.', 'error');
     });
   }
@@ -550,6 +557,12 @@
     var required = ['first_name_ar', 'last_name_ar', 'birth_date',
                     'phone', 'address',
                     'email', 'username', 'password', 'password_confirm'];
+    /* The photograph is part of the registration and not something the club asks
+       for at the counter. The official form has a frame for it and the membership
+       card has a frame for it, and a registration that cannot be turned into a
+       card is not a registration. Asked of everybody: the frame is the same size
+       whether the swimmer is eight or forty. */
+    if (!state.photo) missing.push('photo');
     if (category() === 'minor') {
       /* The place of birth, for a minor: it is one of the three things that say a
          child is who they are -- two children born the same year in the same
@@ -652,6 +665,7 @@
     guardian_national_id: cardNumberError('رقم بطاقة الولي'),
     guardian_national_id_expiry: 'اكتب تاريخ انتهاء بطاقة الولي بصيغة سنة/شهر/يوم — 2031/06/02.',
     guardian_card_issued: 'اكتب تاريخ إصدار بطاقة الولي بصيغة سنة/شهر/يوم — 2021/06/02.',
+    photo: 'الصورة إجبارية. اختر صورة واضحة، والوجه داخل الإطار.',
     birth_place: 'اختر بلدية الميلاد من القائمة -- تُكتب في استمارة النادي بعد «ب:».',
     password: 'كلمة المرور ثماني خانات على الأقل.',
     password_confirm: 'كلمتا المرور غير متطابقتين. أعد كتابة كلمة المرور.',
@@ -1176,7 +1190,8 @@
        paperwork: it can be added at the club, and everything else is stored. */
     var warn = el('done-warning');
     if (rec.photo_omitted) {
-      warn.textContent = 'وصل طلبك كاملًا، لكن الصورة لم تُرفق لحجمها. أضِفها عند النادي، '
+      warn.textContent = 'وصل طلبك، لكن الصورة لم تُرفق لأن الملف صار أكبر من المسموح. '
+        + 'أعد إرسال الطلب بصورة أصغر حجمًا — مربوطة من الأسفل كما في المثال — '
         + 'واعرض الرقم أعلاه على الموظف.';
       warn.hidden = false;
     }
@@ -1321,7 +1336,13 @@
     if (bad.length) {
       var first = flag(bad);
       say(bad.map(function (id) { return MESSAGES[id] || 'أكمل الحقول المطلوبة.'; })[0], 'error');
+      /* The photograph is not an input, so being walked to it means being walked
+         to the control that picks one. */
       if (first) first.focus();
+      else if (bad.indexOf('photo') !== -1 && el('photo')) {
+        var choose = el('photo').closest('label');
+        if (choose) { choose.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+      }
       return;
     }
     saveDraft();
@@ -1447,6 +1468,11 @@
   /* Laid out before the draft is read, so a restored value and a typed one are in
      the same shape rather than the form holding both. */
   listenForDigits();
+  /* Every date field gets a calendar. Attached by class, so a date field added
+     later is a date field with a calendar on it -- and each field says for itself
+     which dates it will take, because nothing is born next year and a card does
+     not run out before the club's own records begin. */
+  if (window.SADARA_CALENDAR) window.SADARA_CALENDAR.attachAll();
   syncCategory();
   updateTotal();
   paintPhoto();

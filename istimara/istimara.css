@@ -190,6 +190,83 @@ input.bad, select.bad, textarea.bad { border-color: var(--danger); background: #
 .form-msg.error { background: #fdecea; color: var(--danger); border-color: #f3c4c0; }
 .form-msg.ok { background: #e7f6ee; color: var(--ok); border-color: #b6e0c9; }
 
+/* ---------------- the calendar ---------------- */
+/* The field keeps its place and its width; only a button is added beside it. The
+   calendar is an addition to the field, never a replacement for it, because the
+   form has to work without this script and the keyboard is faster than a pointer
+   for somebody who knows their own date. */
+.cal-wrap { position: relative; display: block; }
+.cal-open {
+  position: absolute; inset-inline-end: 8px; top: 50%; transform: translateY(-50%);
+  width: 34px; height: 34px; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted); font-size: 16px; cursor: pointer;
+  display: grid; place-items: center;
+}
+.cal-open:hover { background: #eef4f6; color: var(--teal-dark); }
+.cal-open:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
+/* Room for the button, so the text in the field never runs underneath it. */
+.cal-wrap input.date-in { padding-inline-end: 40px; }
+
+.cal-pop {
+  position: absolute; z-index: 95; width: 300px; max-width: calc(100vw - 16px);
+  padding: 12px; background: #fff;
+  border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 14px 38px rgba(16, 42, 67, .18), 0 2px 6px rgba(16, 42, 67, .08);
+  animation: cal-in .16s ease-out both;
+}
+@keyframes cal-in { from { opacity: 0; transform: translateY(-6px); } }
+
+.cal-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.cal-title {
+  flex: 1; text-align: center; font-weight: 700; font-size: 14.5px; color: var(--teal-dark);
+}
+.cal-nav {
+  width: 34px; height: 34px; flex: none; font-size: 20px; line-height: 1;
+  border: 1px solid var(--line); border-radius: 9px; background: #fff;
+  color: var(--muted); cursor: pointer;
+}
+.cal-nav:hover { background: var(--teal-soft); color: var(--teal-dark); border-color: #bfe0e4; }
+.cal-nav:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
+
+.cal-week, .cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px;
+}
+.cal-week { margin-bottom: 4px; }
+.cal-dow {
+  text-align: center; font-size: 11.5px; color: var(--muted); font-weight: 600;
+  padding-bottom: 2px;
+}
+.cal-cell {
+  height: 36px; border: 0; border-radius: 9px; background: transparent;
+  font: inherit; font-size: 13.5px; color: var(--ink); cursor: pointer;
+  display: grid; place-items: center;
+}
+.cal-cell:hover:not(:disabled) { background: var(--teal-soft); }
+.cal-cell:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
+/* A day the field will not take: shown, said to be unsaid. A grid that changes
+   shape with the bound confuses the eye more than an empty cell does. */
+.cal-cell.cal-off { color: #c3d2d7; cursor: not-allowed; }
+.cal-cell.cal-today-mark { font-weight: 800; color: var(--teal-dark); text-decoration: underline; }
+.cal-cell.cal-on { background: var(--teal); color: #fff; font-weight: 700; }
+.cal-cell.cal-on.cal-today-mark { color: #fff; }
+.cal-blank { height: 36px; }
+
+.cal-foot {
+  display: flex; gap: 8px; margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.cal-foot button {
+  flex: 1; min-height: 38px; font: inherit; font-weight: 700; font-size: 13.5px;
+  border: 1px solid var(--line); border-radius: 9px; background: #fff;
+  color: var(--teal-dark); cursor: pointer;
+}
+.cal-foot button:hover { background: var(--teal-soft); border-color: #bfe0e4; }
+.cal-foot button:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cal-pop { animation: none; }
+}
+
 /* ---------------- your account in the club ---------------- */
 /* The one part of the form that rearranges itself, so it is a tray inside its
    card rather than four fields that happen to sit together. */

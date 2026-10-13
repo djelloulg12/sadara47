@@ -38,6 +38,7 @@ const HTML = fs.readFileSync(path.join(FOLDER, 'index.html'), 'utf8');
 const CSS = fs.readFileSync(path.join(FOLDER, 'istimara.css'), 'utf8');
 const PAGE = fs.readFileSync(path.join(FOLDER, 'istimara.js'), 'utf8');
 const PRINT = fs.readFileSync(path.join(FOLDER, 'print.js'), 'utf8');
+const CALENDAR = fs.readFileSync(path.join(FOLDER, 'datepicker.js'), 'utf8');
 const ALGERIA = fs.readFileSync(path.join(FOLDER, 'algeria.js'), 'utf8');
 const COMMUNES = fs.readFileSync(path.join(FOLDER, 'communes.json'), 'utf8');
 const APP = fs.readFileSync(path.join(PUB, 'app.js'), 'utf8');
@@ -47,6 +48,11 @@ const RULES = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
    space between the thousands depending on the runtime, so compare on digits
    alone. */
 const digits = s => String(s).replace(/[\s\u00a0\u202f\u2009,]/g, '');
+
+/* The smallest thing that is an image. What is being asked of a request is that a
+   photograph is on it, not that one decodes -- a check that proved the second
+   would be testing the browser. */
+const TINY_PHOTO = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 const isAmount = (text, want) => digits(text).indexOf(String(want)) !== -1;
 
 /* The wilaya used wherever a check has to choose a place of birth: the first with
@@ -320,6 +326,10 @@ function boot(seedDraft) {
   };
 
   w.eval(PRINT);
+  /* The calendar is loaded by the page, so the harness loads it too, in the same
+     place -- a script the harness cannot see is a script every question about it
+     answers "not there", which is a true answer to a false question. */
+  w.eval(CALENDAR);
   /* The wilaya list is a separate file the page loads before itself, so it is
      loaded here too -- evaluating the page without it would leave the field
      empty and every check about it would pass for the wrong reason. */
@@ -330,6 +340,11 @@ function boot(seedDraft) {
 
 /* Picks a photo the way the person would, through the real file input. */
 function choosePhoto(w, bytes) {
+  /* The small photograph every other check carries is taken away first. Waiting
+     for a photograph to appear cannot tell this one from that one -- and while it
+     could, the wait was answered by the one already there, and the record went
+     out with a photograph of a different size than the one under test. */
+  w.SADARA_FORM.setPhoto('');
   w.__photoSize = bytes;
   const input = w.document.getElementById('photo');
   Object.defineProperty(input, 'files', { configurable: true, value: [{ name: 'photo.jpg', type: 'image/jpeg' }] });
@@ -471,6 +486,10 @@ function fill(w, category) {
   }
   /* The account fields, because a form that asks for a password does not send
      without one -- and every send check below goes through this. */
+  /* A photograph. The club's card has a frame for it and the registration is not
+     finished without one, so it is part of what a request has to carry -- and it
+     is set through the page's own door, the one the file picker ends at. */
+  w.SADARA_FORM.setPhoto(TINY_PHOTO);
   set('email', 'swimmer@example.com');
   set('username', 'swimmer.test');
   set('password', 'correct-horse');
@@ -1307,6 +1326,10 @@ const card_fields = () => {
   const commune = book[target.code][0];
 
   const w = boot();
+
+  /* A photograph, because the registration is not finished without one --
+     set through the page's own door, the one the file picker ends at. */
+  w.SADARA_FORM.setPhoto(TINY_PHOTO);
   const id = x => w.document.getElementById(x);
   const say = () => (id('form-msg').textContent || '').trim();
 
@@ -1410,6 +1433,9 @@ const card_fields = () => {
 /* An adult holds one too, and is stopped by it when it is wrong. */
 const adult_card = () => {
   const w = boot();
+  /* A photograph, because the registration is not finished without one --
+     set through the page's own door, the one the file picker ends at. */
+  w.SADARA_FORM.setPhoto(TINY_PHOTO);
   const id = x => w.document.getElementById(x);
   const say = () => (id('form-msg').textContent || '').trim();
   const set = (f, v) => { const n = id(f); n.value = v; n.dispatchEvent(new w.Event('input', { bubbles: true })); };
@@ -1580,6 +1606,9 @@ function signInAs(w, email, uid) {
 
 const guardian_returns = () => {
   const w = boot();
+  /* A photograph, because the registration is not finished without one --
+     set through the page's own door, the one the file picker ends at. */
+  w.SADARA_FORM.setPhoto(TINY_PHOTO);
   const id = x => w.document.getElementById(x);
   const set = (f, v) => { const n = id(f); n.value = v; n.dispatchEvent(new w.Event('input', { bubbles: true })); };
   const say = () => (id('form-msg').textContent || '').trim();
@@ -1663,6 +1692,137 @@ const guardian_returns = () => {
 
 tasks.push(() => guardian_returns().catch(
   e => errors.push('[sibling] the check did not finish: ' + e.message)));
+/* The calendar, and a photograph that is not optional.
+
+   The photograph first, because it is a rule and a rule that is not written down
+   is a rule somebody changes by accident.
+
+   The calendar second, and what is checked is the writing and the refusing, not
+   the grid: a calendar that looks right and writes `14-09-2013` into a field that
+   stores `yyyy/mm/dd` has made the date worse, not better. So what the check
+   chooses is picked up off the field and compared with the one form the database
+   holds -- which is the only comparison that matters here.
+
+   And the two dates a person is most likely to be stopped by: a birth date three
+   years from now, and a card that ran out in 1975. The field says what it will
+   take, and the calendar asks the field. */
+const calendar_writes = () => {
+  const w = boot();
+  const id = x => w.document.getElementById(x);
+  const cal = w.SADARA_CALENDAR;
+
+  if (!cal) {
+    errors.push('[cal] the page has no calendar on its date fields');
+    return Promise.resolve();
+  }
+
+  /* One form, from everything the calendar might be handed. */
+  const forms = [
+    ['2026/10/11', '2026/10/11'],
+    ['2026-1-5', '2026/01/05'],
+    ['2026/1/5', '2026/01/05'],
+    ['2026.01.05', '2026/01/05'],
+    ['\u0662\u0660\u0662\u0666/\u0661\u0660/\u0661\u0661', '2026/10/11']
+  ];
+  for (const [typed, want] of forms) {
+    const got = cal.format(cal.parse(typed) || {});
+    if (got !== want) {
+      errors.push('[cal] ' + JSON.stringify(typed) + ' is read back as ' + got + ', not ' + want);
+    }
+  }
+  /* And what is not a date is refused rather than guessed. The 31st of February
+     is the one everybody's finger writes. */
+  for (const bad of ['', '2013/02/31', '2013/13/01', 'not a date', '13/09/2013']) {
+    if (cal.parse(bad)) {
+      errors.push('[cal] ' + JSON.stringify(bad) + ' was taken for a date');
+    }
+  }
+
+  return waitFor(w, () => !!id('birth_date') && !!id('birth_date').parentNode
+    && !!id('birth_date').parentNode.querySelector('.cal-open')).then(() => {
+    /* Choosing a day writes the club's date and says so, so the draft keeps it. */
+    const field = id('birth_date');
+    let heard = 0;
+    field.addEventListener('input', () => { heard++; });
+    id('birth_date').parentNode.querySelector('.cal-open').click();
+    const pick = w.document.querySelector('.cal-pop button.cal-cell:not([disabled])');
+    if (!pick) {
+      errors.push('[cal] the calendar opened with nothing to choose');
+      return;
+    }
+    pick.click();
+    if (!/^\d{4}\/\d{2}\/\d{2}$/.test(field.value)) {
+      errors.push('[cal] a chosen day was written as ' + JSON.stringify(field.value));
+    }
+    if (!heard) errors.push('[cal] the field was written without saying so, so the draft is stale');
+
+    /* Nothing is born next year. The field says which bound it has and the
+       calendar asks the field, so the question is put to this one and counted: in
+       this month, the days after today are forbidden and the rest are not. */
+    const now = new Date();
+    const yy = now.getFullYear(), mm = now.getMonth() + 1;
+    const stamp = yy + '/' + String(mm).padStart(2, '0') + '/' + String(now.getDate()).padStart(2, '0');
+    field.value = stamp;
+    field.dispatchEvent(new w.Event('input', { bubbles: true }));
+    field.parentNode.querySelector('.cal-open').click();
+    const expectedOff = new Date(yy, mm, 0).getDate() - now.getDate();
+    const off = [...w.document.querySelectorAll('.cal-pop button.cal-cell.cal-off')]
+      .filter(n => Number(n.textContent) > now.getDate()).length;
+    if (off !== expectedOff) {
+      errors.push('[cal] a birth date may be chosen in the future: ' + off
+        + ' of the days after today are forbidden, and there are ' + expectedOff);
+    }
+
+    /* A card, on the other hand, does run out in the future -- that is the whole
+       point of it -- and it is the same calendar. The difference has to come from
+       the field, or the calendar is deciding for both on its own. */
+    if (id('national_id_expiry').getAttribute('data-cal-max') === 'today') {
+      errors.push('[cal] a card cannot expire in the future');
+    }
+    if (!field.getAttribute('data-cal-max')) {
+      errors.push('[cal] a birth date was not given a bound');
+    }
+  }).catch(e => errors.push('[cal] the check did not finish: ' + e.message));
+};
+
+/* The photograph. Without one the request is not sent, and that is said in words
+   rather than by leaving the button looking the same. */
+const photo_is_required = () => {
+  const w = boot();
+  const id = x => w.document.getElementById(x);
+  return waitFor(w, () => id('reg-form')).then(() => {
+    const before = w.__calls.filter(c => c.method === 'POST').length;
+    fill(w, 'adult');
+    /* Taken away again, which is the state a person is in who has not chosen one. */
+    w.SADARA_FORM.setPhoto('');
+    id('reg-form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+    const after = w.__calls.filter(c => c.method === 'POST').length;
+    if (after !== before) {
+      errors.push('[photo] a request was sent with no photograph on it');
+    }
+    const said = (id('form-msg').textContent || '');
+    if (!/\u0627\u0644\u0635\u0648\u0631\u0629/.test(said)) {
+      errors.push('[photo] nobody was told the photograph is needed: ' + said);
+    }
+    /* And with one, it goes. */
+    w.SADARA_FORM.setPhoto(TINY_PHOTO);
+    id('form-msg').hidden = true;
+    id('reg-form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+    return waitFor(w, () => w.__calls.some(c => c.method === 'POST'))
+      .catch(() => errors.push('[photo] the request never went with a photograph on it'));
+  }).then(() => {
+    const posts = w.__calls.filter(c => c.method === 'POST');
+    const body = posts.length ? JSON.parse(posts[posts.length - 1].body) : {};
+    if (body.photo !== TINY_PHOTO) {
+      errors.push('[photo] the photograph did not travel with the request');
+    }
+  }).catch(e => errors.push('[photo] the check did not finish: ' + e.message));
+};
+
+tasks.push(() => calendar_writes().catch(
+  e => errors.push('[cal] the check did not finish: ' + e.message)));
+tasks.push(() => photo_is_required().catch(
+  e => errors.push('[photo] the check did not finish: ' + e.message)));
 /* ---- run the settling checks in order ---- */
 tasks.reduce((chain, task) => chain.then(task), Promise.resolve()).then(() => {
   if (errors.length) { console.log('PROBLEMS:\n  - ' + [...new Set(errors)].join('\n  - ')); process.exit(1); }
