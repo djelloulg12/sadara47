@@ -79,16 +79,17 @@ action=async function(a,el){
 
 /* ----------Styles ---------- */
 
-/* the file input is bound on every render */
-bind=function(){
-  baseBind();
-  document.querySelectorAll('[data-role-page]').forEach(e=>e.onclick=()=>{state.rolePage=e.dataset.rolePage;save();render()});
-  const live=(sel,fn)=>{const el=document.querySelector(sel);if(el){el.oninput=fn;el.onchange=fn;el.onkeyup=fn}};
-  live('#app-search',e=>{state.appQuery=e.target.value;renderPageOnly()});
-  live('#app-filter',e=>{state.appFilter=e.target.value;renderPageOnly()});
-  live('#user-search',e=>{state.userQuery=e.target.value;renderPageOnly()});
-  live('#group-filter',e=>{state.groupFilter=e.target.value;renderPageOnly()});
-  live('#attendance-group',e=>{state.attendanceGroup=e.target.value;renderPageOnly()});
-  const file=document.querySelector('#my-photo');
-  if(file) file.onchange=()=>action('upload-my-photo',{files:file.files});
+/* The file input is bound on every render.
+
+   This takes the binding it is given and adds one line to it, rather than writing
+   the table out again. It used to restate it, and the restatement won -- so a
+   control bound in the baseline was unbound in the built file whenever this copy
+   did not repeat it, with nothing to show for it: the page rendered, the control
+   was there, and pressing it did nothing. That is how the switch for showing the
+   decided requests arrived unbound. */
+const coreBindList = bind;
+bind = function () {
+  coreBindList();
+  const file = document.querySelector('#my-photo');
+  if (file) file.onchange = () => action('upload-my-photo', { files: file.files });
 };

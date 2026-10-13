@@ -28,7 +28,10 @@ function exportSwimmers(){
 function exportApplications(){
   downloadCsv('طلبات التسجيل',
     ['رقم الطلب', 'الاسم', 'اللقب', 'الفئة', 'الاشتراك', 'النقل', 'البدلة', 'المبلغ', 'الحالة', 'القرار', 'الهاتف'],
-    (state.applications || []).map(a => [a.application_no || a.id, a.coach_name || a.first_name_ar, a.last_name_ar || '',
+    /* The same queue the screen reads, in the same order, decided ones included:
+       an export is a reconciliation, and a reconciliation is supposed to see what
+       was decided. */
+    appSorted(state.applications || []).map(a => [a.application_no || a.id, a.coach_name || a.first_name_ar, a.last_name_ar || '',
       catLabel(a.application_type === 'coach' ? 'coach' : a.category), planName(a.subscription_code),
       a.transport ? 'نعم' : 'لا', a.uniform ? 'نعم' : 'لا', esc(money(a.expected_amount)), stateLabel(a.status),
       a.decision_reason || '', a.coach_phone || a.phone || '']));

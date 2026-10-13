@@ -46,22 +46,22 @@
         <div class="row two">
           <label class="f">
             <span class="lbl">الاسم بالعربية <i class="req">*</i></span>
-            <input id="first_name_ar" name="first_name_ar" type="text" required maxlength="40" placeholder="مثال: أمين" />
+            <input id="first_name_ar" name="first_name_ar" type="text" required maxlength="40" placeholder="مثال: جلول" />
           </label>
           <label class="f">
             <span class="lbl">اللقب بالعربية <i class="req">*</i></span>
-            <input id="last_name_ar" name="last_name_ar" type="text" required maxlength="40" placeholder="مثال: بلعيد" />
+            <input id="last_name_ar" name="last_name_ar" type="text" required maxlength="40" placeholder="مثال: قندوز" />
           </label>
         </div>
 
         <div class="row two">
           <label class="f">
             <span class="lbl">الاسم بالفرنسية</span>
-            <input id="first_name_fr" name="first_name_fr" type="text" dir="ltr" maxlength="40" />
+            <input id="first_name_fr" name="first_name_fr" type="text" dir="ltr" maxlength="40"  required />
           </label>
           <label class="f">
             <span class="lbl">اللقب بالفرنسية</span>
-            <input id="last_name_fr" name="last_name_fr" type="text" dir="ltr" maxlength="40" />
+            <input id="last_name_fr" name="last_name_fr" type="text" dir="ltr" maxlength="40"  required />
           </label>
         </div>
 
@@ -95,7 +95,7 @@
           </label>
           <label class="f">
             <span class="lbl">الجنس</span>
-            <select id="gender" name="gender">
+            <select id="gender" required name="gender">
               <option value="">--</option>
               <option value="male">ذكر</option>
               <option value="female">أنثى</option>
@@ -122,7 +122,7 @@
           </label>
           <label class="f">
             <span class="lbl">الولاية</span>
-            <select id="wilaya" name="wilaya"></select>
+            <select id="wilaya" required name="wilaya"></select>
           </label>
         </div>
 
@@ -135,14 +135,14 @@
           <label class="f" data-adult-only>
             <span class="lbl">رقم بطاقة التعريف الوطني <i class="req">*</i></span>
             <input id="national_id" name="national_id" type="text" inputmode="numeric"
-                   dir="ltr" maxlength="9" pattern="[0-9]{9}" placeholder=" 123456789 " />
+                   dir="ltr" maxlength="9" pattern="[0-9]{9}" placeholder=" 123456789 "  required />
             <small class="hint">تسعة أرقام، كما هي على البطاقة.</small>
           </label>
           <label class="f" data-adult-only>
             <span class="lbl">تاريخ انتهاء البطاقة <i class="req">*</i></span>
             <input id="national_id_expiry" name="national_id_expiry" type="text"
                    inputmode="numeric" class="date-in" maxlength="12" placeholder="2031/04/17"
-                   aria-describedby="national_id_expiry-hint"  data-cal-min-year="1980" />
+                   aria-describedby="national_id_expiry-hint"  data-cal-min-year="1980"  required />
             <small class="hint" id="national_id_expiry-hint">بصيغة سنة/شهر/يوم — 2031/04/17</small>
           </label>
         </div>
@@ -150,14 +150,14 @@
         <div class="row two">
           <label class="f">
             <span class="lbl">رقم شهادة الميلاد</span>
-            <input id="birth_certificate_no" name="birth_certificate_no" type="text" dir="ltr" maxlength="30" />
+            <input id="birth_certificate_no" name="birth_certificate_no" type="text" dir="ltr" maxlength="30"  required />
           </label>
         </div>
 
         <div class="row two">
           <label class="f">
             <span class="lbl">فصيلة الدم</span>
-            <select id="blood_group" name="blood_group">
+            <select id="blood_group" required name="blood_group">
               <option value="">--</option>
               <option>A+</option><option>A-</option>
               <option>B+</option><option>B-</option>
@@ -167,7 +167,7 @@
           </label>
           <label class="f">
             <span class="lbl">المستوى</span>
-            <select id="level" name="level">
+            <select id="level" required name="level">
               <option value="">--</option>
               <option value="مبتدئ">مبتدئ</option>
               <option value="متوسط">متوسط</option>
@@ -188,7 +188,7 @@
           </label>
           <label class="f">
             <span class="lbl">رقم الواتساب</span>
-            <input id="whatsapp" name="whatsapp" type="tel" inputmode="tel" dir="ltr" maxlength="20" />
+            <input id="whatsapp" name="whatsapp" type="tel" inputmode="tel" dir="ltr" maxlength="20"  required />
           </label>
         </div>
 
@@ -207,11 +207,11 @@
         <div class="row two">
           <label class="f">
             <span class="lbl">اسم الولي <i class="req">*</i></span>
-            <input id="guardian_first_name" name="guardian_first_name" type="text" maxlength="40" />
+            <input id="guardian_first_name" name="guardian_first_name" type="text" required maxlength="40" />
           </label>
           <label class="f">
             <span class="lbl">لقب الولي <i class="req">*</i></span>
-            <input id="guardian_last_name" name="guardian_last_name" type="text" maxlength="40" />
+            <input id="guardian_last_name" name="guardian_last_name" type="text" required maxlength="40" />
           </label>
         </div>
 
@@ -219,24 +219,24 @@
           <label class="f">
             <span class="lbl">تاريخ ميلاد الولي</span>
             <input id="guardian_birth_date" name="guardian_birth_date" type="text"
-                   inputmode="numeric" maxlength="12" placeholder="1975/06/02" class="date-in"  data-cal-max="today" />
+                   inputmode="numeric" maxlength="12" placeholder="1975/06/02" class="date-in"  data-cal-max="today"  required />
           </label>
           <label class="f">
             <span class="lbl">صفة القرابة</span>
-            <input id="guardian_relation" name="guardian_relation" type="text" maxlength="40" placeholder="أب، أم، أخ..." />
+            <input id="guardian_relation" name="guardian_relation" type="text" maxlength="40" placeholder="أب، أم، أخ..."  required />
           </label>
         </div>
 
         <div class="row two">
           <label class="f">
             <span class="lbl">هاتف الولي</span>
-            <input id="guardian_phone" name="guardian_phone" type="tel" inputmode="tel" dir="ltr" maxlength="20" />
+            <input id="guardian_phone" name="guardian_phone" type="tel" inputmode="tel" dir="ltr" maxlength="20"  required />
           </label>
           <label class="f">
             <span class="lbl">رقم بطاقة الولي <i class="req">*</i></span>
             <input id="guardian_national_id" name="guardian_national_id" type="text"
                    inputmode="numeric" dir="ltr" maxlength="9" pattern="[0-9]{9}"
-                   placeholder=" 123456789 " />
+                   placeholder=" 123456789 "  required />
             <small class="hint">تسعة أرقام — وهي التي تُكتب في استمارة النادي.</small>
           </label>
         </div>
@@ -245,13 +245,13 @@
           <label class="f">
             <span class="lbl">تاريخ انتهاء بطاقة الولي <i class="req">*</i></span>
             <input id="guardian_national_id_expiry" name="guardian_national_id_expiry" type="text"
-                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2031/06/02"  data-cal-min-year="1980" />
+                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2031/06/02"  data-cal-min-year="1980"  required />
             <small class="hint">بصيغة سنة/شهر/يوم — 2031/06/02</small>
           </label>
           <label class="f">
             <span class="lbl">تاريخ إصدار بطاقة الولي</span>
             <input id="guardian_card_issued" name="guardian_card_issued" type="text"
-                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2021/06/02"  data-cal-min-year="1980" />
+                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2021/06/02"  data-cal-min-year="1980"  required />
             <small class="hint">اختياري — خانة «الصادرة بتاريخ» في استمارة النادي.</small>
           </label>
         </div>
@@ -295,7 +295,7 @@
             <span class="lbl">المسبح أو المنشأة</span>
             <!-- Filled from /api/facilities, which the club edits in Settings.
                  The four below are only what shows before that list arrives. -->
-            <select id="facility" name="facility">
+            <select id="facility" required name="facility">
               <option>المسبح الأولمبي</option>
               <option>المسبح النصف أولمبي</option>
               <option>الملعب البلدي</option>
@@ -318,7 +318,7 @@
         <div class="row two">
           <label class="f">
             <span class="lbl">طريقة الدفع</span>
-            <select id="payment_method" name="payment_method">
+            <select id="payment_method" required name="payment_method">
               <option value="cash">نقدًا</option>
               <option value="postal_check">صك بريدي</option>
               <option value="postal_transfer">حوالة بريدية</option>
@@ -343,7 +343,7 @@
         <div class="row">
           <label class="f">
             <span class="lbl">ملاحظة للنادي</span>
-            <textarea id="notes" name="notes" rows="3" maxlength="400" placeholder="أي معلومة تودّ إخبار إدارة النادي بها"></textarea>
+            <textarea id="notes" required name="notes" rows="3" maxlength="400" placeholder="أي معلومة تودّ إخبار إدارة النادي بها"></textarea>
           </label>
         </div>
         <label class="check f-wide terms">

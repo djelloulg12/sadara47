@@ -466,23 +466,65 @@ tasks.push(() => {
 
 const posted = w => w.__calls.some(c => c.method === 'POST');
 
-function fill(w, category) {
-  const set = (id, v) => { const n = w.document.getElementById(id); n.value = v; };
+/* Everything the form asks of everybody, in one place.
+
+   Three checks used to carry their own copy of this list, and each stopped on a
+   field it had not been told about -- the symptom being a check failing about a
+   field it was never testing. One list, four callers. */
+function answerEverything(w, set) {
   set('first_name_ar', 'أمين');
   set('last_name_ar', 'بلعيد');
+  set('first_name_fr', 'Amine');
+  set('last_name_fr', 'Belaid');
   set('birth_date', '1994-05-04');
+  set('gender', 'male');
+  set('blood_group', 'O+');
+  set('level', 'مبتدئ');
+  set('birth_certificate_no', '1994-1234');
   set('phone', '0661000001');
+  set('whatsapp', '0661000004');
   set('address', 'حي الثنية');
+  set('payment_method', 'cash');
+  set('notes', 'لا شيء');
+  /* The pool, from the list the page offers -- for the same reason as the
+     commune: a value the list does not carry is dropped and the field comes back
+     empty, with nothing in between to say why. */
+  const pool = w.document.getElementById('facility');
+  if (pool && pool.options.length > 1) {
+    pool.value = pool.options[1].value;
+    pool.dispatchEvent(new w.Event('change', { bubbles: true }));
+  }
+}
+
+/* The guardian's fields, for a check that is registering a child. Same reason as
+   the list above: two lists of "what a minor's form needs" is one field short of
+   a check that fails about something it was not testing. */
+function answerForAGuardian(w, set, over) {
+  Object.assign(set, over || {});
+  set('guardian_first_name', 'كريم');
+  set('guardian_last_name', 'بلعيد');
+  set('guardian_birth_date', '1978/06/02');
+  set('guardian_relation', 'الأب');
+  set('guardian_phone', '0661000002');
+  set('guardian_national_id', '197809031');
+  set('guardian_national_id_expiry', '2031/06/02');
+  set('guardian_card_issued', '2021/06/02');
+  if (w.document.getElementById('guardian_consent')) {
+    w.document.getElementById('guardian_consent').checked = true;
+  }
+}
+
+function fill(w, category) {
+  const set = (id, v) => { const n = w.document.getElementById(id); n.value = v; };
+  answerEverything(w, set);
   /* The national identity card. Nine digits, and the day it runs out. Asked of
      the two people who hold one and of nobody else: an adult, and the guardian
      of a minor. */
   if (category === 'adult') {
-    set('national_id', '198501011'.slice(0, 9));
+    set('national_id', '19850101'.slice(0, 8) + '1');
     set('national_id_expiry', '2031/04/17');
   } else {
-    set('guardian_national_id', '1978090311');
-    set('guardian_national_id_expiry', '2031/06/02');
-    set('guardian_card_issued', '2021/06/02');
+    answerForAGuardian(w, set, { birth_place: '' });
   }
   /* The account fields, because a form that asks for a password does not send
      without one -- and every send check below goes through this. */
@@ -514,6 +556,10 @@ function fill(w, category) {
     wilaya.dispatchEvent(new w.Event('change', { bubbles: true }));
     const commune = book[target.code][0];
     if (commune) { place.value = commune; place.dispatchEvent(new w.Event('change', { bubbles: true })); }
+  }
+  /* The pool is chosen by answerEverything. */
+  const pool = w.document.getElementById('facility');
+  if (pool) {
   }
   return radio;
 }
@@ -772,7 +818,12 @@ tasks.push(() => {
   else if (adultOnly.hidden) errors.push('[adults] the swimmer national number is hidden from an adult');
   if (!w.document.getElementById('guardian_national_id')) errors.push('[ids] the guardian national number is gone');
   else if (w.document.getElementById('guardian_national_id').required) errors.push('[adults] an adult must fill a hidden guardian number');
-  if (w.document.getElementById('national_id').required) errors.push('[adults] the adult number should not be compulsory');
+  /* What this has always meant: nobody is stopped by a field they cannot see. The
+     adult's own number is on the screen for an adult, so it is required there --
+     and the same field must not be required for a child, who has no card. */
+  if (!w.document.getElementById('national_id').required) {
+    errors.push('[adults] an adult is not asked for their own card number');
+  }
 
   minor.checked = true;
   minor.dispatchEvent(new w.Event('change', { bubbles: true }));
@@ -809,6 +860,12 @@ tasks.push(() => {
 tasks.push(() => {
   const w = boot();
   fill(w, 'minor');
+  /* One field taken away, and the form is asked to name this one. A full form with
+     something missing in it tests whatever the filler forgot; an emptied field
+     tests the field. */
+  const name = w.document.getElementById('guardian_first_name');
+  name.value = '';
+  name.dispatchEvent(new w.Event('input', { bubbles: true }));
   w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   return waitFor(w, () => w.document.getElementById('form-msg').textContent)
     .catch(() => errors.push('[minor] no message explaining what is missing'))
@@ -816,6 +873,11 @@ tasks.push(() => {
       if (posted(w)) errors.push('[minor] sent without the guardian');
       if (!w.document.getElementById('guardian_first_name').classList.contains('bad')) {
         errors.push('[minor] the empty guardian field is not marked');
+      }
+      if (!/\u0627\u0644\u0648\u0644\u064a|\u0627\u0633\u0645\u0651 \u0627\u0644\u0648\u0644\u064a/.test(
+        w.document.getElementById('form-msg').textContent || '')) {
+        errors.push('[minor] the message does not name the field that is missing: '
+          + (w.document.getElementById('form-msg').textContent || '(no message)'));
       }
       if (w.document.getElementById('form-msg').hidden) errors.push('[minor] no message explaining what is missing');
     });
@@ -1347,17 +1409,15 @@ const card_fields = () => {
 
   const fillShared = () => {
     const set = (f, v) => { const n = id(f); n.value = v; n.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  /* Everybody's fields, from the one list. */
+  answerEverything(w, set);
+  answerForAGuardian(w, set, { birth_place: '' });
     set('first_name_ar', 'أمين');
     set('last_name_ar', 'بلعيد');
     set('birth_date', '2015/04/02');
     set('phone', '0661000001');
     set('address', 'حي الثنية');
-    set('guardian_first_name', 'كريم');
-    set('guardian_last_name', 'بلعيد');
-    set('guardian_birth_date', '1978/06/02');
-    set('guardian_phone', '0661000002');
     id('terms').checked = true;
-    id('guardian_consent').checked = true;
     set('email', 'probe.card@example.com');
     set('username', 'probe.card');
     set('password', 'correct-horse');
@@ -1439,6 +1499,8 @@ const adult_card = () => {
   const id = x => w.document.getElementById(x);
   const say = () => (id('form-msg').textContent || '').trim();
   const set = (f, v) => { const n = id(f); n.value = v; n.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  /* Everybody's fields, from the one list. */
+  answerEverything(w, set);
   const submit = () => id('reg-form').dispatchEvent(
     new w.Event('submit', { bubbles: true, cancelable: true }));
 
@@ -1611,6 +1673,9 @@ const guardian_returns = () => {
   w.SADARA_FORM.setPhoto(TINY_PHOTO);
   const id = x => w.document.getElementById(x);
   const set = (f, v) => { const n = id(f); n.value = v; n.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  /* Everybody's fields, from the one list. */
+  answerEverything(w, set);
+  answerForAGuardian(w, set, { birth_place: '' });
   const say = () => (id('form-msg').textContent || '').trim();
 
   return waitFor(w, () => id('wilaya') && id('wilaya').options.length > 1).then(() => {
@@ -1637,14 +1702,7 @@ const guardian_returns = () => {
     set('phone', '0661000009');
     set('address', 'حي الثنية');
     set('birth_certificate_no', '04512');
-    set('guardian_first_name', 'كريم');
-    set('guardian_last_name', 'بلعيد');
-    set('guardian_birth_date', '1978/06/02');
-    set('guardian_phone', '0661000002');
-    set('guardian_national_id', '197809031');
-    set('guardian_national_id_expiry', '2031/06/02');
     id('terms').checked = true;
-    id('guardian_consent').checked = true;
     set('email', 'guardian@example.com');
     /* No password, and no user name: this is the whole point. A field that is
        still demanded here is the field that stops a second child. */

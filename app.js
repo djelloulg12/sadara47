@@ -331,6 +331,71 @@ const todayISO=()=>isoDay(new Date());
 const longDate=(d=new Date())=>`${AR_DAYS[d.getDay()]}، ${slashDate(d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()))}`;
 const money=v=>`${clubDigits(Number(v||0).toLocaleString('en-US'))} دج`;
 const sum=(list,f)=>list.reduce((t,x)=>t+(Number(typeof f==='function'?f(x):x[f])||0),0);
+/* ---------------------- the order of the requests ----------------------
+   A queue, not a ledger: what needs deciding first, and what has been decided
+   out of the way. Three rules, and they are the club's own:
+
+     under review   always at the top, the newest first -- it is the work, and the
+                    newest of it has been waiting least
+     refused        always at the bottom, whatever their dates -- it has been dealt
+                    with, and a refusal from last March above a request from
+                    yesterday says the wrong thing about today
+     everything decided leaves the list
+
+   The date is read from the three places a request actually carries it: the
+   timestamp the database wrote, the reference number (which has the day in it),
+   and whatever date field the request holds. A request whose date cannot be read
+   sorts to the bottom of its own group rather than to the top of the page,
+   because an unknown date is not a recent one. */
+function appDateValue(a){
+  const t=a&&a.created_at;
+  if(t){
+    if(typeof t.toDate==='function'){const d=t.toDate();if(!isNaN(d.getTime()))return d.getTime();}
+    if(typeof t==='number')return t;
+    if(typeof t==='string'){const p=Date.parse(t);if(!isNaN(p))return p;}
+  }
+  const no=String((a&&(a.application_no||a.id))||'');
+  const m=/(\d{4})(\d{2})(\d{2})/.exec(no);
+  if(m)return Date.UTC(Number(m[1]),Number(m[2])-1,Number(m[3]));
+  const raw=String((a&&(a.date||a.registered_at||''))||'');
+  if(raw){const p=Date.parse(raw);if(!isNaN(p))return p;}
+  return 0;
+}
+/* 0 under review, 1 decided, 2 refused. Then the date, newest first, and a
+   request with no readable date last within its own group. */
+function appSortKey(a){
+  const st=String((a&&a.status)||'pending');
+  const group=st==='rejected'?2:(st==='pending'?0:1);
+  const when=appDateValue(a);
+  return [group, when?0:1, when?when:0];
+}
+function appSorted(list){return (list||[]).slice().sort((x,y)=>{
+  const a=appSortKey(x),b=appSortKey(y);
+  if(a[0]!==b[0])return a[0]-b[0];
+  if(a[1]!==b[1])return a[1]-b[1];
+  if(a[2]!==b[2])return b[2]-a[2];   /* newest first */
+  return String((x&&x.application_no)||'').localeCompare(String((y&&y.application_no)||''));
+});}
+/* A request that has become a member is not a request. The record stays -- it is
+   the account of what was decided and by whom, and the registration numbers are
+   counted out of these documents -- but the queue does not carry it.
+
+   A refusal is NOT out of the queue. It is at the bottom of it, which is a place
+   in the list and not an absence from it: the manager still needs to see what was
+   refused and why, and a page where a refusal has disappeared is a page where it
+   has to be looked up somewhere else. Decided and dealt with are two different
+   things, and only one of them empties. */
+function appDecided(a){
+  if(!a)return false;
+  if(a.transferred_to)return true;
+  /* Also the requests accepted before the transfer existed: fourteen of them,
+     carrying a status and no mark. A queue that only knows the mark would carry
+     every one of them for ever -- a page that gets longer every time the club
+     does its job. A refusal is neither, which is the last thing to say about it. */
+  return ['accepted','approved','\u0645قبول','\u0645قبولة']
+    .indexOf(String(a.status||'pending'))!==-1;
+}
+
 const stateLabel=s=>s==='approved'?'مقبول':s==='rejected'?'مرفوض':s==='paid'?'مدفوع':s==='cancelled'?'ملغى':'قيد المراجعة';
 const planName=code=>(state.subscriptions||[]).find(p=>p.code===code)?.name||code||'—';
 const catLabel=c=>c==='minor'?'أصاغر':c==='adult'?'أكابر':c==='coach'?'مدرب':c||'—';
@@ -534,7 +599,12 @@ function pageApplications(){
   const list=state.applications||[];
   const q=(state.appQuery||'').trim();
   const f=state.appFilter||'all';
-  const rows=list.filter(a=>{
+  /* Decided requests are out of the queue unless somebody asks for them, and the
+     order is applied before the search so a filter cannot argue with it. */
+  const showDecided=!!state.appShowDecided;
+  const open=(showDecided?list:list.filter(a=>!appDecided(a)));
+  const decidedCount=list.length-open.length;
+  const rows=appSorted(open).filter(a=>{
     if(f!=='all'&&(a.status||'pending')!==f)return false;
     if(!q)return true;
     /* Folded on both sides, so a number read off a printed sheet -- which is in
@@ -548,10 +618,13 @@ function pageApplications(){
   const head='<div class="toolbar"><div class="search">⌕<input placeholder="ابحث بالاسم أو رقم الطلب..." id="app-search" value="'+esc(q)+'"></div>'
     +'<div class="toolbar-group">'
     +'<select class="filter" id="app-filter">'+[['all','كل الحالات'],['pending','قيد المراجعة'],['approved','مقبول'],['rejected','مرفوض']].map(([v,l])=>'<option value="'+v+'"'+(v===f?' selected':'')+'>'+l+'</option>').join('')+'</select>'
+    +'<label class="check-line" title="ما تم البت فيه ينتقل إلى قائمة السباحين، ويبقى هنا للسجل"><input type="checkbox" id="app-show-decided"'+(showDecided?' checked':'')+'> إظهار المحسومة</label>'
     +printBtn('print-applications','طباعة القائمة')
     +'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button>'
     +'</div></div>';
-  const body='<section class="panel table-panel"><div class="panel-head"><div><h3>طلبات التسجيل والمدربين</h3><p>'+clubDigits(rows.length)+' من '+clubDigits(list.length)+' طلب — ملف المدربين لا يفتحه إلا رئيس النادي</p></div></div>'
+  const body='<section class="panel table-panel"><div class="panel-head"><div><h3>طلبات التسجيل والمدربين</h3><p>'+clubDigits(rows.length)+' طلب مفتوح'
+    +(decidedCount?(' — و'+clubDigits(decidedCount)+' تم البت فيه، انتقلت إلى قائمة السباحين'):'')
+    +' — قيد المراجعة أولًا من الأحدث إلى الأقدم، والمرفوض في الأسفل</p></div></div>'
     +'<div class="table-scroll"><table><thead><tr><th>رقم الطلب</th><th>رقم التسجيل</th><th>المتقدم</th><th>النوع</th><th>الاشتراك</th><th>المبلغ</th><th>الوثائق</th><th>الحالة</th><th>القرار</th><th></th></tr></thead><tbody>'
     +(rows.length?rows.map(a=>'<tr><td dir="ltr">'+esc(clubDigits(a.application_no||a.id))+'</td>'
       /* The number the club reads off the card and the applicant is told at the
@@ -951,7 +1024,17 @@ function noticeModal(n){
 const coreAction=action;
 action=async function(a,el){
   /* ---------- الطباعة ---------- */
-  if(a==='print-applications'){printPage('طلبات التسجيل والمدربين','عدد الطلبات: '+(state.applications||[]).length);return}
+  /* The count is the count of the sheet. It used to count every request in the
+     database while the sheet showed only the open ones -- and the sheet is the
+     page, printed, so the two numbers sat next to each other and disagreed. */
+  if(a==='print-applications'){
+    const all=state.applications||[];
+    const open=all.filter(x=>!appDecided(x));
+    printPage('طلبات التسجيل والمدربين',
+      'الطلبات المفتوحة: '+open.length+' — قيد المراجعة أولًا من الأحدث إلى الأقدم، والمرفوض في الأسفل'
+      +(all.length>open.length?(' — و'+(all.length-open.length)+' تم البت فيه'):''));
+    return;
+  }
   if(a==='print-subscriptions'){printPage('الأسعار والخدمات','الموسم '+CLUB.season);return}
   if(a==='print-swimmers'){printPage('قائمة السباحين','الموسم '+CLUB.season);return}
   if(a==='print-schedule'){printPage('البرنامج الأسبوعي',weekRange(state.weekOffset||0).label);return}
@@ -1183,6 +1266,9 @@ bind=function(){
   const live=(sel,fn)=>{const el=document.querySelector(sel);if(el){el.oninput=fn;el.onchange=fn;el.onkeyup=fn}};
   live('#app-search',e=>{state.appQuery=e.target.value;renderPageOnly()});
   live('#app-filter',e=>{state.appFilter=e.target.value;renderPageOnly()});
+  /* A way of looking, not a setting about the club: kept in the page state and not
+     saved, so nobody's decisions change because somebody turned it on. */
+  live('#app-show-decided',e=>{state.appShowDecided=!!e.target.checked;renderPageOnly()});
   live('#user-search',e=>{state.userQuery=e.target.value;renderPageOnly()});
   live('#group-filter',e=>{state.groupFilter=e.target.value;renderPageOnly()});
   live('#attendance-group',e=>{state.attendanceGroup=e.target.value;renderPageOnly()});
@@ -2045,18 +2131,19 @@ action=async function(a,el){
 
 /* ----------Styles ---------- */
 
-/* the file input is bound on every render */
-bind=function(){
-  baseBind();
-  document.querySelectorAll('[data-role-page]').forEach(e=>e.onclick=()=>{state.rolePage=e.dataset.rolePage;save();render()});
-  const live=(sel,fn)=>{const el=document.querySelector(sel);if(el){el.oninput=fn;el.onchange=fn;el.onkeyup=fn}};
-  live('#app-search',e=>{state.appQuery=e.target.value;renderPageOnly()});
-  live('#app-filter',e=>{state.appFilter=e.target.value;renderPageOnly()});
-  live('#user-search',e=>{state.userQuery=e.target.value;renderPageOnly()});
-  live('#group-filter',e=>{state.groupFilter=e.target.value;renderPageOnly()});
-  live('#attendance-group',e=>{state.attendanceGroup=e.target.value;renderPageOnly()});
-  const file=document.querySelector('#my-photo');
-  if(file) file.onchange=()=>action('upload-my-photo',{files:file.files});
+/* The file input is bound on every render.
+
+   This takes the binding it is given and adds one line to it, rather than writing
+   the table out again. It used to restate it, and the restatement won -- so a
+   control bound in the baseline was unbound in the built file whenever this copy
+   did not repeat it, with nothing to show for it: the page rendered, the control
+   was there, and pressing it did nothing. That is how the switch for showing the
+   decided requests arrived unbound. */
+const coreBindList = bind;
+bind = function () {
+  coreBindList();
+  const file = document.querySelector('#my-photo');
+  if (file) file.onchange = () => action('upload-my-photo', { files: file.files });
 };
 
 /* ==========================================================
@@ -2349,7 +2436,10 @@ function exportSwimmers(){
 function exportApplications(){
   downloadCsv('طلبات التسجيل',
     ['رقم الطلب', 'الاسم', 'اللقب', 'الفئة', 'الاشتراك', 'النقل', 'البدلة', 'المبلغ', 'الحالة', 'القرار', 'الهاتف'],
-    (state.applications || []).map(a => [a.application_no || a.id, a.coach_name || a.first_name_ar, a.last_name_ar || '',
+    /* The same queue the screen reads, in the same order, decided ones included:
+       an export is a reconciliation, and a reconciliation is supposed to see what
+       was decided. */
+    appSorted(state.applications || []).map(a => [a.application_no || a.id, a.coach_name || a.first_name_ar, a.last_name_ar || '',
       catLabel(a.application_type === 'coach' ? 'coach' : a.category), planName(a.subscription_code),
       a.transport ? 'نعم' : 'لا', a.uniform ? 'نعم' : 'لا', esc(money(a.expected_amount)), stateLabel(a.status),
       a.decision_reason || '', a.coach_phone || a.phone || '']));

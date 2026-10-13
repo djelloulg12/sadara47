@@ -157,19 +157,38 @@ def identity_key(d):
     """Which name says "this person, already", and of what kind.
 
     An adult is the holder of a national identity number. A child has none of
-    their own, so they are the birth certificate number with the year and the
-    commune of birth -- all three, because any one of them on its own is shared
-    by more than one child."""
+    their own, so they are the guardian's number -- which is what says whose
+    swimmer this is, the club working by the card -- together with the child's own
+    certificate, the year, and the commune of birth. All four, because any one of
+    them on its own is shared by more than one child.
+
+    Not the guardian's number alone: that would say a guardian has one swimmer,
+    which is the opposite of what the club asked for."""
     minor = str((d or {}).get('category') or 'adult').lower() == 'minor'
     if minor:
+        guard = norm_id(d.get('guardian_national_id'))
         cert = norm_id(d.get('birth_certificate_no'))
         year = str(d.get('birth_date') or '')[:4]
         place = norm_id(d.get('birth_place'))
-        if not (cert and year and place):
+        if not (guard and cert and year and place):
             return None
-        return ('duplicate_key', '|'.join([cert, year, place]))
+        return ('duplicate_key', '|'.join([guard, cert, year, place]))
     nid = norm_id(d.get('national_id'))
     return ('national_id_key', nid) if nid else None
+
+
+def legacy_minor_key(d):
+    """The name a minor was filed under before the guardian's number was in it.
+
+    Still looked for: the requests already on the books are under it, and a new
+    key with no look at the old one is a check with a hole in it from the day it
+    is written."""
+    cert = norm_id(d.get('birth_certificate_no'))
+    year = str(d.get('birth_date') or '')[:4]
+    place = norm_id(d.get('birth_place'))
+    if not (cert and year and place):
+        return ''
+    return '|'.join([cert, year, place])
 
 
 def claim_id(kind, key):
@@ -333,6 +352,7 @@ def init_db():
         'registration_id': 'TEXT', 'pool_number': 'INTEGER',
         'username': 'TEXT', 'national_id_key': 'TEXT', 'duplicate_key': 'TEXT',
         'rejection_reason': 'TEXT', 'claim_only': 'INTEGER NOT NULL DEFAULT 0',
+        'transferred_to': 'TEXT', 'transferred_at': 'TEXT',
         'filed_under': "TEXT NOT NULL DEFAULT 'reference'",
         # The national identity card: the number, the day it runs out, and -- for
         # the guardian, whose card the club's own form has a box for -- the day it
@@ -642,6 +662,12 @@ class App(SimpleHTTPRequestHandler):
                 # anything is written, and the club's own words come back.
                 key=identity_key(d)
                 found=find_duplicate(c,key)
+                # And under the name the child was first filed by, which is where
+                # the requests already on the books are.
+                if not found and key and key[0]=='duplicate_key':
+                    legacy=legacy_minor_key(d)
+                    if legacy and legacy!=key[1]:
+                        found=find_duplicate(c,('duplicate_key',legacy))
                 if found:
                     self.send_json({'error':DUPLICATE_MESSAGE,'duplicate':True,'existing':found},409); return
 
@@ -938,6 +964,22 @@ class App(SimpleHTTPRequestHandler):
                     else:
                         c.execute('INSERT INTO swimmers(membership_no,name,group_name,phone,status)'
                                   " VALUES(?,?,?,?,'active')", (no, name, group, row['phone'] or ''))
+                    # The request names the member it became, and the page reads
+                    # that name to keep a decided request out of the queue. It is
+                    # written here, where the member is written, so the two cannot
+                    # come apart. The row stays: it is the record of what was
+                    # decided and by whom, and the registration numbers are counted
+                    # out of this very table -- removing a row hands its number to
+                    # the next swimmer.
+                    c.execute('UPDATE applications SET transferred_to=?,transferred_at=datetime(\'now\') WHERE id=?',
+                              (no, app_id))
+            # Refused after having been accepted: this person is not a member, and a
+            # member the club has just refused is a card for somebody it never took.
+            if data.get('status') == 'rejected':
+                was = c.execute('SELECT transferred_to FROM applications WHERE id=?', (app_id,)).fetchone()
+                if was and was['transferred_to']:
+                    c.execute('DELETE FROM swimmers WHERE membership_no=?', (was['transferred_to'],))
+                    c.execute('UPDATE applications SET transferred_to=NULL,transferred_at=NULL WHERE id=?', (app_id,))
             c.execute('INSERT INTO audit_logs(user_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?)',
                       (user['id'],'تعديل طلب','application',app_id,json.dumps(data,ensure_ascii=False)))
             c.commit(); self.send_json({'ok':True})

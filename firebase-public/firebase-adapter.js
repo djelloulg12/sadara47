@@ -253,14 +253,34 @@
   const identityKeyOf = d => {
     const nid = normId(d && d.national_id);
     if (feeCategory(d) === 'minor') {
+      /* The guardian's card says whose swimmer this is -- the club works by the
+         card, one guardian and the children under them -- and the child's own
+         certificate and year say which child of that guardian this is.
+
+         Not the guardian's card alone: that would say a guardian has one swimmer,
+         which is the opposite of what the club asked for and of what the form now
+         lets a family do on one account. */
+      const guard = normId(d && d.guardian_national_id);
       const cert = normId(d && d.birth_certificate_no);
       const year = String((d && d.birth_date) || '').slice(0, 4);
       const place = normId(d && d.birth_place);
-      if (!cert || !year || !place) return null;
-      return { kind: 'minor_key', key: [cert, year, place].join('|') };
+      if (!guard || !cert || !year || !place) return null;
+      return { kind: 'minor_key', key: [guard, cert, year, place].join('|') };
     }
     if (!nid) return null;
     return { kind: 'national_id', key: nid };
+  };
+
+  /* The name a minor was filed under before the guardian's card was part of it.
+     Still looked for: there are requests on file under it, and a new key with no
+     look at the old one is a duplicate check with a hole in it from the day it is
+     written. */
+  const legacyMinorKeyOf = d => {
+    const cert = normId(d && d.birth_certificate_no);
+    const year = String((d && d.birth_date) || '').slice(0, 4);
+    const place = normId(d && d.birth_place);
+    if (!cert || !year || !place) return '';
+    return [cert, year, place].join('|');
   };
 
   /* ---------------- the one form the database holds ----------------
@@ -349,7 +369,15 @@
        carried as one joined string. */
     const field = key.kind === 'minor_key' ? 'duplicate_key' : 'national_id_key';
     const found = await findByKey(field, key.key);
-    return found ? { key, found } : null;
+    if (found) return { key, found };
+    /* And under the name the child was first filed by, which is where the requests
+       already on the books are. */
+    const legacy = legacyMinorKeyOf(d);
+    if (legacy && legacy !== key.key) {
+      const older = await findByKey(field, legacy);
+      if (older) return { key, found: older };
+    }
+    return null;
   };
 
   /* ---------------- the registration number ----------------
@@ -389,9 +417,16 @@
   const countedFromRecords = async (kind, year, pool) => {
     let list;
     try { list = await rows('applications'); }
-    catch (error) { console.warn('cannot read the requests to count registrations', error); return 0; }
+    catch (error) { console.warn('cannot read the requests to count registrations', error); list = []; }
+    /* And from the members, because a request that has been accepted is a member
+       now and its number is on the member's card. Counting from the requests
+       alone means the number walks backwards the moment a record is lost, and the
+       club hands the same number to two people. */
+    let members = [];
+    try { members = await rows('swimmers'); }
+    catch (error) { console.warn('cannot read the members to count registrations', error); }
     let highest = 0;
-    for (const r of list) {
+    for (const r of list.concat(members)) {
       const seq = readRegistrationId(r.registration_id || r.membership_no, kind, year, pool);
       if (seq > highest) highest = seq;
     }
@@ -1075,6 +1110,20 @@
              carries the number they were given. Without this the member would be
              a swimmer at the pool and somebody whose request still reads "under
              study" at their own front door. */
+          /* The request names the member it became, and the requests page reads
+             that name to keep a decided request out of the queue. It is written
+             here, where the member is written, so the two cannot come apart: a
+             member with no request pointing at it, or a request pointing at no
+             member, is the state this arrangement exists to prevent.
+
+             The document stays. It is the record of what was decided, when, and by
+             whom -- and the registration numbers are counted out of these very
+             documents, so removing one would hand its number to the next swimmer. */
+          await db.collection('applications').doc(no).set({
+            transferred_to: no,
+            transferred_at: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+
           if (src.applicant_uid) {
             await db.collection('users').doc(src.applicant_uid).set({
               /* Where the request stands, on the account. */
@@ -1092,6 +1141,17 @@
            on, and the club would field the same question at the counter. */
         if (patch.status === 'rejected') {
           const stored = (await db.collection('applications').doc(appMatch[1]).get()).data() || {};
+          /* A request that had been accepted and is now refused was this person,
+             not a new applicant: the mark is taken off and the swimmer is removed,
+             because leaving a member in the list who has been refused is how a
+             club ends up with a card for somebody it never took. */
+          if (stored.transferred_to) {
+            await db.collection('swimmers').doc(stored.transferred_to).delete().catch(() => {});
+            await db.collection('applications').doc(appMatch[1]).set({
+              transferred_to: firebase.firestore.FieldValue.delete(),
+              transferred_at: firebase.firestore.FieldValue.delete()
+            }, { merge: true });
+          }
           const why = String(patch.rejection_reason || stored.rejection_reason || '').trim();
           if (!why) {
             return jsonResponse({ error: 'اكتب سبب الرفض قبل رفض الطلب —Applicantd يقرأه عند محاولته الدخول.' }, 400);

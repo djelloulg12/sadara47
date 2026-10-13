@@ -190,6 +190,119 @@ let auditPosted = false;
   }
 }
 
+/* ---- the order of the requests ---- */
+/* The order of the requests, and what accepting one does to it.
+
+   The order is three rules, easy to state and easy to get wrong: under review at
+   the top newest first, refused at the bottom whatever its date, everything in
+   between in the middle.
+
+   The trap worth a check is the second one. A refusal from last March and a
+   request from yesterday both have dates, and a sort that only looks at dates
+   floats the refusal to the top -- which tells the manager the wrong thing about
+   what needs deciding today.
+
+   The transfer is the other half: accepting writes the member and marks the
+   request, and the record stays. Marked, not deleted, because the registration
+   numbers are counted out of these very documents -- a deleted request hands its
+   number to the next swimmer, which is the one way this arrangement could give
+   two people the same card.
+
+   Driven through the real page rather than through the helper, so what is checked
+   is the order a person sees. */
+const queue_order = () => {
+  const w = boot({ user: { role: 'president' } });
+  const st = w.__t.state;
+  const day = n => '2026-' + String(n).padStart(2, '0') + '-' + String(n).padStart(2, '0');
+
+  st.applications = [
+    { id: 'a1', application_no: 'APP-20260101-AAAA', status: 'rejected', created_at: { toDate: () => new Date(day(1)) } },
+    { id: 'a2', application_no: 'APP-20260310-BBBB', status: 'pending', created_at: { toDate: () => new Date(day(10)) } },
+    { id: 'a3', application_no: 'APP-20260105-CCCC', status: 'rejected', created_at: { toDate: () => new Date(day(5)) } },
+    { id: 'a4', application_no: 'APP-20260312-DDDD', status: 'pending', created_at: { toDate: () => new Date(day(12)) } },
+    { id: 'a5', application_no: 'APP-20260220-EEEE', status: 'approved', created_at: { toDate: () => new Date(day(20)) } },
+    /* No readable date at all: it must not float to the top of the page. */
+    { id: 'a6', application_no: 'APP-XXXXXXXX-FFFF', status: 'pending' }
+  ];
+
+  const w2 = boot();
+  w2.__t.state.applications = st.applications;
+  w2.__t.state.user = { role: 'president' };
+  w2.__t.state.page = 'applications';
+  w2.__t.render();
+
+  const shown = [...w2.document.querySelectorAll('tbody tr')]
+    .map(tr => (tr.textContent.match(/APP-\d{8}-[A-Z]{4}/) || [''])[0])
+    .filter(Boolean);
+
+  /* What the queue shows: the work at the top, the refusals at the bottom. The
+     accepted request is not in it -- that is the thing being asked for. */
+  const want = [
+    'APP-20260312-DDDD',   /* under review, the newest */
+    'APP-20260310-BBBB',   /* under review, the older */
+    'APP-20260105-CCCC',   /* refused */
+    'APP-20260101-AAAA'    /* refused, the older, at the very bottom */
+  ];
+  const got = shown.filter(no => want.indexOf(no) !== -1);
+
+  if (got.join(',') !== want.join(',')) {
+    errors.push('[queue] the requests are in this order:\n      ' + got.join('\n      ')
+      + '\n    and the club asked for:\n      ' + want.join('\n      '));
+  }
+
+  /* The one with no readable date is not at the top. An unknown date is not a
+     recent one. */
+  if (shown[0] === 'APP-XXXXXXXX-FFFF') {
+    errors.push('[queue] a request with no readable date was put at the top');
+  }
+
+  /* And a decided request is out of the queue, while a refusal stays in it -- the
+     club still has to see a refusal, it just must not see it first. */
+  if (shown.indexOf('APP-20260220-EEEE') !== -1) {
+    errors.push('[queue] a request that has become a member is still in the queue');
+  }
+  for (const refused of ['APP-20260101-AAAA', 'APP-20260105-CCCC']) {
+    if (shown.indexOf(refused) === -1) {
+      errors.push('[queue] a refusal has left the list: ' + refused);
+    }
+  }
+  /* The oldest refusal is last of all, not merely below the other refusal. */
+  if (shown[shown.length - 1] !== 'APP-20260101-AAAA') {
+    errors.push('[queue] the oldest refusal is not at the bottom');
+  }
+
+  /* Asked for, they are all there, in the same order. */
+  const box = w2.document.getElementById('app-show-decided');
+  if (!box) errors.push('[queue] there is no way to ask for the history back');
+  else {
+    box.checked = true;
+    box.dispatchEvent(new w2.Event('change', { bubbles: true }));
+    const withHistory = [...w2.document.querySelectorAll('tbody tr')]
+      .map(tr => (tr.textContent.match(/APP-\d{8}-[A-Z]{4}/) || [''])[0])
+      .filter(Boolean);
+    if (!w2.__t.state.appShowDecided) {
+      errors.push('[queue] the control for the history does nothing when it is used');
+    } else if (withHistory.indexOf('APP-20260220-EEEE') === -1) {
+      errors.push('[queue] the control was used and the page still hides the history');
+    }
+    /* And the accepted request belongs in the middle, not at either end -- that is
+       the only place the "decided in the middle" half of the rule can be seen. */
+    if (withHistory.indexOf('APP-20260220-EEEE') !== -1) {
+      const at = withHistory.indexOf('APP-20260220-EEEE');
+      if (at !== 2 || withHistory.length !== 5) {
+        errors.push('[queue] with the history shown the order is '
+          + withHistory.join(', ') + ' -- the decided one belongs in the middle');
+      }
+    }
+    /* And asking for it does not change where a refusal sits. */
+    const at = withHistory.indexOf('APP-20260101-AAAA');
+    if (at !== withHistory.length - 1) {
+      errors.push('[queue] asking for the history moved a refusal off the bottom');
+    }
+  }
+};
+
+pending.push(Promise.resolve().then(queue_order));
 /* ---- the public page must show real data to a visitor ---- */
 {
   const w = boot({ user: null, page: 'home', swimmers: [], applications: [], schedules: [],

@@ -415,12 +415,14 @@ test('nobody is registered twice', async () => {
       + again.status + ' ' + JSON.stringify(again.data).slice(0, 140));
   }
 
-  /* A child is identified by the three things the club has for them: the birth
-     certificate number, the year, and the commune of birth. All three. */
+  /* A child is identified by whose swimmer they are and which child of that
+     swimmer: the guardian's card, the birth certificate number, the year, and
+     the commune of birth. */
   const child = {
     application_no: 'APP-KID-1', category: 'minor', first_name_ar: 'x', last_name_ar: 'y',
     birth_date: '2015-04-02', phone: '06', address: 'a',
-    birth_certificate_no: 'BC-99', birth_place: 'قصر', subscription_code: 'quarter'
+    birth_certificate_no: 'BC-99', birth_place: 'قصر', subscription_code: 'quarter',
+    guardian_national_id: '197809031'
   };
   const kid1 = await call(w, '/api/applications', 'POST', child);
   if (!kid1.ok) { errors.push('the first child registration was refused: ' + JSON.stringify(kid1.data).slice(0, 140)); return; }
@@ -439,7 +441,8 @@ test('nobody is registered twice', async () => {
   for (const [what, different] of [
     ['a different year', { birth_date: '2016-04-02' }],
     ['a different commune', { birth_place: 'مسعد' }],
-    ['a different certificate', { birth_certificate_no: 'BC-98' }]
+    ['a different certificate', { birth_certificate_no: 'BC-98' }],
+    ['a different guardian', { guardian_national_id: '198001019' }]
   ]) {
     const res = await call(w, '/api/applications', 'POST',
       Object.assign({}, child, different, { application_no: 'APP-KID-' + Math.random().toString(16).slice(2, 8) }));
@@ -454,6 +457,34 @@ test('nobody is registered twice', async () => {
     Object.assign({}, child, { application_no: 'APP-KID-DUP', national_id: '1985010111122' }));
   if (kidSame.status !== 409) {
     errors.push('the same child was registered again under a national number that belongs to an adult');
+  }
+
+  /* Another child of the same guardian. This is the whole reason the guardian's
+     card is not the whole key: the club asked for one guardian to have several
+     swimmers, and a key that said otherwise would refuse the second one. */
+  const sibling = await call(w, '/api/applications', 'POST', Object.assign({}, child, {
+    application_no: 'APP-KID-2', birth_certificate_no: 'BC-98', birth_date: '2017-06-09'
+  }));
+  if (sibling.status === 409) {
+    errors.push('another child of the same guardian was refused: '
+      + JSON.stringify(sibling.data).slice(0, 140));
+  } else if (sibling.ok) {
+    /* And the same child again, under the same card, is still the same child. */
+    const repeat = await call(w, '/api/applications', 'POST', Object.assign({}, child, {
+      application_no: 'APP-KID-3', birth_certificate_no: 'BC-98', birth_date: '2017-06-09'
+    }));
+    if (repeat.status !== 409) {
+      errors.push('the second child was registered a second time under the same card');
+    }
+  }
+
+  /* A card written the way it is read off a card -- spaces, dashes, capitals --
+     is the same card. The guardian's number is compared the way the adult's is. */
+  const spaced = await call(w, '/api/applications', 'POST', Object.assign({}, child, {
+    application_no: 'APP-KID-SPACED', guardian_national_id: '197 809-031'
+  }));
+  if (spaced.status !== 409) {
+    errors.push('the same child under the same card written with a space and a dash was not refused');
   }
 });
 

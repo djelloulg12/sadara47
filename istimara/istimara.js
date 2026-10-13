@@ -339,7 +339,9 @@
      birth and national number. All four are required of a minor, because the
      declaration cannot be completed without them, and none is required of an
      adult, who has no guardian. */
-  var GUARDIAN_FIELDS = ['guardian_first_name', 'guardian_last_name', 'guardian_birth_date', 'guardian_national_id'];
+  var GUARDIAN_FIELDS = ['guardian_first_name', 'guardian_last_name',
+    'guardian_birth_date', 'guardian_relation', 'guardian_phone',
+    'guardian_national_id', 'guardian_national_id_expiry', 'guardian_card_issued'];
   function syncCategory() {
     var minor = category() === 'minor';
     /* The fee follows the category and the pool, so both changes re-ask. */
@@ -554,8 +556,14 @@
      the person is walked to the first one that is missing. */
   function validate() {
     var missing = [];
-    var required = ['first_name_ar', 'last_name_ar', 'birth_date',
-                    'phone', 'address',
+    /* Everything the form asks, except the one field a person can honestly leave
+       empty: a previous registration number, which they have if they are
+       renewing and do not if they are new. */
+    var required = ['first_name_ar', 'last_name_ar', 'first_name_fr', 'last_name_fr',
+                    'birth_date', 'gender', 'blood_group', 'level',
+                    'birth_certificate_no', 'wilaya', 'facility',
+                    'phone', 'whatsapp', 'address',
+                    'payment_method', 'notes',
                     'email', 'username', 'password', 'password_confirm'];
     /* The photograph is part of the registration and not something the club asks
        for at the counter. The official form has a frame for it and the membership
@@ -607,6 +615,15 @@
     if (val('guardian_birth_date') && !isoDate(val('guardian_birth_date'))) {
       missing.push('guardian_birth_date');
     }
+    /* A name written only in Arabic is not a name the club can match on the
+       card, and the Latin spelling is what the documents are printed from. */
+    if (val('first_name_fr') && !/^\s*[A-Za-z][A-Za-z\s'-]*$/.test(val('first_name_fr'))) {
+      missing.push('first_name_fr');
+    }
+    if (val('last_name_fr') && !/^\s*[A-Za-z][A-Za-z\s'-]*$/.test(val('last_name_fr'))) {
+      missing.push('last_name_fr');
+    }
+
     var phone = val('phone');
     if (phone && latinDigits(phone).replace(/[\s.\-()]/g, '').length < 9) missing.push('phone');
     /* The shape of an address is checked here rather than being left to the mail
@@ -663,6 +680,23 @@
     national_id: cardNumberError('رقم بطاقتك'),
     national_id_expiry: 'اكتب تاريخ انتهاء البطاقة بصيغة سنة/شهر/يوم — 2031/04/17.',
     guardian_national_id: cardNumberError('رقم بطاقة الولي'),
+    guardian_national_id_expiry: 'اكتب تاريخ انتهاء بطاقة الولي بصيغة سنة/شهر/يوم — 2031/06/02.',
+    guardian_card_issued: 'اكتب تاريخ إصدار بطاقة الولي بصيغة سنة/شهر/يوم — 2021/06/02.',
+    /* One sentence per field, because a message that belongs to one field and is
+       shown for another sends somebody to rewrite the right one. */
+    first_name_fr: 'اكتب الاسم باللاتينية كما هو في بطاقة التعريف.',
+    last_name_fr: 'اكتب اللقب باللاتينية كما هو في بطاقة التعريف.',
+    gender: 'اختر الجنس.',
+    blood_group: 'اختر فصيلة الدم.',
+    level: 'اختر المستوى.',
+    birth_certificate_no: 'اكتب رقم شهادة الميلاد.',
+    wilaya: 'اختر الولاية.',
+    facility: 'اختر المسبح.',
+    whatsapp: 'اكتب رقم واتساب. إن لم يكن لديك رقم آخر فاكتب نفس رقم الهاتف.',
+    payment_method: 'اختر طريقة الدفع.',
+    notes: 'اكتب ملاحظة للنادي — إن لم يكن لديك شيء اكتب: لا شيء.',
+    guardian_relation: 'اختر صلة القرابة.',
+    guardian_phone: 'اكتب هاتف الولي.',
     guardian_national_id_expiry: 'اكتب تاريخ انتهاء بطاقة الولي بصيغة سنة/شهر/يوم — 2031/06/02.',
     guardian_card_issued: 'اكتب تاريخ إصدار بطاقة الولي بصيغة سنة/شهر/يوم — 2021/06/02.',
     photo: 'الصورة إجبارية. اختر صورة واضحة، والوجه داخل الإطار.',
