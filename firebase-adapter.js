@@ -799,11 +799,19 @@
       if (path === '/api/swimmers' && method === 'GET') {
         const user = await currentUser();
         const profile = user ? await userView(user) : null;
-        const isStaff = profile && ['admin', 'president', 'coach'].includes(profile.role);
-        const list = await rows('swimmers');
-        if (isStaff) return jsonResponse(list);
-        const mine = String(profile.member_no || '');
-        return jsonResponse(mine ? list.filter(x => String(x.membership_no) === mine) : []);
+        if (!user) return jsonResponse({ error: 'يرجى تسجيل الدخول' }, 401);
+        /* The rules have already answered this. A member's read returns the card
+           they were given and each of their children's, because that is what the
+           rules let through and nothing else; a member of staff reads the roster.
+
+           It used to be filtered here as well, down to the one record whose number
+           matched the account's own -- which was a belt to braces while the rules
+           were shut, and cut off exactly what they have just let through: none of
+           a parent's three children carries the parent's number, so a parent with
+           three children received none of them.
+
+           Nothing is decided in a browser, and nothing is written. */
+        return jsonResponse(await rows('swimmers'));
       }
 /* ---------------- accounts and their permissions ----------------
          The rules already let a manager read and update any users document.
@@ -1110,6 +1118,9 @@
       if (path === '/api/cards' && method === 'GET') return jsonResponse(await rows('cards'));
 
       /* ---------------- attendance ---------------- */
+      /* Same reasoning as the roster: the rules decide which marks this account may
+         read -- its own swimmers' -- and filtering again here would only remove
+         what was let through. A read, and only a read. */
       if (path === '/api/attendance' && method === 'GET') return jsonResponse(await rows('attendance'));
       if (path === '/api/attendance' && method === 'POST') {
         const user = await currentUser();

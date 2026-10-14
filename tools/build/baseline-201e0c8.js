@@ -1098,24 +1098,97 @@ const ROLE_MENU={
   parent:[['home','نظرة عامة','⌂'],['attendance','حضور الأبناء','✓'],['cards','البطاقات','▣'],['applications','الطلبات','▤'],['notices','الإعلانات','◈']],
   member:[['home','نظرة عامة','⌂'],['schedule','البرنامج','▦'],['notices','الإعلانات','◈']]
 };
+/* The swimmers this account is answerable for.
+
+   For a member that is whatever the database let through: their own card, and each
+   of their children's, because the rules refuse the rest before the page is given
+   a say. Nothing is filtered here -- a browser is not a place to decide who may
+   read the roster, and the filtering that used to happen here is what took a
+   parent's three children away from them: none of them carries the parent's
+   number, so at most one could ever match.
+
+   For a member of staff it is the club's roster, and they are one person in it --
+   which `mySwimmer` still works out for itself, by number, then telephone, then
+   name. */
+function mySwimmers(){
+  return (state.swimmers||[]).slice();
+}
+
+/* The swimmer being looked at.
+
+   Everything on this page -- the face, the three numbers, the timetable -- reads
+   this one and not another, because they are three readings of the same person and
+   two of them at once is how a parent reads the wrong child.
+
+   The choice is kept, so coming back to the page comes back to the same child
+   rather than to the first name in a list that may have been re-sorted underneath
+   them. A choice that nobody can keep is not a choice. */
+function chosenSwimmer(){
+  const list=mySwimmers();
+  if(!list.length)return null;
+  const want=String(state.chosenSwimmer||'');
+  return list.find(s=>String(s.id)===want)||list[0];
+}
 function mySwimmer(){
   const u=state.user||{};
   const list=state.swimmers||[];
-  const no=(u.member_no||'').trim();
-  if(no)return list.find(s=>String(s.id)===no)||null;
-  const phone=String(u.phone||'').replace(/\s/g,'');
-  if(phone)return list.find(s=>String(s.phone||'').replace(/\s/g,'').endsWith(phone))||null;
-  const name=(u.name||'').trim();
-  if(name)return list.find(s=>String(s.name||'').trim()===name)||null;
-  return null;
+  if(['admin','president','coach'].includes(u.role)){
+    const no=(u.member_no||'').trim();
+    if(no){const hit=list.find(s=>String(s.id)===no);if(hit)return hit}
+    const phone=String(u.phone||'').replace(/\s/g,'');
+    if(phone){const hit=list.find(s=>String(s.phone||'').replace(/\s/g,'').endsWith(phone));if(hit)return hit}
+    const name=(u.name||'').trim();
+    if(name){const hit=list.find(s=>String(s.name||'').trim()===name);if(hit)return hit}
+  }
+  return chosenSwimmer();
 }
+/* The timetable, for the swimmer being looked at and nobody else.
+
+   Their group, and their level where the timetable carries one -- narrowing by a
+   level the timetable does not have would leave a member with no sessions at all,
+   which reads as "your group has no timetable" rather than as "we could not match
+   you".
+
+   It used to answer with every session when no swimmer could be found, and that is
+   how a member with no card was shown other children's groups: the fallback was
+   "show everything", and everything is somebody else's group. It shows none now,
+   and says so. */
 function mySessions(){
-  const me=mySwimmer();
+  const me=chosenSwimmer();
   const coachGroup=(state.user?.group_name||'').trim();
   const list=state.schedules||[];
   if(coachGroup)return list.filter(s=>String(s.group_name||'').trim()===coachGroup);
-  if(me)return list.filter(s=>String(s.group_name||'').trim()===String(me.group||'').trim());
-  return list;
+  if(!me)return [];
+  const group=String(me.group||me.group_name||'').trim();
+  const level=String(me.level||'').trim();
+  return list.filter(s=>{
+    if(group&&String(s.group_name||'').trim()!==group)return false;
+    if(level&&s.level&&String(s.level).trim()!==level)return false;
+    return true;
+  });
+}
+
+/* What the three numbers count, for one swimmer and one season.
+
+   Every one of them is a reading of the marks and nothing else: no target, no
+   comparison with last month, no figure that could not be read off a record. The
+   progress share is the one that could have been invented, so it is defined in the
+   card's own words -- the share of recorded sessions they were present for. A
+   swimmer with one session marked is a hundred per cent, and the card says "one of
+   one" beside it, which is the truth about it. */
+function swimmerProgress(me){
+  const out={attended:0,absent:0,late:0,recorded:0};
+  if(!me)return out;
+  const days=state.attendanceByDay||{};
+  Object.keys(days).forEach(d=>{
+    const m=dayMark(d,me.id);
+    if(!m)return;
+    out.recorded++;
+    if(m.status==='present')out.attended++;
+    else if(m.status==='late')out.late++;
+    else if(m.status==='absent')out.absent++;
+  });
+  return out;
 }
 function myAttendance(){
   const me=mySwimmer();
@@ -1124,16 +1197,112 @@ function myAttendance(){
   if(me)Object.keys(days).sort().forEach(k=>{const m=dayMark(k,me.id);if(m)out.push({date:k,status:m.status});});
   return out.reverse();
 }
+/* A swimmer's face, in a circle, or their own initial in one.
+
+   The club's mark is not used here. A logo where a face should be is a photograph
+   of nobody, and on a page whose whole job is to say whose this is, it is worse
+   than admitting there is no picture. */
+function swimmerFace(me, size){
+  const photo=memberPhoto(me, state.profile);
+  const initial=String((me&&me.name)||'?').trim().charAt(0);
+  const box='<div class="mine-avatar'+(photo?'':' is-empty')+'"'
+    +(size?' style="--face:'+size+'px"':'')+'>'
+    +(photo?'<img src="'+esc(photo)+'" alt="صورة '+esc(me.name||'')+'">':'<span>'+esc(initial)+'</span>')
+    +'</div>';
+  return box;
+}
+
+/* The member's space. A face, a switch, three numbers, and the timetable of the
+   person chosen -- in that order, because that is the order a parent reads them. */
+function memberSpace(me, mine, sessions, role){
+  const p=swimmerProgress(me);
+  const pct=p.recorded?Math.round(p.attended/p.recorded*100):null;
+  const full=String(me&&me.name||'').trim();
+  const who=esc(full||'لا يوجد سبّاح مرتبط بهذا الحساب');
+  const sub=me
+    ? esc([me.group||me.group_name,me.level].filter(Boolean).join(' · ')||'فوج غير محدد')
+      +' · <span dir="ltr">'+esc(clubDigits(me.id||''))+'</span>'
+    : 'اربط الحساب ببطاقة سبّاح لتظهر بياناته هنا.';
+
+  const switcher=mine.length>1
+    ? '<div class="mine-switch"><label for="which-swimmer">السبّاح</label>'
+      +'<select id="which-swimmer" class="filter">'
+      +mine.map(s=>'<option value="'+esc(s.id)+'"'+(s===me?' selected':'')+'>'
+        +esc(s.name||'')+'</option>').join('')
+      +'</select><small>'+clubDigits(mine.length)+' سبّاح تحت هذا الحساب</small></div>'
+    : '';
+
+  const card=(icon,tone,title,value,note)=>'<article class="mine-stat">'
+    +'<span class="mine-stat-icon '+tone+'">'+icon+'</span>'
+    +'<div><small>'+esc(title)+'</small>'
+    +'<strong>'+esc(value)+'</strong>'
+    +'<p>'+note+'</p></div></article>';
+
+  const bar=pct===null?'':'<div class="mine-bar" role="img" aria-label="نسبة التقدم '+clubDigits(pct)+' بالمئة">'
+    +'<i style="width:'+pct+'%"></i></div>';
+
+  return '<section class="mine">'
+    +'<header class="mine-head">'
+      +'<div class="mine-id">'+swimmerFace(me,112)
+        +'<div class="mine-who"><h1>'+who+'</h1><p>'+sub+'</p></div></div>'
+      +switcher
+    +'</header>'
+    +'<div class="mine-stats">'
+      +card('✓','mint','عدد الحصص',clubDigits(p.attended),
+            'حضر '+clubDigits(p.attended)+' من '+clubDigits(p.recorded)+' حصة مسجَّلة')
+      +card('!','rose','عدد الغيابات',clubDigits(p.absent),
+            (p.late?clubDigits(p.late)+' مرة تأخر':'لا تأخير مسجَّل'))
+      +'<article class="mine-stat wide"><span class="mine-stat-icon blue">◔</span>'
+        +'<div><small>نسبة التقدم</small>'
+        +'<strong>'+(pct===null?'—':clubDigits(pct)+'%')+'</strong>'
+        +'<p>الحضور من الحصص المسجَّلة</p></div>'+bar+'</article>'
+    +'</div>'
+    +'<section class="panel mine-timetable"><div class="panel-head"><div>'
+      +'<h3>حصص '+esc(me&&me.name?String(me.name).split(/\s+/).slice(-1)[0]:'السبّاح')+'</h3>'
+      +'<p>'+(sessions.length
+          ? clubDigits(sessions.length)+' حصة في فوجه — الموسم '+esc(clubDigits(CLUB.season))
+          : 'لا توجد حصص مبرمجة لفوج هذا السبّاح بعد.')+'</p>'
+      +'</div>'+printBtn('print-role-schedule','طباعة البرنامج')+'</div>'
+    +(sessions.length
+      ? '<div class="table-scroll"><table><thead><tr><th>اليوم</th><th>التوقيت</th><th>الفوج</th><th>المستوى</th><th>المدرب</th><th>المسبح</th></tr></thead><tbody>'
+        +sessions.map(x=>'<tr><td><b>'+esc(x.day_name||'')+'</b></td><td dir="ltr">'+esc(clubDigits(x.time_range||''))+'</td>'
+          +'<td>'+esc(x.group_name||'')+'</td><td>'+esc(x.level||'—')+'</td>'
+          +'<td>'+esc(x.coach||'')+'</td><td>'+esc(x.pool||'مسبح الصدارة')+'</td></tr>').join('')
+        +'</tbody></table></div>'
+      : '<p class="empty-cell">لا توجد حصص مبرمجة لفوج هذا السبّاح بعد.</p>')
+    +'</section>'
+    +'<div class="role-grid"><section class="panel"><div class="panel-head"><div><h3>آخر إعلانات النادي</h3><p>معلومات محدثة من إدارة النادي</p></div></div>'
+    +((state.notices||[]).length
+      ? '<div class="role-list">'+(state.notices||[]).slice(0,3).map(n=>'<div><b>'+esc(n.title)+'</b><span>'+esc(n.text)+'</span></div>').join('')+'</div>'
+      : '<p class="empty-cell">لا توجد إعلانات بعد.</p>')
+    +'</section>'
+    +'<section class="panel role-side"><h3>روابط النادي</h3>'
+    +'<a class="role-link" href="'+esc(CLUB.facebook)+'" target="_blank" rel="noopener noreferrer">f — الصفحة الرسمية للنادي</a>'
+    +'<a class="role-link" href="tel:'+esc(CLUB.phone.replace(/\s/g,''))+'">☎ — اتصال بالنادي</a>'
+    +'<a class="role-link" href="mailto:'+esc(CLUB.email)+'">✉ — إرسال رسالة</a>'
+    +'<p class="page-description">العنوان: '+esc(CLUB.address)+'</p>'
+    +'</section></div>'
+    +'</section>';
+}
+
 function roleHome(role){
-  const me=mySwimmer();
+  const mine=mySwimmers();
+  const me=chosenSwimmer();
   const sessions=mySessions();
   const rate=attendanceRate();
   const cards=activeCards().length;
   const upcoming=sessions[0];
   const notes=(state.notices||[]).slice(0,3);
+
+  /* A member or a parent gets their own space: the face, the switch, the numbers.
+     Everything else keeps what it had. */
+  if(['swimmer_adult','swimmer_minor','parent','member'].includes(role)&&!['admin','president','coach'].includes(state.user?.role)){
+    return memberSpace(me, mine, sessions, role);
+  }
+
   return '<section class="role-hero"><div><span class="eyebrow">'+esc(ROLE_LABELS[role]||'فضاء العضو')+'</span>'
     +'<h1>مرحبًا، '+esc(firstName())+' 👋</h1>'
-    +'<p>'+(role==='coach'?'سجّل حضور السباحين ووتابع أفواجك لحظة بلحظة.':role==='parent'?'تابع حضور أبنائك وبطاقاتهم واشتراكاتهم.':me?'هذه بطاقتك وحضورك في فوج السباحة.':'آخر أخبار النادي وبرامجه بين يديك.')+'</p></div>'
+    +'<p>'+(role==='coach'?'سجّل حضور السباحين وتابع أفواجك لحظة بلحظة.':role==='parent'?'تابع حضور أبنائك وبطاقاتهم واشتراكاتهم.':me?'هذه بطاقتك وحضورك في فوج السباحة.':'آخر أخبار النادي وبرامجه بين يديك.')+'</p></div>'
     +'<div class="role-mark">'+({coach:'🏊‍♂️',parent:'👨‍👩‍👧',swimmer_adult:'🏊',swimmer_minor:'🏊',member:'⭐'}[role]||'⭐')+'</div></section>'
     +'<div class="role-cards">'
     +'<article><span class="stat-icon blue">▦</span><small>الحصة القادمة</small><strong>'+esc(upcoming?(upcoming.day_name||'—'):'—')+'</strong><p>'+esc(clubDigits(upcoming?(upcoming.time_range||''):'لا توجد حصة مبرمجة'))+'</p></article>'
@@ -1591,6 +1760,17 @@ bind=function(){
   /* Which session is being recorded. Saved, so a coach who is interrupted comes
      back to the same session rather than to today without meaning to. */
   live('#attendance-date',e=>{state.attendanceDate=e.target.value;save();renderPageOnly()});
+  /* Which swimmer. Kept, so coming back to the page comes back to the same child
+     rather than to the first name in a list that may have been re-sorted underneath
+     them.
+
+     The whole render, not renderPageOnly(): that one rebuilds a single element from
+     a map whose entry for the front page is the *management* overview, and a
+     member's front page is drawn by a different function -- so on this page it
+     found nothing to redraw and the DOM stayed exactly as it was. The symptom was
+     the quiet kind: the value went into the state, the state was right, and the
+     page did not move. A parent picks the other child and sees the first one. */
+  live('#which-swimmer',e=>{state.chosenSwimmer=e.target.value;save();render()});
 };
 function renderPageOnly(){
   const p=state.page;

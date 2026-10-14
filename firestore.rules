@@ -30,6 +30,39 @@ service cloud.firestore {
     function coach() { return signedIn() && role() == 'coach'; }
     function staff() { return manager() || coach(); }
 
+    /* Is this member's card mine?
+
+       Three links, because the link was written at three different times:
+
+         the account that filed the request
+         the request the member was accepted from, read through the document --
+           for everybody who joined before the member carried the first link
+         the number on my own account, which is how an adult swimmer's card is
+           tied to an account that is not a parent at all
+
+       Each is a comparison against this account and nothing else. The roster stays
+       shut: there is no way to reach a document that is not one of these three,
+       and the comparison is here rather than in the page -- so the page is not the
+       thing that decides who may read the roster, and no later change to a page can
+       widen it.
+
+       `exists()` before every cross-document read, because a path that is not there
+       compares as nothing -- the right answer, but an explicit guard says so
+       rather than leaving it to how a missing document happens to be reported. */
+    function swimmerIsMine(doc) {
+      return doc != null
+        && (doc.applicant_uid == request.auth.uid
+            || (doc.from_application != ''
+                && exists(/databases/$(database)/documents/applications/$(doc.from_application))
+                && get(/databases/$(database)/documents/applications/$(doc.from_application)).data.applicant_uid == request.auth.uid)
+            || (doc.membership_no != '' && doc.membership_no == profile().member_no));
+    }
+    function swimmerDocIsMine(id) {
+      return exists(/databases/$(database)/documents/swimmers/$(id))
+        && swimmerIsMine(get(/databases/$(database)/documents/swimmers/$(id)).data);
+    }
+
+
     match /config/owners {
       allow read: if signedIn();
       allow write: if ownerEmail();
@@ -119,16 +152,23 @@ service cloud.firestore {
       allow delete: if manager();
     }
 
-    // Roster: management and coaches only. A member reads their own card from users/{uid}.
+    /* Roster: management, coaches, and a member for their own cards.
+
+       It was management and coaches only, which shut one door too far: a member
+       could not read their own card and a parent could not read their children's,
+       so a member's dashboard had nothing to draw -- no photograph, no statistics,
+       no sessions. The page was built to show what the database refused to hand
+       over. Writes stay with management. */
     match /swimmers/{id} {
-      allow read: if staff();
+      allow read: if staff() || (signedIn() && swimmerIsMine(resource.data));
       allow write: if manager();
     }
 
-    // Attendance: staff write, everyone signed in can read only their own group totals,
-    // so keep reads for management and coaches to avoid leaking other members' days.
+    /* Attendance: staff write. A member reads the marks about their own swimmers --
+       and only those, through the same key the roster uses, so a mark about
+       anybody else is still refused. */
     match /attendance/{id} {
-      allow read: if staff();
+      allow read: if staff() || (signedIn() && swimmerDocIsMine(resource.data.member_id));
       allow create, update: if staff();
       allow delete: if manager();
     }

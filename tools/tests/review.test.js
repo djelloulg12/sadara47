@@ -142,7 +142,45 @@ let auditPosted = false;
   if (/orderBy\(/.test(ADAPTER)) errors.push('adapter still orders in the database (fragile against older documents)');
   if (!/staff|admin', 'president', 'coach'/.test(ADAPTER)) errors.push('adapter has no staff check on the roster read');
   if (!/path === '\/api\/audit'/.test(ADAPTER)) errors.push('adapter has no /api/audit endpoint');
-  if (!/isStaff/.test(ADAPTER)) errors.push('roster read does not filter by role');
+
+  /* Who may read the roster is decided by the rules, not by the page. The adapter
+     used to ask a second time -- which is a browser deciding who may read other
+     people's cards -- and the second question cut off exactly what the first had
+     let through: none of a parent's children carries the parent's number, so a
+     parent with three children received none of them.
+
+     So what is checked here is the rules, and it is three things rather than one:
+
+       the door is an equality against this account, by one of the links that were
+         actually written -- never a group, a role or a flag
+       a mark is readable only when the swimmer it is about is
+       the roster still refuses writes to anybody but management
+
+     That is more than the string it replaces was checking, and it protects the same
+     thing: other people's cards. */
+  const rosterBlock = (RULES.match(/match \/swimmers\/\{id\} \{[\s\S]*?\n    \}/) || [''])[0];
+  const attBlock = (RULES.match(/match \/attendance\/\{id\} \{[\s\S]*?\n    \}/) || [''])[0];
+  if (!/swimmerIsMine\(resource\.data\)/.test(rosterBlock)) {
+    errors.push('a member cannot read their own card, so a member dashboard has nothing to draw');
+  }
+  if (!/staff\(\)/.test(rosterBlock) || !/allow write: if manager\(\)/.test(rosterBlock)) {
+    errors.push('the roster no longer stays shut to other members, or writing is no longer management-only');
+  }
+  if (!/doc\.applicant_uid == request\.auth\.uid/.test(RULES)) {
+    errors.push('a card is no longer tied to the account that filed it');
+  }
+  if (!/from_application/.test(RULES) || !/profile\(\)\.member_no/.test(RULES)) {
+    errors.push('the two older links to a card are gone, so members who joined before them cannot read their own');
+  }
+  /* The dangerous shape: a door that opens on a group or a role rather than on
+     this account. Anything comparing to a shared value would hand the whole roster
+     to whoever has it. */
+  if (/allow read: if staff\(\) \|\|/.test(rosterBlock) && !/swimmerIsMine/.test(rosterBlock)) {
+    errors.push('the roster opens on something other than the account itself');
+  }
+  if (!/swimmerDocIsMine\(resource\.data\.member_id\)/.test(attBlock)) {
+    errors.push('a member can read marks that are not about their own swimmers');
+  }
 }
 
 /* ---- accessibility basics ---- */
@@ -600,6 +638,177 @@ pending.push(Promise.resolve().then(() => {
   }
   if (field.value !== 'correct horse') {
     errors.push('[eye] looking at the password changed it');
+  }
+}));
+
+/* A member's space: a face, a switch, three numbers, and one swimmer's timetable.
+
+   The point of most of these is that everything on the page belongs to the same
+   person. That is easy to say and easy to get wrong: the photograph reads one
+   record, the numbers read another, and the timetable a third, and a parent who
+   switches and sees one child's face above another child's attendance has been told
+   something false in a way that is not obviously false.
+
+   So the switch is pressed and everything is read again, and each part is asked
+   whether it moved with it.
+
+   And the timetable is asked the question the club asked: does any session belonging
+   to another group appear? It used to, by way of a fallback that answered "show
+   everything" when it could not tell whose timetable to show -- and everything is
+   somebody else's group.
+
+   The photograph here is not the one on the membership card's checks: different
+   subject, and `PIXEL` is already spoken for in this file. */
+
+const FACE_PIXEL = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+
+const family = () => {
+  const days = {};
+  /* جلول: four sessions, three present.  مريم: one, absent. */
+  days['2026-10-10'] = { E202610001: { status: 'present', at: '' } };
+  days['2026-10-11'] = { E202610001: { status: 'present', at: '' }, E202610002: { status: 'absent', at: '' } };
+  days['2026-10-12'] = { E202610001: { status: 'present', at: '' } };
+  return {
+    user: { role: 'parent', id: 'u1', name: 'بلعيد الأخيرة' },
+    swimmers: [
+      { id: 'E202610001', name: 'جلول قندوز', group: 'المبتدئون', level: 'مبتدئ', photo: FACE_PIXEL },
+      { id: 'E202610002', name: 'مريم بلعيد', group: 'المتقدمون', level: 'متقدم' }
+    ],
+    attendanceByDay: days,
+    schedules: [
+      { day_name: 'السبت', time_range: '09:00-10:00', group_name: 'المبتدئون', coach: 'سليم', pool: 'الصدارة 1' },
+      { day_name: 'الأحد', time_range: '09:00-10:00', group_name: 'المبتدئون', coach: 'سليم', pool: 'الصدارة 1' },
+      { day_name: 'الثلاثاء', time_range: '17:00-18:00', group_name: 'المتقدمون', coach: 'نور', pool: 'الصدارة 2' }
+    ],
+    notices: []
+  };
+};
+
+const read = w => {
+  const stats = [...w.document.querySelectorAll('.mine-stat')].map(c => ({
+    label: (c.querySelector('small') || {}).textContent || '',
+    value: (c.querySelector('strong') || {}).textContent || '',
+    note: (c.querySelector('p') || {}).textContent || ''
+  }));
+  const rows = [...w.document.querySelectorAll('.mine-timetable tbody tr')]
+    .map(tr => [...tr.querySelectorAll('td')].map(td => td.textContent.trim()));
+  return {
+    name: (w.document.querySelector('.mine-who h1') || {}).textContent || '',
+    face: !!w.document.querySelector('.mine-avatar img'),
+    emptyFace: !!w.document.querySelector('.mine-avatar.is-empty'),
+    options: [...w.document.querySelectorAll('#which-swimmer option')].map(o => o.textContent.trim()),
+    stats,
+    rows,
+    bar: (w.document.querySelector('.mine-bar i') || {}).getAttribute
+      ? w.document.querySelector('.mine-bar i').getAttribute('style') : '',
+    listed: w.document.querySelector('.mine-switch small').textContent
+  };
+};
+
+pending.push(Promise.resolve().then(() => {
+  const w = boot(family());
+  w.__t.state.page = 'home';
+  w.__t.render();
+  const first = read(w);
+
+  /* ---- the face and the name ------------------------------------------------ */
+  if (first.name !== 'جلول قندوز') {
+    errors.push('[mine] the dashboard does not say whose it is: ' + JSON.stringify(first.name));
+  }
+  if (!first.face) errors.push('[mine] there is no photograph, and the database holds one');
+  if (first.emptyFace) errors.push('[mine] the photograph was replaced by a placeholder');
+
+  /* ---- the switch ----------------------------------------------------------- */
+  if (first.options.join(',') !== 'جلول قندوز,مريم بلعيد') {
+    errors.push('[mine] the switch does not offer both swimmers: ' + first.options.join(' | '));
+  }
+  if (!/2/.test(first.listed)) {
+    errors.push('[mine] the switch does not say how many there are: ' + first.listed);
+  }
+
+  /* ---- the numbers ---------------------------------------------------------- */
+  const attended = first.stats.find(s => s.label === 'عدد الحصص');
+  const absent = first.stats.find(s => s.label === 'عدد الغيابات');
+  const progress = first.stats.find(s => s.label === 'نسبة التقدم');
+  if (!attended || attended.value !== '3') {
+    errors.push('[mine] the number of sessions is ' + (attended && attended.value) + ', not 3');
+  }
+  if (!absent || absent.value !== '0') {
+    errors.push('[mine] the number of absences is ' + (absent && absent.value) + ', not 0');
+  }
+  if (!progress || progress.value !== '100%') {
+    errors.push('[mine] the progress is ' + (progress && progress.value) + ', not 100%');
+  }
+  /* It says what it counted, so a hundred per cent from one session cannot be
+     mistaken for a season. */
+  if (!/من 3/.test(attended.note)) {
+    errors.push('[mine] the card does not say what the number counted: ' + attended.note);
+  }
+  if (!/100/.test(first.bar)) errors.push('[mine] the progress bar does not match the number beside it');
+
+  /* ---- and the timetable is this swimmer's alone --------------------------- */
+  const groups = [...new Set(first.rows.map(r => r[2]))];
+  if (groups.join(',') !== 'المبتدئون') {
+    errors.push('[mine] the timetable shows other groups: ' + groups.join(', '));
+  }
+}));
+
+/* ---- and it all moves together --------------------------------------------- */
+pending.push(Promise.resolve().then(() => {
+  const w = boot(family());
+  w.__t.state.page = 'home';
+  w.__t.render();
+  const before = read(w);
+
+  /* Switch, the way a parent does: choose the other child in the list. */
+  const picker = w.document.getElementById('which-swimmer');
+  if (!picker) { errors.push('[mine] there is no switch to use'); return; }
+  picker.value = 'E202610002';
+  picker.dispatchEvent(new w.Event('input', { bubbles: true }));
+  const after = read(w);
+
+  if (after.name !== 'مريم بلعيد') {
+    errors.push('[mine] the name did not follow the switch: ' + JSON.stringify(after.name));
+  }
+  if (after.face || !after.emptyFace) {
+    errors.push('[mine] the photograph did not follow the switch');
+  }
+  const attended = after.stats.find(s => s.label === 'عدد الحصص');
+  const absent = after.stats.find(s => s.label === 'عدد الغيابات');
+  if (!attended || attended.value !== '0') {
+    errors.push('[mine] the number of sessions is still the other child\'s: ' + (attended && attended.value));
+  }
+  if (!absent || absent.value !== '1') {
+    errors.push('[mine] the number of absences is still the other child\'s: ' + (absent && absent.value));
+  }
+  const groups = [...new Set(after.rows.map(r => r[2]))];
+  if (groups.join(',') !== 'المتقدمون') {
+    errors.push('[mine] the timetable did not follow the switch: ' + (groups.join(',') || 'nothing') +
+      ' rather than المتقدمون');
+  }
+  /* The old child's numbers must be gone, not merely overwritten somewhere else. */
+  if (after.stats.find(s => s.label === 'عدد الحصص').value === before.stats.find(s => s.label === 'عدد الحصص').value
+      && before.stats.find(s => s.label === 'عدد الحصص').value !== '0') {
+    errors.push('[mine] the numbers did not change with the swimmer');
+  }
+}));
+
+/* ---- a member with no card is shown nothing, and told why ------------------ */
+pending.push(Promise.resolve().then(() => {
+  const w = boot(family());
+  w.__t.state.swimmers = [];
+  w.__t.state.page = 'home';
+  w.__t.render();
+
+  if (w.document.querySelector('.mine-timetable tbody tr')) {
+    errors.push('[mine] a member with no card is shown a timetable');
+  }
+  const timetable = (w.document.querySelector('.mine-timetable') || {}).textContent || '';
+  if (/السبت|الأحد|الثلاثاء/.test(timetable)) {
+    errors.push('[mine] a member with no card is shown another group\'s sessions');
+  }
+  if (!/اربط الحساب/.test(w.document.querySelector('.mine-who').textContent)) {
+    errors.push('[mine] a member with no card is not told what to do about it');
   }
 }));
 

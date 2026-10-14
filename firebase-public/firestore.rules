@@ -1,0 +1,206 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function role() { return profile().role; }
+
+    /* The club owner. Named by address in config/owners, so the right follows the
+       person rather than a user id that only exists once an account has been
+       created -- otherwise the owner would have to wait for an account to exist
+       before being able to create one. No user document is needed: the token
+       already carries the address.
+
+       config/owners must be readable by every signed-in account. Gating its read
+       on ownerEmail() looks tighter but is circular: ownerEmail() reads this
+       document, so asking "may I read it?" re-enters the same question and
+       Firestore denies the whole thing. The owner would then hold no rights at
+       all, silently. The addresses are already known to anyone who can read the
+       club's public page, so signed-in is the honest boundary; the write stays
+       with the owner, which is the side that matters. */
+    function ownerList() {
+      return get(/databases/$(database)/documents/config/owners).data.emails;
+    }
+    function ownerEmail() { return signedIn() && request.auth.token.email != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ownerList(); }
+
+    function manager() { return ownerEmail() || (signedIn() && role() in ['admin', 'president']); }
+    function coach() { return signedIn() && role() == 'coach'; }
+    function staff() { return manager() || coach(); }
+
+    /* Is this member's card mine?
+
+       Three links, because the link was written at three different times:
+
+         the account that filed the request
+         the request the member was accepted from, read through the document --
+           for everybody who joined before the member carried the first link
+         the number on my own account, which is how an adult swimmer's card is
+           tied to an account that is not a parent at all
+
+       Each is a comparison against this account and nothing else. The roster stays
+       shut: there is no way to reach a document that is not one of these three,
+       and the comparison is here rather than in the page -- so the page is not the
+       thing that decides who may read the roster, and no later change to a page can
+       widen it.
+
+       `exists()` before every cross-document read, because a path that is not there
+       compares as nothing -- the right answer, but an explicit guard says so
+       rather than leaving it to how a missing document happens to be reported. */
+    function swimmerIsMine(doc) {
+      return doc != null
+        && (doc.applicant_uid == request.auth.uid
+            || (doc.from_application != ''
+                && exists(/databases/$(database)/documents/applications/$(doc.from_application))
+                && get(/databases/$(database)/documents/applications/$(doc.from_application)).data.applicant_uid == request.auth.uid)
+            || (doc.membership_no != '' && doc.membership_no == profile().member_no));
+    }
+    function swimmerDocIsMine(id) {
+      return exists(/databases/$(database)/documents/swimmers/$(id))
+        && swimmerIsMine(get(/databases/$(database)/documents/swimmers/$(id)).data);
+    }
+
+
+    match /config/owners {
+      allow read: if signedIn();
+      allow write: if ownerEmail();
+    }
+
+    // Accounts: a member reads only their own document; management reads all.
+    match /users/{id} {
+      allow read: if signedIn() && (request.auth.uid == id || manager());
+      allow create: if signedIn() && (request.auth.uid == id || ownerEmail());
+      allow update: if signedIn() && (request.auth.uid == id || manager());
+      allow delete: if manager();
+    }
+
+    /* Registration numbers are counted here.
+       A number is a letter for the kind of account, the year, the number of the
+       pool, and four digits that run on. Those four digits have to be consecutive
+       under two people registering at once, which is what a document that is only
+       ever raised inside a transaction is for. */
+    match /counters/{id} {
+      allow read: if signedIn();
+      allow write: if manager();
+    }
+
+    /* Claims are how a name is made unique on a database that has no unique
+       constraint. The document's id IS the name being claimed: an address, a
+       username, a national identity number, the three-part key that identifies a
+       minor.
+
+       It is here because a query is not enough. A query says "nobody has this
+       name" and then, a moment later, somebody else takes it, and two people
+       registering at the same moment both pass. A claim is written once and never
+       changed, and updates and deletes are refused outright, so the database
+       itself turns the second one away rather than a check that ran a moment
+       earlier.
+
+       Only the person the name is being claimed for may claim it. That is what
+       stops a second applicant taking the first one's identity number out from
+       under them by writing the document first. */
+    match /claims/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.kind in
+             ['email', 'username', 'national_id', 'minor_key', 'registration_id']
+        && request.resource.data.key == id
+        && (request.resource.data.owner == request.auth.uid || ownerEmail());
+      allow update, delete: if false;
+    }
+
+    // Prices are public so the sign-up page can show them.
+    match /subscription_plans/{id} {
+      allow read: if true;
+      allow write: if manager();
+    }
+    match /fee_settings/{id} {
+      allow read: if true;
+      allow write: if manager();
+    }
+    match /coach_requirements/{id} {
+      allow read: if true;
+      allow write: if manager();
+    }
+    // Pool and venue names: public so the registration form can offer them,
+    // management-only so only the club decides what a swimmer may pick.
+    match /facilities/{id} {
+      allow read: if true;
+      allow write: if manager();
+    }
+
+    // Applications: public sign-ups always start pending; coach files belong to the applicant.
+    match /applications/{id} {
+      // Every request has to say which kind of file it is. The rules deployed to
+      // the project refuse a document without application_type; these rules did
+      // not, so a request missing it was accepted locally and rejected on the
+      // site -- which is how the public form came to answer every registration
+      // with "you do not have permission". Naming it 'swimmer' explicitly means
+      // an omission is now refused here too, where it can be seen.
+      allow create: if (request.resource.data.application_type == 'coach')
+        ? (signedIn() && request.resource.data.applicant_uid == request.auth.uid
+           && request.resource.data.status == 'pending')
+        : (request.resource.data.application_type == 'swimmer'
+           && request.resource.data.status == 'pending'
+           && !('reviewed_by' in request.resource.data));
+      allow read: if manager()
+        || (signedIn() && resource.data.application_type == 'coach'
+            && resource.data.applicant_uid == request.auth.uid);
+      allow update: if manager();
+      allow delete: if manager();
+    }
+
+    /* Roster: management, coaches, and a member for their own cards.
+
+       It was management and coaches only, which shut one door too far: a member
+       could not read their own card and a parent could not read their children's,
+       so a member's dashboard had nothing to draw -- no photograph, no statistics,
+       no sessions. The page was built to show what the database refused to hand
+       over. Writes stay with management. */
+    match /swimmers/{id} {
+      allow read: if staff() || (signedIn() && swimmerIsMine(resource.data));
+      allow write: if manager();
+    }
+
+    /* Attendance: staff write. A member reads the marks about their own swimmers --
+       and only those, through the same key the roster uses, so a mark about
+       anybody else is still refused. */
+    match /attendance/{id} {
+      allow read: if staff() || (signedIn() && swimmerDocIsMine(resource.data.member_id));
+      allow create, update: if staff();
+      allow delete: if manager();
+    }
+
+    // Cards belong to the member; management and coaches issue them.
+    match /cards/{id} {
+      allow read: if staff() || (signedIn() && resource.data.member_no == profile().member_no);
+      allow write: if manager();
+    }
+
+    match /notices/{id} {
+      allow read: if true;
+      allow write: if manager();
+    }
+    // the weekly timetable is published on the club's public page
+    match /schedules/{id} {
+      allow read: if true;
+      allow write: if manager();
+    }
+
+    // Cash ledger: written when a request is settled, read by management only.
+    match /payments/{id} {
+      allow read: if manager();
+      allow create: if manager();
+      allow update, delete: if false;
+    }
+
+    // Decision trail, written by the client after a successful API call.
+    match /audit_logs/{id} {
+      allow read: if manager();
+      allow create: if manager();
+      allow update, delete: if false;
+    }
+  }
+}
