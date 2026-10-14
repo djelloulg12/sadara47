@@ -215,26 +215,56 @@
 
   function pad2(v) { return String(v).length < 2 ? '0' + v : String(v); }
 
-  /* The date the club writes: 2026/10/11. A date typed with dashes, or with a
-     one-digit month, is still a date and is laid out the same way. */
+  /* Three numbers, and which of them is the year.
+
+     The club writes the day first: 11/10/2026. Four copies of these rules live on
+     this page and all four said the year came first, which meant the calendar wrote
+     a shape and the validator on the same field refused it -- the form rejecting
+     the output of its own calendar, and telling the person to type something every
+     other screen in the club contradicts.
+
+       four digits first   it is a year: the old order
+       otherwise           the day is first, always
+
+     Both orders are read on purpose. A person who has the old shape in front of
+     them will type it, and refusing a date they meant is worse than reading it the
+     way the club writes it. Day first out is also what makes a value round-trip:
+     what comes out of a field is what goes back in. */
+  function readDateParts(value) {
+    var text = latinDigits(value).trim();
+    var year = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(text);
+    if (year) return { y: year[1], m: year[2], d: year[3] };
+    var day = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/.exec(text);
+    if (!day) return null;
+    /* The one rescue that costs nothing: a first number that cannot be a day at all
+       is read the only way it can be. The club never writes one. */
+    if (Number(day[1]) > 31) return { y: day[3], m: day[2], d: day[1] };
+    return { y: day[3], m: day[2], d: day[1] };
+  }
+
+  /* How a date is written out for a person: 11/10/2026. */
   function slashDate(value) {
     var raw = latinDigits(value);
-    var m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw.trim());
-    if (!m) return latinDigits(value);
-    return m[1] + '/' + pad2(m[2]) + '/' + pad2(m[3]);
+    var m = readDateParts(raw);
+    if (!m) return raw;
+    return pad2(m.d) + '/' + pad2(m.m) + '/' + m.y;
   }
 
 
-  /* The same date for the database. '' when the text is not a date rather than a
-     guess: a birth date that has been guessed is a member who is the wrong age on
-     the card for ever. */
+  /* The same date for the database: yyyy-mm-dd, whatever order it was written in.
+     What is stored does not move -- that shape is what the queue order and every
+     equality query depend on -- and reading both orders is what keeps a field shown
+     as dd/mm/yyyy from storing dd/mm/yyyy.
+
+     '' when the text is not a date, rather than a guess: a birth date that has been
+     guessed is a member who is the wrong age on the card for ever. */
   function isoDate(value) {
     var raw = latinDigits(value).trim();
-    var m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw);
+    var m = readDateParts(raw);
     if (!m) return '';
-    var month = Number(m[2]), day = Number(m[3]);
+    var month = Number(m.m), day = Number(m.d);
     if (month < 1 || month > 12 || day < 1 || day > 31) return '';
-    return m[1] + '-' + pad2(m[2]) + '-' + pad2(m[3]);
+    return m.y + '-' + pad2(m.m) + '-' + pad2(m.d);
   }
 
   /* The fields that hold a number rather than a name. Their digits are folded to
@@ -283,9 +313,16 @@
     var hasSep = /[-/.]/.test(text);
     if (!hasSep && digits.length <= 4) return clubDigits(digits);
     if (!hasSep && digits.length <= 6) return clubDigits(digits.slice(0, 4) + '/' + digits.slice(4));
-    if (!hasSep && digits.length <= 8) return clubDigits(digits.slice(0, 4) + '/' + digits.slice(4, 6) + '/' + digits.slice(6));
-    var m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(text.trim());
-    if (m) return slashDate(m[1] + '-' + pad2(m[2]) + '-' + pad2(m[3]));
+    /* Eight digits with no separators, in the club's order: the day first. It was
+       year first, which made one field answer in two shapes depending only on
+       whether the person typed a slash -- so the same date left the field two ways
+       depending on how it was entered. */
+    if (!hasSep && digits.length <= 8) return clubDigits(digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4));
+    /* Both orders, as it is typed: a person writing 12/03/1996 and a person writing
+       1996/03/12 are both writing the same date, and the field must not disagree
+       with itself about which one it accepts. */
+    var m = readDateParts(text);
+    if (m) return slashDate(m.y + '-' + pad2(m.m) + '-' + pad2(m.d));
     return clubDigits(text.slice(0, 12));
   }
 
@@ -734,16 +771,16 @@
   var MESSAGES = {
     first_name_ar: 'اكتب الاسم بالعربية.',
     last_name_ar: 'اكتب اللقب بالعربية.',
-    birth_date: 'اكتب تاريخ الميلاد بصيغة سنة/شهر/يوم — 1998/03/17.',
+    birth_date: 'اكتب تاريخ الميلاد بصيغة يوم/شهر/سنة — 17/03/1998.',
     phone: 'اكتب رقم هاتف صحيح.',
     address: 'اكتب العنوان.',
     email: 'اكتب بريدًا إلكترونيًا صحيحًا — مثال: name@example.com',
     username: 'اسم المستخدم: حروف لاتينية وأرقام و . _ - فقط، من 3 إلى 32 خانة.',
     national_id: cardNumberError('رقم بطاقتك'),
-    national_id_expiry: 'اكتب تاريخ انتهاء البطاقة بصيغة سنة/شهر/يوم — 2031/04/17.',
+    national_id_expiry: 'اكتب تاريخ انتهاء البطاقة بصيغة يوم/شهر/سنة — 17/04/2031.',
     guardian_national_id: cardNumberError('رقم بطاقة الولي'),
-    guardian_national_id_expiry: 'اكتب تاريخ انتهاء بطاقة الولي بصيغة سنة/شهر/يوم — 2031/06/02.',
-    guardian_card_issued: 'اكتب تاريخ إصدار بطاقة الولي بصيغة سنة/شهر/يوم — 2021/06/02.',
+    guardian_national_id_expiry: 'اكتب تاريخ انتهاء بطاقة الولي بصيغة يوم/شهر/سنة — 02/06/2031.',
+    guardian_card_issued: 'اكتب تاريخ إصدار بطاقة الولي بصيغة يوم/شهر/سنة — 02/06/2021.',
     /* One sentence per field, because a message that belongs to one field and is
        shown for another sends somebody to rewrite the right one. */
     first_name_fr: 'اكتب الاسم باللاتينية كما هو في بطاقة التعريف.',
@@ -766,7 +803,7 @@
     password_confirm: 'كلمتا المرور غير متطابقتين. أعد كتابة كلمة المرور.',
     guardian_first_name: 'اكتب اسم الولي.',
     guardian_last_name: 'اكتب لقب الولي.',
-    guardian_birth_date: 'اكتب تاريخ ميلاد الولي بصيغة سنة/شهر/يوم — 1975/06/02.',
+    guardian_birth_date: 'اكتب تاريخ ميلاد الولي بصيغة يوم/شهر/سنة — 02/06/1975.',
     guardian_consent: 'التصريح بإذن التدريب ضروري للأصاغر.',
     terms: 'يجب الموافقة على النظام الداخلي قبل الإرسال.'
   };

@@ -119,10 +119,29 @@ function makeFirestore() {
        a mock that put it on the reference would let a wrong call through. */
     runTransaction: async (fn) => {
       calls.push(['transaction']);
-      return fn({
+      /* Which collection a transaction wrote to. Needed because the refusal below
+         is about one collection and must not touch the others -- a mock that
+         refused every write would make this check pass for the wrong reason, and
+         would make every registration fail for a reason that is not this one. */
+      let wrote = null;
+      const tx = {
         get: async (ref) => ({ exists: !!DATA[ref._name][ref.id], data: () => DATA[ref._name][ref.id] }),
-        set: (ref, value) => { DATA[ref._name][ref.id] = value; }
-      });
+        set: (ref, value) => { wrote = ref._name; DATA[ref._name][ref.id] = value; }
+      };
+      /* The write is only refused once the body has said it wants one, so the
+         refusal lands where the rules would land it rather than before. */
+      const denied = {};
+      tx.set = (ref, value) => {
+        if (DATA.readOnlyCounters && ref._name === 'counters') denied.hit = true;
+        else { wrote = ref._name; DATA[ref._name][ref.id] = value; }
+      };
+      const result = await fn(tx);
+      if (denied.hit) {
+        const e = new Error('Missing or insufficient permissions.');
+        e.code = 'permission-denied';
+        throw e;
+      }
+      return result;
     }
   };
   return db;
@@ -947,6 +966,140 @@ test('the photograph travels with the member it became', async () => {
      a name and a number and the club's logo standing in for a face. */
   if (member.photo !== PIXEL) {
     errors.push('the member was written without the photograph: ' + JSON.stringify(member.photo));
+  }
+});
+
+/* A counter that can be read but not written.
+
+   This is the permission error on the registration form, and it took the shape of
+   something that cannot happen to test it honestly:
+
+     the rules let any signed-in account READ a counter
+     the rules let only management WRITE one
+     and the registration form creates an account before it posts
+
+   So the probe -- which asks whether a counter can be read -- always succeeded, the
+   write always happened, and every registration made with an account was answered
+   with a permission error. The registrations that worked were the ones signed out,
+   which is the path nobody takes.
+
+   The mock therefore refuses writes and allows reads, which is the only shape in
+   which the bug is visible. The existing counter check throws on *read* and so walks
+   the fallback without ever meeting this.
+
+   And what is asserted is that the registration still gets a number, that the
+   number is the next one in the run, and that the refusal is not shown to the
+   person -- because a working fallback that answers "you do not have permission"
+   would be no fix at all. */
+
+/* A counter that can be read but not written.
+
+   This is the permission error on the registration form, and it took a mock
+   nobody had built to reproduce honestly:
+
+     the rules let any signed-in account READ a counter
+     the rules let only management WRITE one
+     and the registration form creates an account before it posts
+
+   So the probe -- which asks whether a counter can be *read* -- always succeeded,
+   the write always happened, and every registration made with an account was
+   answered with a permission error. The registrations that worked were the ones
+   signed out, which is the path nobody takes.
+
+   The existing counter check throws on *read* and so walks the fallback without
+   ever meeting this. Here reads answer and the write is refused.
+
+   What is asserted: the registration succeeds, it is given a number, and the number
+   is the next one in the run rather than a fresh start. A fallback that answered
+   "you do not have permission" would be no fix at all, and a fallback that lost the
+   count would hand two swimmers the same number -- so both are checked. */
+
+test('a counter that can be read but not written still hands out the next number', async () => {
+  const savedCounters = DATA.counters;
+  const savedReadOnly = DATA.readOnlyCounters;
+
+  /* A run that has got to 41, so "the next number" is 42 and not 1. */
+  DATA.counters = { registration_2026_0: { value: 41, year: 2026, pool: 0 } };
+  DATA.readOnlyCounters = true;
+  DATA.applications = {
+    /* Two already on the books, which is what the fallback counts out of. Quoted,
+       because `APP-A` in an object literal is `APP` minus `A` -- and a file that
+       does not parse reports the line after the mistake, not the line of it. */
+    'APP-1': { application_no: 'APP-1', registration_id: 'E2026000001' },
+    'APP-2': { application_no: 'APP-2', registration_id: 'E2026000002' }
+  };
+
+  try {
+    /* A registrant, signed in -- which is what the form has done by the time it
+       posts, and the whole difference between this failing and not. */
+    const w = boot(asUser('u1'));
+    const r = await call(w, '/api/applications', 'POST', {
+      first_name_ar: 'ح', last_name_ar: 'ج', birth_date: '1990-01-01',
+      phone: '06', address: 'غرداية', subscription_code: 'quarter',
+      national_id: '1990010100001'
+    });
+
+    if (r.status !== 201) {
+      errors.push('a registration on a project that will not let a member write the counter '
+        + 'answers ' + r.status + ' instead of 201: ' + JSON.stringify(r.data));
+    }
+
+    const written = Object.values(DATA.applications).find(a => a.national_id === '1990010100001');
+    if (written) {
+      const id = written.registration_id || '';
+      /* The count must continue, not restart: the fallback reads the running
+         numbers out of the records, so it produces the next one and not the first.
+         Two swimmers with the same number is the failure that matters. */
+      const last = Number(String(id).slice(-4));
+      if (!id) {
+        errors.push('a registration with no writable counter was given no number at all');
+      } else if (last <= 2) {
+        errors.push('the fallback restarted the count instead of continuing it: ' + id
+          + ' where the run had already reached 2');
+      }
+      if (id && String(id).length !== 10) {
+        errors.push('the number handed out is not a registration number: ' + id);
+      }
+    } else {
+      errors.push('no request was written at all');
+    }
+  } finally {
+    DATA.counters = savedCounters;
+    DATA.readOnlyCounters = savedReadOnly;
+  }
+});
+
+/* And the second one does not walk into the same wall: the refusal is remembered,
+   so it costs one attempt rather than one per registration. Two registrations in a
+   row, both answered. */
+test('the refusal is remembered, so the second registration is not slowed by it', async () => {
+  const savedCounters = DATA.counters;
+  const savedReadOnly = DATA.readOnlyCounters;
+  DATA.counters = {};
+  DATA.readOnlyCounters = true;
+  DATA.applications = {};
+
+  try {
+    const w = boot(asUser('u1'));
+    const before = calls.filter(c => c[0] === 'transaction').length;
+    for (let i = 1; i <= 2; i++) {
+      const r = await call(w, '/api/applications', 'POST', {
+        first_name_ar: 'س', last_name_ar: 'ت', birth_date: '1990-01-01',
+        phone: '06', address: 'غرداية', subscription_code: 'quarter',
+        national_id: '199001010000' + i
+      });
+      if (r.status !== 201) {
+        errors.push('registration ' + i + ' of 2 answers ' + r.status + ': ' + JSON.stringify(r.data));
+      }
+    }
+    const after = calls.filter(c => c[0] === 'transaction').length;
+    if (after - before !== 1) {
+      errors.push('the counter was tried ' + (after - before) + ' times for two registrations; '
+        + 'a refusal that is not remembered costs one attempt per person');
+    }
+  } finally {
+    DATA.counters = savedCounters;
+    DATA.readOnlyCounters = savedReadOnly;
   }
 });
 

@@ -132,8 +132,34 @@ if (missing.length) problems.push('CSS classes used but not defined: ' + missing
     else for (const f of SYNC_FILES) {
       if (!loop[1].split(/\s+/).includes(f)) problems.push('the workflow does not verify ' + f);
     }
-    if (!/secrets\.FIREBASE_SERVICE_ACCOUNT != ''/.test(wf)) {
+    /* GitHub does not expose the secrets context to `if:`. A condition written as
+       `secrets.X != ''` does not fail at run time -- it fails to parse, and the
+       whole file is rejected, so nothing runs at all. So this cannot ask for that
+       line, and the version that did was demanding the bug.
+
+       What is protected is the same thing: the deploy job must not run without the
+       service account. The shape that works asks the question inside a step --
+       where a secret may be read -- answers it as an output, and has the job decide
+       on that output. And the output is checked to be really produced, which the
+       old check could not do: it could only look for a string. */
+    /* Comments removed first. The file explains this rule in a comment that quotes
+       the broken line, so a check that read the file as-is found its own
+       explanation and reported the bug it was written to catch. A comment cannot be
+       a condition. */
+    const wfCode = wf.split('\n').filter(l => !/^\s*#/.test(l)).join('\n');
+    if (/if:[^\n]*secrets\./.test(wfCode)) {
+      problems.push('a condition reads a secret, which GitHub will not parse: the whole '
+        + 'workflow file would be rejected and nothing would run');
+    }
+    const gateOut = wf.match(/has_service_account:\s*\$\{\{\s*steps\.gate\.outputs\.has_service_account/);
+    if (!gateOut) {
+      problems.push('the deploy job is not decided on the answer to "is the service account there?"');
+    }
+    if (!/if:\s*\$\{\{\s*needs\.verify\.outputs\.has_service_account == 'true'/.test(wf)) {
       problems.push('the deploy job runs even without the service account secret');
+    }
+    if (!/echo "has_service_account=(true|false)" >> "\$GITHUB_OUTPUT"/.test(wf)) {
+      problems.push('the answer the deploy job decides on is never produced');
     }
     if (!/firestore:rules/.test(wf)) problems.push('the workflow does not publish the Firestore rules');
     if (!/storage/.test(wf)) problems.push('the workflow does not publish the Storage rules');

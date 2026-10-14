@@ -391,7 +391,9 @@ tasks.push(() => {
     field(id).value = v;
     field(id).dispatchEvent(new w.Event('input', { bubbles: true }));
   };
-  const SHOWN = '1998/03/07';
+  /* The date in the order the club writes it: the day first. Defined once and used
+     in five places, so it is changed here and nowhere else. */
+  const SHOWN = '07/03/1998';
 
   /* Typed either way, it reads as the club writes it. */
   for (const [what, entered, shown] of [
@@ -406,23 +408,43 @@ tasks.push(() => {
     }
   }
 
-  /* A date stays as it is typed while the year is still being typed -- taking the
-     slashes away under the caret moves it out from under the person -- and is laid
-     out as year/month/day the moment there is enough of one to be one. */
-  type('birth_date', '199');
-  if (field('birth_date').value !== '199') {
-    errors.push('[date] a half-typed year was re-laid out under the caret: ' + field('birth_date').value);
+  /* A date stays as it is typed while the first part is still being typed -- taking
+     the slashes away under the caret moves it out from under the person -- and is
+     laid out in the club's order the moment there is enough of one to be one.
+
+     The club's order is the day first. The form used to ask for year first while
+     the calendar wrote day first, so the form rejected the output of its own
+     calendar and told the person to type a shape that every other screen in the
+     club contradicts. That was a real fault and the person saw it as one.
+
+     Both orders are *read*, and that is checked here too: a person with the old
+     shape in front of them will type it -- it is on every older card and in every
+     older record -- and refusing a date they meant is worse than reading it the way
+     the club writes it. */
+  type('birth_date', '19');
+  if (field('birth_date').value !== '19') {
+    errors.push('[date] a half-typed first part was re-laid out under the caret: ' + field('birth_date').value);
   }
-  type('birth_date', '19980307');
+  type('birth_date', '07031998');
   if (field('birth_date').value !== SHOWN) {
-    errors.push('[date] a date typed as eight digits is not laid out as year/month/day: '
+    errors.push('[date] a date typed as eight digits is not laid out as day/month/year: '
       + field('birth_date').value);
   }
-  for (const entered of ['1998/03/07', '1998-03/07', '1998/3/7',
-                         typed('1998/3/7'), typed('1998-3-7')]) {
+  for (const entered of ['07/03/1998', '07-03/1998', '7/3/1998',
+                         typed('7/3/1998'), typed('7-3-1998')]) {
     type('birth_date', entered);
     if (field('birth_date').value !== SHOWN) {
-      errors.push('[date] a date typed as ' + entered + ' reads as ' + field('birth_date').value);
+      errors.push('[date] a date typed as ' + entered + ' reads as ' + field('birth_date').value
+        + ', not ' + SHOWN);
+    }
+  }
+  /* The old order still reads. It has to: it is the shape on every card the club
+     already holds, and somebody will type it. */
+  for (const entered of ['1998/03/07', '1998-3-7', typed('1998/3/7')]) {
+    type('birth_date', entered);
+    if (field('birth_date').value !== SHOWN) {
+      errors.push('[date] the old order is no longer read: ' + entered + ' reads as '
+        + field('birth_date').value + ', not ' + SHOWN);
     }
   }
 

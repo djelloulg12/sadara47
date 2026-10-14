@@ -1,5 +1,17 @@
 name: Deploy Sadara to Firebase Hosting
 
+# `secrets` is not available in an `if:` condition.
+#
+# GitHub exposes the secrets context to `run:` steps and to the job's `env`, and
+# not to the expression that decides whether a job or a step runs at all. So a
+# condition written as `if: secrets.X != ''` does not fail at run time -- it fails
+# to parse, the whole workflow file is rejected, and nothing runs: not the checks,
+# not the deploy. It was rejected for exactly that reason, twice, with the error
+# pointing at the two lines below and not at anything anyone had done to the code.
+#
+# The question "is the service account there?" is therefore asked once, inside a
+# step that is allowed to ask it, and answered as an output. The job and the step
+# then decide on that output, which is a value they are allowed to read.
 on:
   push:
     branches: [main, master]
@@ -11,9 +23,13 @@ concurrency:
 
 jobs:
   # Always runs, so a broken deployable copy is caught even before the
-  # Firebase service account exists.
+  # Firebase service account exists -- and it is also where the two questions the
+  # later steps are not allowed to ask get asked.
   verify:
     runs-on: ubuntu-latest
+    outputs:
+      has_service_account: ${{ steps.gate.outputs.has_service_account }}
+      deploy_firestore_rules: ${{ steps.gate.outputs.deploy_firestore_rules }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,7 +43,6 @@ jobs:
               exit 1
             fi
           done
-
       - name: The public registration folder is published and identical
         run: |
           set -e
@@ -44,7 +59,6 @@ jobs:
               exit 1
             fi
           done
-
       - name: Every asset the site references must be published
         run: |
           set -e
@@ -56,7 +70,6 @@ jobs:
               exit 1
             fi
           done
-
       - name: Nothing private may reach the repository
         run: |
           set -e
@@ -71,11 +84,34 @@ jobs:
             exit 1
           fi
 
+      # The one place a secret may be read, and the two answers the rest of the
+      # file decides on. Never printed, and never used as a value in a shell line.
+      - name: Decide what may be deployed
+        id: gate
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          DEPLOY_RULES: ${{ secrets.DEPLOY_FIRESTORE_RULES }}
+        run: |
+          set -e
+          if [ -n "$SERVICE_ACCOUNT" ]; then
+            echo "has_service_account=true" >> "$GITHUB_OUTPUT"
+            echo "the service account is present; hosting may be deployed"
+          else
+            echo "has_service_account=false" >> "$GITHUB_OUTPUT"
+            echo "no service account: hosting is skipped and the checks above still ran"
+          fi
+          if [ "$DEPLOY_RULES" = "true" ]; then
+            echo "deploy_firestore_rules=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy_firestore_rules=false" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy:
     needs: verify
     runs-on: ubuntu-latest
     # Skipped until the service account is stored, so a fresh fork stays green.
-    if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+    # The question is asked above, where a secret can be read.
+    if: ${{ needs.verify.outputs.has_service_account == 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,15 +128,17 @@ jobs:
           echo "deploying to $id"
 
       - name: Write the service account to disk
+        # Through `env:` rather than by writing `${{ secrets... }}` into the script
+        # itself: an interpolated secret sits in the command line of the step, and a
+        # step that fails prints its command.
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "${{ runner.temp }}/firebase-sa.json"
+          set -e
+          printf '%s' "$SERVICE_ACCOUNT" > "${{ runner.temp }}/firebase-sa.json"
           test -s "${{ runner.temp }}/firebase-sa.json" || { echo "::error::FIREBASE_SERVICE_ACCOUNT is empty"; exit 1; }
 
       - name: Deploy Firestore and Storage rules
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
-        run: |
-          npx --yes firebase-tools@latest deploy --only firestore:rules,storage --project "${{ steps.config.outputs.id }}" --non-interactive
         # Held back on purpose.
         #
         # The rules running on the project are NOT the copy in this repository.
@@ -113,9 +151,17 @@ jobs:
         # So publishing this file would not be a no-op: it would widen what is
         # allowed, on a live database, without anyone having read what it replaces.
         # That has to be a decision somebody makes, not a side effect of adding a
-        # service account. Until then the form is fixed to satisfy the rules that
-        # are actually in force, and this copy stays the one nobody deploys.
-        if: ${{ secrets.DEPLOY_FIRESTORE_RULES == 'true' }}
+        # service account.
+        #
+        # NOTE: the copy in the repository was published on 2026-10-13, by hand and
+        # deliberately, to open a member's own records to that member -- the roster
+        # had been shut so far that a member could not read their own card. That
+        # decision was taken, read and made; this step has not caught up with it.
+        if: ${{ needs.verify.outputs.deploy_firestore_rules == 'true' }}
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
+        run: |
+          npx --yes firebase-tools@latest deploy --only firestore:rules,storage --project "${{ steps.config.outputs.id }}" --non-interactive
 
       - name: Deploy Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0

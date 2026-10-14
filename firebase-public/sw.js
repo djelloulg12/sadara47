@@ -3,7 +3,7 @@
    ========================================================== */
 /* Bumped whenever what is cached changes: the activate step deletes every cache
    under any other name, so a new name is what retires the old one. */
-const CACHE = 'sadara-v12';
+const CACHE = 'sadara-v13';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/firebase-config.js',
   '/manifest.webmanifest', '/assets/logo.png', '/assets/form-registration-01.jpg',
   '/assets/internal-regulations.jpg', '/assets/registration-card.jpg'];

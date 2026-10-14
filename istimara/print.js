@@ -124,7 +124,11 @@
      somebody wrote is not a date and is still worth printing. */
   function slashDate(v) {
     var raw = ar(v).trim();
-    var m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw);
+    /* Both orders, for the same reason as the form: a date typed in the club's
+      order and a date typed in the old one are the same date, and the printed
+      sheet must not read only one of them. */
+    var m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw)
+      || /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/.exec(raw);
     if (!m) return ar(v);
     return m[1] + '/' + (m[2].length < 2 ? '0' + m[2] : m[2])
       + '/' + (m[3].length < 2 ? '0' + m[3] : m[3]);

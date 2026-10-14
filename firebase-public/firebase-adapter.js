@@ -248,6 +248,10 @@
      assumed, and a number that cannot be counted here is left to be counted when
      the club accepts, where the counter can be written. */
   let countersChecked = null;
+  /* A readable counter is not a writable one, and this only asks about reading --
+     so it is a question about permission, answered properly where the permission
+     is needed, inside `nextRegistrationId`. What it is still good for is finding
+     out that there are no rules for the collection at all. */
   const countersAvailable = async () => {
     if (countersChecked === null) {
       try {
@@ -260,6 +264,10 @@
     }
     return countersChecked;
   };
+
+  /* A counter that was refused. Remembered, so the answer costs one attempt per
+     session rather than one per registration. */
+  const markCountersUnavailable = () => { countersChecked = false; };
 
   /* A name is compared the way a person writes it, not the way a keyboard typed
      it: the same national number written with spaces, with dashes or in capitals
@@ -522,21 +530,43 @@
     const year = yearOf();
     const pool = Math.max(0, Math.min(99, Number(poolNo) || 0));
     const letter = idLetter(kind);
-    if (!await countersAvailable()) {
+    /* Counting the running numbers out of the records is not a lesser path: it
+       reads them out of the very documents the numbering is defined over, so it
+       produces the same next number and needs no permission at all. Used whenever
+       a counter cannot be kept. */
+    const fromRecords = async () => {
       const seq = await countedFromRecords(kind, year, pool);
       return seq ? letter + year + String(pool) + String(seq).padStart(4, '0') : '';
-    }
+    };
+    if (!await countersAvailable()) return fromRecords();
     const ref = db.collection('counters').doc('registration_' + year + '_' + pool);
     /* The transaction belongs to the database, not to the document: the compat
        build the site loads has no runTransaction on a reference, and calling it
        there fails every registration rather than one. */
-    const seq = await db.runTransaction(async tx => {
-      const snap = await tx.get(ref);
-      const next = (snap.exists ? Number(snap.data().value) || 0 : 0) + 1;
-      tx.set(ref, { value: next, year, pool, kind: letter, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
-      return next;
-    });
-    return letter + year + String(pool) + String(seq).padStart(4, '0');
+    /* Writing, not reading -- and that is the whole bug. The probe above asks
+       whether a counter can be *read*, which any signed-in account may do, while
+       handing out a number means *writing* one, which only management may do. The
+       registration form creates an account before it posts, so the probe always
+       succeeded, the transaction was always taken, and every registration with an
+       account was answered with a permission error. The one path that worked was
+       the one nobody takes: registering while signed out.
+
+       So the refusal is caught here, where it is one branch, and it marks the
+       counter unavailable -- so the second person to register does not walk into
+       the same wall, and every later one goes straight to counting the records. */
+    try {
+      const seq = await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        const next = (snap.exists ? Number(snap.data().value) || 0 : 0) + 1;
+        tx.set(ref, { value: next, year, pool, kind: letter, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
+        return next;
+      });
+      return letter + year + String(pool) + String(seq).padStart(4, '0');
+    } catch (error) {
+      if (!/permission/i.test(String((error && error.message) || error))) throw error;
+      markCountersUnavailable();
+      return fromRecords();
+    }
   };
 
   const extrasDoc = () => db.collection('fee_settings').doc('extras');
@@ -853,7 +883,7 @@
          The oldest is offered as the one to keep: it is the one that has been in
          use longest, and which one was the mistake is the manager's answer. */
       if (path === '/api/accounts/duplicates' && method === 'GET') {
-        const gate = await managerView('فحص الحسابات المكررة لرئيس النادي فقط');
+        const gate = await managerView('فحص الحسابات المكررة متاح للمدير أو رئيس النادي فقط');
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
         const list = await db.collection('users').get();
         const owners = await ownerAddresses();
@@ -948,7 +978,7 @@
          and whichever of the two accounts happened to come first should not decide
          which of those he is. */
       if (path === '/api/accounts/merge' && method === 'POST') {
-        const gate = await managerView('دمج الحسابات لرئيس النادي فقط');
+        const gate = await managerView('دمج الحسابات متاح للمدير أو رئيس النادي فقط');
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
         const keep = String(body.keep || '');
         const remove = (Array.isArray(body.remove) ? body.remove : []).map(String).filter(Boolean);
