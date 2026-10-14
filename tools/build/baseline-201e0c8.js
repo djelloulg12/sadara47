@@ -181,7 +181,6 @@ action = async function(a,el){
     const requirements=[...document.querySelectorAll('[data-req-label]')].map((input,i)=>({label:input.value.trim(),required:document.querySelectorAll('[data-req-required]')[i]?.checked!==false})).filter(x=>x.label);
     const res=await fetch('/api/coach-requirements',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({requirements})}); if(!res.ok){const d=await res.json();showToast(d.error||'تعذر حفظ القائمة','error');return} state.coachRequirements=requirements;showToast('تم حفظ قائمة الوثائق المطلوبة.');render();return;
   }
-  if(a==='reject-app'){const reason=prompt('سبب رفض الطلب:','الوثائق ناقصة');if(reason===null)return;await fetch('/api/applications/'+el.dataset.id,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({status:'rejected',decision_reason:reason})});await syncApi();render();return}
   if(a==='register'){goToRegistration(el&&el.dataset&&el.dataset.plan);return}
   if(a==='register-desk'){
     /* Registering somebody standing in front of you, from inside the dashboard.
@@ -1573,19 +1572,15 @@ function applicationsSheet(){
   if(a==='save-app'){
     const app=(state.applications||[]).find(x=>String(x.id)===String(el.dataset.id));
     if(!app){showToast('تعذر العثور على الطلب.','error');return}
-    const payload={subscription_code:$('#edit-plan').value,transport:$('#edit-transport').checked,uniform:$('#edit-uniform').checked,payment_method:$('#edit-payment').value,facility:$('#edit-facility').value,status:$('#edit-status').value,decision_reason:$('#edit-note').value.trim()};
+    const payload={subscription_code:$('#edit-plan').value,transport:$('#edit-transport').checked,uniform:$('#edit-uniform').checked,payment_method:$('#edit-payment').value,facility:$('#edit-facility').value,status:$('#edit-status').value,/* The field the server reads. It was `decision_reason`, which the adapter has never read -- so a request refused through this dialog was refused with "write a reason" for a reason that had in fact been typed, one field away. Worse than not working: this dialog reads the note back out of the old name and the queue prints it from there, so the reason appeared on screen and on the printed sheet while the server never saw it. Nothing ever looked broken.
+     The reading below still accepts both, so every request already on file shows its note. */
+     rejection_reason:$('#edit-note').value.trim()};
     payload.expected_amount=recalcAmount({...app,...payload});
     try{await api('/api/applications/'+encodeURIComponent(app.id),'PATCH',payload);showToast('تم تحديث الطلب واحتساب المبلغ.');document.querySelector('.modal-backdrop')?.remove();await syncApi();render()}catch(e){showToast(e.message,'error')}
     return;
   }
   if(a==='approve-app'){
     try{await api('/api/applications/'+encodeURIComponent(el.dataset.id),'PATCH',{status:'approved'});showToast('تم اعتماد الطلب.');await syncApi();render()}catch(e){showToast(e.message,'error')}
-    return;
-  }
-  if(a==='reject-app'){
-    const reason=prompt('سبب رفض الطلب:','الوثائق ناقصة');
-    if(reason===null)return;
-    try{await api('/api/applications/'+encodeURIComponent(el.dataset.id),'PATCH',{status:'rejected',decision_reason:reason});showToast('تم رفض الطلب وتسجيل السبب.');await syncApi();render()}catch(e){showToast(e.message,'error')}
     return;
   }
 

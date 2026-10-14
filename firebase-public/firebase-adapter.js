@@ -265,15 +265,42 @@
      A permission error on a document that already exists IS the answer -- the
      rules refuse the second write to it -- so it is returned as an answer rather
      than thrown. Anything else is a fault and is passed on. */
+  /* Write it once, and say why not if it cannot be.
+
+     `create()` rather than `set()`: `set()` on a document that already exists
+     overwrites it, so a "claim" written that way was never a claim -- two people
+     choosing the same name at the same moment both succeeded and the second
+     document replaced the first. `create()` succeeds once and refuses afterwards,
+     in one round trip with nothing in between.
+
+     The answer is three-valued on purpose, because the two callers need opposite
+     answers and lumping them together is what caused the fault:
+
+       { ok: true }                     it is written
+       { ok: false, taken: true }       it was already there -- and only that
+       { ok: false, taken: false }      we could not write it, and it is logged
+
+     `aborted` is deliberately not counted as taken. It is a transaction that was
+     cancelled, which happens under contention and says nothing about whether a
+     name is free -- so reporting it as "taken" sends the club to arrange something
+     that does not need arranging, which is the same wrong answer one failure mode
+     further on. */
   const writeOnce = async (docId, record) => {
     try {
-      await db.collection('applications').doc(docId).set(record);
-      return true;
+      const ref = db.collection('applications').doc(docId);
+      if (typeof ref.create === 'function') await ref.create(record);
+      else await ref.set(record);
+      return { ok: true };
     } catch (error) {
-      const denied = String((error && error.code) || '').includes('permission-denied')
-        || /PERMISSION_DENIED/i.test(error.message || '');
-      if (denied) return false;
-      throw error;
+      const code = String((error && error.code) || '');
+      const said = String((error && error.message) || '');
+      if (code === 'already-exists' || code === 'ALREADY_EXISTS' || /already exists/i.test(said)) {
+        return { ok: false, taken: true, code: code || 'already-exists' };
+      }
+      /* Ours, not theirs. Kept in the console with the code, because a person
+         cannot act on it and somebody has to be able to. */
+      console.error('A document could not be written once', code || '(no code)', error);
+      return { ok: false, taken: false, code: code || 'unknown' };
     }
   };
 
@@ -1320,8 +1347,21 @@
         const docId = identityDocId(identity) || applicationNo;
         record.filed_under = identity ? 'identity' : 'reference';
         if (!checked && identity) record.duplicate_check = 'could-not-name-one';
-        if (!await writeOnce(docId, record)) {
-          return jsonResponse({ error: DUPLICATE_MESSAGE, duplicate: true }, 409);
+        /* Here the refusal really does mean "already on the books": the rules are
+           what refuses it, and they refuse it for exactly that reason. */
+        const filed = await writeOnce(docId, record);
+        if (!filed.ok) {
+          if (filed.taken) {
+            return jsonResponse({ error: DUPLICATE_MESSAGE, duplicate: true }, 409);
+          }
+          /* A failure that is ours must not be dressed as a person already on the
+             books -- the person would be told to go and register again, which is
+             not the thing that happened. */
+          return jsonResponse({
+            error: 'تعذّر حفظ طلبك الآن بسبب خطأ في النظام. لم يُكتب شيء. '
+              + 'أعد المحاولة بعد قليل، وإن استمر الأمر اتصل بإدارة النادي.',
+            duplicate: false, filed: false, code: filed.code
+          }, 503);
         }
 
         /* The chosen user name is held after the request, not before.
@@ -1351,12 +1391,26 @@
             application_no: applicationNo,
             claimed_at: firebase.firestore.FieldValue.serverTimestamp()
           });
-          if (!held) {
+          /* Two different failures, two different answers.
+
+             A name that is genuinely taken is answered by picking another, and the
+             person is told so. A name we could not hold is answered by calling the
+             club -- and saying "that name is taken" there would send somebody to
+             choose again when the request behind it was already filed and the
+             problem is on our side of the line.
+
+             Both say plainly that the request is on file. The one that does not is
+             the one that leaves a family believing they have to start again. */
+          if (!held.ok) {
+            const taken = held.taken;
             return jsonResponse({
-              error: 'طلبك مسجّل، لكن اسم المستخدم «' + username + '» مستعمل من قبل. '
-                + 'ستتصل بك إدارة النادي لترتيبه.',
-              duplicate: true, field: 'username', filed: true
-            }, 409);
+              error: taken
+                ? 'طلبك مسجّل، لكن اسم المستخدم «' + username + '» مستعمل من قبل. '
+                  + 'اختر اسمًا آخر وأعد الإرسال، أو سيتصل بك إدارة النادي لترتيبه.'
+                : 'طلبك مسجّل، وتعذّر حجز اسم المستخدم الآن بسبب خطأ في النظام. '
+                  + 'اسمك المحفوظ كما هو، وسيتصل بك إدارة النادي لترتيبه.',
+              duplicate: taken, field: 'username', filed: true, code: held.code
+            }, taken ? 409 : 503);
           }
           /* Written after the fact rather than folded into the request, because a
              request may not be written a second time and this had to be known
@@ -1396,6 +1450,36 @@
         delete patch.id;
         // a scan lives in Cloud Storage; never write the inline copy into Firestore
         delete patch.scan_data_url;
+
+        /* Who reviewed, and when it was decided -- written only when the request
+           becomes a decision.
+
+           They used to go on every write, because the merge below carried them:
+           uploading the signed form marked a request as reviewed, and so did
+           changing a subscription and so did recording a payment. A request nobody
+           had decided on carried a reviewer's name, on a queue built out of that
+           column.
+
+           It is one line in the middle of a merge, which is why it survived: nobody
+           reads it and nothing fails. The person who notices is the one looking at
+           last week's requests and asking who reviewed them.
+
+           `decided_at` moves with it rather than being left behind. It was written
+           to the *account* on accept and on reject and never to the request, so a
+           decided request carried no date on itself; the account keeps its own
+           copy, which is the one the applicant reads at sign-in.
+
+           Nothing on file is touched. This changes what future writes put in the
+           column; it reads nothing and repairs nothing. */
+        const isDecision = patch.status === 'approved' || patch.status === 'rejected';
+        delete patch.reviewed_by;
+        delete patch.decided_at;
+        const review = isDecision
+          ? {
+            reviewed_by: gate.profile.id,
+            decided_at: firebase.firestore.FieldValue.serverTimestamp()
+          }
+          : {};
         if (patch.payment_status === 'paid') {
           await db.collection('payments').add({
             application_no: patch.application_no || appMatch[1],
@@ -1407,7 +1491,9 @@
             created_at: firebase.firestore.FieldValue.serverTimestamp()
           });
         }
-        await db.collection('applications').doc(appMatch[1]).set({ ...patch, reviewed_by: gate.profile.id, updated_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        await db.collection('applications').doc(appMatch[1]).set(
+          { ...patch, ...review, updated_at: firebase.firestore.FieldValue.serverTimestamp() },
+          { merge: true });
 
         /* Accepting a request used to change the request's status and stop
            there, so nobody became a swimmer and the club had to add them again by

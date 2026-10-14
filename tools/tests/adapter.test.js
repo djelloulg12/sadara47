@@ -70,6 +70,36 @@ function makeFirestore() {
           calls.push(['set', name, id, value]);
           DATA[name][id] = opts && opts.merge ? Object.assign({}, DATA[name][id], value) : value;
         },
+        /* Write once. `create()` is what the adapter uses to claim a name, and it
+           refuses a document that is already there with `already-exists`.
+
+           This is why it is on the mock at all. The mock used to refuse a second
+           write with `permission-denied`, which is a *different* failure -- the
+           rules refusing, not the document existing -- and the adapter, being
+           written to treat the two alike, said "already on the books" for both.
+           Every check that met a refusal therefore passed for the wrong reason,
+           and the confusion was invisible: nothing was measuring what it appeared
+           to measure.
+
+           The adapter prefers `create()` and falls back to `set()` only when a
+           reference has none, so this is the path the checks now walk. */
+        create: async (value) => {
+          /* A check can make this fail for a chosen reason -- already held,
+             refused, cancelled. A hook rather than a flag on the data because the
+             three are not states of the data: a document that exists is a state,
+             and a rules refusal is not something a row can be in. Modelling them
+             as one flag is what let the original confusion happen at all. */
+          if (typeof makeFirestore.__createHook === 'function') {
+            makeFirestore.__createHook(name, id, value);
+          }
+          if (DATA[name][id]) {
+            const e = new Error('The entity already exists.');
+            e.code = 'already-exists';
+            throw e;
+          }
+          calls.push(['create', name, id, value]);
+          DATA[name][id] = value;
+        },
         get: async () => ({ exists: !!DATA[name][id], data: () => DATA[name][id], id, ref: refOf(id) }),
         delete: async () => { calls.push(['delete', name, id]); delete DATA[name][id]; }
       });
@@ -176,6 +206,11 @@ async function call(w, url, method = 'GET', body) {
 }
 
 const asUser = (uid) => ({ uid, email: uid + '@x.dz' });
+
+/* Set by a check to make the next `create()` fail in a chosen way, and left unset
+   by every other check. Read inside the mock, so a test does not have to reach
+   into it. */
+makeFirestore.__createHook = null;
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
@@ -1100,6 +1135,210 @@ test('the refusal is remembered, so the second registration is not slowed by it'
   } finally {
     DATA.counters = savedCounters;
     DATA.readOnlyCounters = savedReadOnly;
+  }
+});
+
+/* ---- a name taken is not a name we could not hold ---- */
+
+test('a name that is taken is answered by choosing another', async () => {
+  const savedApps = DATA.applications;
+  try {
+    DATA.applications = {};
+    const first = boot(asUser('u1'));
+    await call(first, '/api/applications', 'POST', {
+      application_no: 'APP-NAME-1', category: 'adult', first_name_ar: 'a', last_name_ar: 'b',
+      birth_date: '1991-01-01', phone: '07', address: 'x', national_id: 'ID-N1',
+      username: 'BELKACEM', subscription_code: 'quarter'
+    });
+
+    const second = boot(asUser('u1'));
+    const b = await call(second, '/api/applications', 'POST', {
+      application_no: 'APP-NAME-2', category: 'adult', first_name_ar: 'c', last_name_ar: 'd',
+      birth_date: '1992-01-01', phone: '07', address: 'y', national_id: 'ID-N2',
+      username: 'belkacem', subscription_code: 'quarter'
+    });
+    if (b.status !== 409) {
+      errors.push('a name already held was answered ' + b.status + ' instead of 409: '
+        + JSON.stringify(b.data).slice(0, 160));
+    }
+    if (b.data && b.data.taken !== true && !/مستعمل من قبل/.test(b.data.error || '')) {
+      errors.push('a name that is genuinely taken is not being described as such: '
+        + JSON.stringify(b.data).slice(0, 160));
+    }
+  } finally {
+    DATA.applications = savedApps;
+  }
+});
+
+test('a name we could not hold is not told to the family as a taken one', async () => {
+  const savedApps = DATA.applications;
+  const realCreate = makeFirestore.__createHook;
+  try {
+    DATA.applications = {};
+    /* The database refuses this one for a reason that has nothing to do with
+       anybody holding the name -- a rule, a limit, a failure on our side. */
+    makeFirestore.__createHook = (name, id) => {
+      if (String(id).startsWith('APP-U-')) {
+        const e = new Error('Missing or insufficient permissions.');
+        e.code = 'permission-denied';
+        throw e;
+      }
+    };
+    const w = boot(asUser('u1'));
+    const r = await call(w, '/api/applications', 'POST', {
+      application_no: 'APP-NAME-3', category: 'adult', first_name_ar: 'e', last_name_ar: 'f',
+      birth_date: '1993-01-01', phone: '07', address: 'z', national_id: 'ID-N3',
+      username: 'benchalal', subscription_code: 'quarter'
+    });
+
+    if (r.status === 409 || /مستعمل من قبل/.test(r.data.error || '')) {
+      errors.push('a write we could not make was told to the family as "that name is '
+        + 'already taken" -- they would go and choose another, and the club would be '
+        + 'asked to arrange something that is not wrong: ' + r.status + ' '
+        + JSON.stringify(r.data).slice(0, 160));
+    }
+    if (r.status !== 503) {
+      errors.push('a write we could not make answered ' + r.status + ' rather than 503: '
+        + JSON.stringify(r.data).slice(0, 160));
+    }
+    /* And it still says the request is on file -- otherwise the family believes
+       they have to start again. */
+    if (!(r.data && r.data.filed)) {
+      errors.push('a failed name claim did not say the request itself is filed: '
+        + JSON.stringify(r.data).slice(0, 160));
+    }
+  } finally {
+    makeFirestore.__createHook = realCreate;
+    DATA.applications = savedApps;
+  }
+});
+
+test('a cancelled transaction is not reported as a name being taken', async () => {
+  const savedApps = DATA.applications;
+  const realCreate = makeFirestore.__createHook;
+  try {
+    DATA.applications = {};
+    makeFirestore.__createHook = (name, id) => {
+      if (String(id).startsWith('APP-U-')) {
+        /* What Firestore raises when a transaction is cancelled. It says nothing
+           about whether a name is free -- under contention, most of all. */
+        const e = new Error('The transaction was aborted.');
+        e.code = 'aborted';
+        throw e;
+      }
+    };
+    const w = boot(asUser('u1'));
+    const r = await call(w, '/api/applications', 'POST', {
+      application_no: 'APP-NAME-4', category: 'adult', first_name_ar: 'g', last_name_ar: 'h',
+      birth_date: '1994-01-01', phone: '07', address: 'w', national_id: 'ID-N4',
+      username: 'benchalal', subscription_code: 'quarter'
+    });
+    if (/مستعمل من قبل/.test(r.data.error || '')) {
+      errors.push('a cancelled transaction is being reported as "that name is already '
+        + 'taken" -- it is a different failure and it sends the club to arrange '
+        + 'something that does not need arranging');
+    }
+  } finally {
+    makeFirestore.__createHook = realCreate;
+    DATA.applications = savedApps;
+  }
+});
+
+test('the request itself is never refused as a duplicate when the failure is ours', async () => {
+  const savedApps = DATA.applications;
+  const realCreate = makeFirestore.__createHook;
+  try {
+    DATA.applications = {};
+    makeFirestore.__createHook = (name, id) => {
+      if (String(id).startsWith('APP-N-')) {
+        const e = new Error('Missing or insufficient permissions.');
+        e.code = 'permission-denied';
+        throw e;
+      }
+    };
+    const w = boot(asUser('u1'));
+    const r = await call(w, '/api/applications', 'POST', {
+      application_no: 'APP-OURS', category: 'adult', first_name_ar: 'i', last_name_ar: 'j',
+      birth_date: '1995-01-01', phone: '07', address: 'v', national_id: 'ID-O1',
+      subscription_code: 'quarter'
+    });
+    if (r.status === 409 || r.data.duplicate) {
+      errors.push('a write we could not make was answered as "already registered", which '
+        + 'sends a new family away thinking they are on the books: ' + r.status + ' '
+        + JSON.stringify(r.data).slice(0, 160));
+    }
+    if (r.status !== 503) {
+      errors.push('our own failure answered ' + r.status + ' rather than 503');
+    }
+  } finally {
+    makeFirestore.__createHook = realCreate;
+    DATA.applications = savedApps;
+  }
+});
+
+/* ---- a review is a decision, and not an edit ---- */
+
+test('editing a request does not write the reviewer onto it', async () => {
+  const savedApps = DATA.applications;
+  try {
+    DATA.applications = {
+      APP_X: {
+        application_no: 'APP-X', applicant_uid: 'u9', status: 'pending',
+        first_name_ar: 'س', last_name_ar: 'ص', phone: '07'
+      }
+    };
+    const w = boot(asUser('u1'));
+    /* Three of the things the club does to a request every day, none of which is a
+       decision: uploading the signed form, changing the subscription, recording the
+       payment. */
+    for (const patch of [
+      { scan_name: 'signed.pdf', scan_path: 'scans/x.pdf' },
+      { subscription_code: 'season', expected_amount: 3000 },
+      { payment_status: 'paid', paid_at: '2026-10-14' }
+    ]) {
+      await call(w, '/api/applications/APP_X', 'PATCH', patch);
+      const after = DATA.applications.APP_X;
+      if (after.reviewed_by) {
+        errors.push('an ordinary edit stamped "' + after.reviewed_by + '" as the reviewer '
+          + 'of a request nobody had decided on (' + JSON.stringify(patch) + ')');
+      }
+      if (after.decided_at) {
+        errors.push('an ordinary edit wrote a decision date on a pending request');
+      }
+    }
+    /* And the edit is still saved -- it is the stamp that was wrong, not the work. */
+    if (DATA.applications.APP_X.subscription_code !== 'season') {
+      errors.push('the edit itself was lost: the fix must stop the stamp, not the saving');
+    }
+  } finally {
+    DATA.applications = savedApps;
+  }
+});
+
+test('a decision writes who decided and when, on the request', async () => {
+  const savedApps = DATA.applications;
+  try {
+    DATA.applications = {
+      APP_Y: {
+        application_no: 'APP-Y', applicant_uid: 'u9', status: 'pending',
+        first_name_ar: 'س', last_name_ar: 'ص', phone: '07'
+      }
+    };
+    const w = boot(asUser('u1'));
+    await call(w, '/api/applications/APP_Y', 'PATCH', {
+      status: 'rejected', rejection_reason: 'الوثائق ناقصة'
+    });
+    const after = DATA.applications.APP_Y;
+    if (after.reviewed_by !== 'u1') {
+      errors.push('a refusal did not record who decided: reviewed_by is '
+        + JSON.stringify(after.reviewed_by));
+    }
+    if (!after.decided_at) {
+      errors.push('a decided request carries no date on itself, so nobody can tell when '
+        + 'it was decided without asking');
+    }
+  } finally {
+    DATA.applications = savedApps;
   }
 });
 
