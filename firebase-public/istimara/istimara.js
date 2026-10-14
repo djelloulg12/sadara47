@@ -57,10 +57,35 @@
 
   /* ---------------- small helpers ---------------- */
 
-  function say(text, kind) {
+  /* `door` is a place to go, not a sentence about going there.
+
+     A link inside `textContent` is a link nobody can press, so the only way to
+     point at the club's sign-in used to be to write the words "go to the sign-in
+     page" and trust the reader to guess which one -- which is what the message for
+     an address already on file did, about a page it did not name.
+
+     The message is still set as text and the link is built, so nothing that
+     reaches the screen can arrive as markup. And the link is never the only thing
+     said: it carries a line saying it leaves this page, because a link appearing
+     without warning carries somebody off a form they are half-way through. */
+  function say(text, kind, door) {
     if (!text) { msg.hidden = true; return; }
     msg.textContent = text;
     msg.className = 'form-msg ' + (kind || 'error');
+    if (door) {
+      var line = document.createElement('a');
+      line.className = 'form-msg-door';
+      line.href = door;
+      line.textContent = 'ادخل إلى المنصة ←';
+      var note = document.createElement('span');
+      note.className = 'form-msg-door-note';
+      note.textContent = ' (سيترك هذه الصفحة)';
+      var row = document.createElement('p');
+      row.className = 'form-msg-door-row';
+      row.appendChild(line);
+      row.appendChild(note);
+      msg.appendChild(row);
+    }
     msg.hidden = false;
     saidKind = kind || 'error';
   }
@@ -319,7 +344,7 @@
        depending on how it was entered. */
     if (!hasSep && digits.length <= 8) return clubDigits(digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4));
     /* Both orders, as it is typed: a person writing 12/03/1996 and a person writing
-       1996/03/12 are both writing the same date, and the field must not disagree
+       12/03/1996 are both writing the same date, and the field must not disagree
        with itself about which one it accepts. */
     var m = readDateParts(text);
     if (m) return slashDate(m.y + '-' + pad2(m.m) + '-' + pad2(m.d));
@@ -356,9 +381,94 @@
       /* A number pasted from a message arrives in whichever digits the sender used;
          the same folding puts it in the shape a typed one would be in. */
       node.addEventListener('paste', function () { window.setTimeout(relayout, 0); });
+      if (isDate) node.addEventListener('keydown', separateDate);
     });
     form.addEventListener('input', clearComplaintOnEdit);
     form.addEventListener('change', clearComplaintOnEdit);
+  }
+
+  /* The slash, written for them.
+
+    A date has to be written day first, and somebody filling a form on a phone at
+    the pool has to remember that. The field's own message names the order -- but
+    that message only arrives once the field has been read and found wanting, so
+    the order is already a mistake by the time anybody reads about it. A month and
+    a day the wrong way round is a birthday that says the wrong thing about a
+    child.
+
+    So the separator is put in: after the second digit, and after the fourth.
+
+      the caret is put back          setting `value` drops it at the end, so
+                                     editing the middle of a date would watch the
+                                     cursor jump away on every digit -- worse than
+                                     no separator at all
+      a typed separator is stepped   somebody who types their own slash must not end
+        over, not doubled            up with two
+      only while typing              the calendar writes a whole date and a paste
+                                     arrives whole; neither needs anything added
+      storage does not move          what the field shows is the club's shape;
+                                     what the database holds is still yyyy-mm-dd,
+                                     which is what the queue, the weekly bars and
+                                     every equality query depend on
+
+    Deletes and backspace are left alone: removing the separator is a reasonable
+    thing to want to do while correcting, and the relayout puts it straight back
+    on the next keystroke anyway. */
+  function separateDate(e) {
+    /* Folded before anything is decided. The club writes its dates in
+       Arabic-Indic digits -- every example on this page is in them -- and the
+       first version accepted only Latin keys, so for the people actually filling
+       the form in the separator never appeared and nothing was wrong. */
+    if (!/^[0-9]$/.test(latinDigits(e.key))) return;
+    var node = e.target;
+    if (!node || node.tagName !== 'INPUT') return;
+
+    var at = node.selectionStart;
+    /* Only at the end, and only while there is room: a date being typed into the
+       middle already has a separator where the caret is. */
+    if (at !== node.value.length) return;
+
+    var written = node.value.slice(0, at);
+    /* How many digits the field holds *before* this keystroke. Two means the day
+       is finished, four means the month is, six or more is the year.
+
+       Over the whole field, and not over the part being typed: the second digit
+       of the day and the second digit of the year are the same shape, so a count
+       taken over the segment cannot tell them apart and puts a third slash in the
+       middle of the year. The format settles it -- two digits, two digits, four --
+       so the total is the only count that answers the question actually being
+       asked.
+
+       Before *this* keystroke, because the character has not arrived yet: the
+       handler puts the separator in and leaves the keypress to insert its own
+       digit, so a count taken after would be looking at the field one keystroke
+       further on than the question is about. */
+    var typed = latinDigits(written).replace(/[^0-9]/g, '').length;
+    if (typed !== 2 && typed !== 4) return;
+    if (node.value.length >= 10) return;
+
+    /* A separator is already there -- typed by hand, or written a keystroke ago.
+       Stepping over it is the whole of what happens. */
+    if (/[-/.]$/.test(written)) {
+      if (document.activeElement === node) {
+        try { node.setSelectionRange(at, at); } catch (_) { /* not every field allows it */ }
+      }
+      return;
+    }
+
+    /* Nothing is prevented, and that is the whole trick.
+
+       `keydown` is the event that cancels the character about to be inserted, so
+       preventing it throws the digit away: the field would read `17/` when the
+       person typed `17/0`. The separator goes in, the caret goes after it, and
+       the keypress does what keypresses do -- insert its character at the caret,
+       which is now past the separator. The browser's own insertion is left doing
+       its work, and with it undo, autocorrect, and a keyboard that is not a
+       keyboard. */
+    node.value = written + '/' + node.value.slice(at);
+    if (document.activeElement === node) {
+      try { node.setSelectionRange(at + 1, at + 1); } catch (_) { /* not every field allows it */ }
+    }
   }
 
   function checked(id) { var n = el(id); return !!(n && n.checked); }
@@ -498,25 +608,40 @@
     return facilities.length ? facilities : FALLBACK_FACILITIES;
   }
 
+  /* Repainting. Reads what is chosen *now* before it rebuilds, because the
+     club's list arrives a moment after the page does and a person who clicked in
+     between would otherwise watch their choice vanish. It reads only what is
+     chosen now, never what was chosen in a visit already dealt with -- opening
+     the gate empties the box first, so there is nothing older to confuse it with.
+
+     `before` is the pool saved on this device. It is *named* beside its option
+     and never ticked: somebody who reopens a half-finished form has to be able to
+     see what they chose last time, and a guess is worse than the answer -- but a
+     remembered tick is not a confirmation, it is a suggestion with the way
+     through already open beside it. */
   function paintGatePools() {
     var box = el('pool-gate-pools');
     if (!box) return;
-    var chosen = val('selected_pool');
+    var chosenBefore = val('selected_pool');
+    var live = box.querySelector('input:checked');
+    var liveValue = live ? live.value : '';
     var names = poolNames();
 
     box.innerHTML = names.map(function (name, i) {
       return '<label class="gate-pool">'
         + '<input type="radio" name="selected_pool_choice" value="' + F.esc(name) + '"'
-        + (name === chosen ? ' checked' : '')
-        + (i === 0 && !chosen ? ' data-first' : '') + ' />'
+        + (name === liveValue ? ' checked' : '')
+        + (i === 0 && !liveValue ? ' data-first' : '') + ' />'
         + '<span class="gate-pool-name">' + F.esc(name) + '</span>'
+        + (name === chosenBefore && !liveValue
+            ? '<span class="gate-pool-again">اختيارك في المرة الماضية</span>' : '')
         + '</label>';
     }).join('');
 
-    /* The way through opens on a choice and only on a choice. It is disabled in
-       the markup as well, so it is disabled before this runs. */
+    /* Open only on a choice made in front of the gate, in this visit. It is
+       disabled in the markup as well, so it is shut before this runs at all. */
     var go = el('pool-gate-go');
-    if (go) go.disabled = !chosen;
+    if (go) go.disabled = !liveValue;
 
     Array.prototype.forEach.call(box.querySelectorAll('input'), function (radio) {
       radio.addEventListener('change', function () {
@@ -531,9 +656,23 @@
   function openPoolGate() {
     var gate = el('pool-gate');
     if (!gate) return;
+    /* Is this a new asking, or the same one being asserted again? The club asked
+       to be asked again on every visit, not every time something touches the
+       gate -- and the difference is the whole of this branch.
+
+       The form calls this whenever it is sent with no pool, which is exactly when
+       the gate is already up. Emptying unconditionally threw away the choice the
+       person had just made, re-shut the way through, and left a radio ticked in a
+       box nothing could see. A gate that was closed is a new asking, so it starts
+       empty; a gate that was already up keeps what is in front of them. */
+    var fresh = gate.hidden;
     gateOpen = true;
     gate.hidden = false;
     document.body.classList.add('gate-open');
+    if (fresh) {
+      var box = el('pool-gate-pools');
+      if (box) box.innerHTML = '';
+    }
     paintGatePools();
 
     if (!gate.dataset.bound) {
@@ -1195,8 +1334,20 @@
       .catch(function (error) {
         var code = String((error && error.code) || '');
         if (code === 'auth/email-already-in-use') {
-          var e = new Error('هذا البريد الإلكتروني مسجّل مسبقًا. سجّل الدخول أو استعمل «نسيت كلمة المرور؟».');
+          /* What this page is not. It can sign in -- `signInAccount` exists -- but
+             only from inside `send()`, after every field of a registration form
+             has been filled and the create button pressed. So the sentence used to
+             point at two doors that are not on this page at all, and somebody with
+             an account and a forgotten password was left with nowhere to go on the
+             one page they had been sent to.
+
+             So it points at the door that exists: the club's own sign-in, with the
+             address they already typed, so it is not asked for twice. A second
+             sign-in flow here would be a second way into the same accounts
+             answering to nobody but itself. */
+          var e = new Error('هذا البريد الإلكتروني مسجّل مسبقًا. لستَ في حاجة إلى طلب جديد: ادخل من صفحة دخول النادي، أو استرجع كلمة مرورك من هناك.');
           e.duplicate = true;
+          e.door = platformSignIn(val('email'));
           throw e;
         }
         if (code === 'auth/weak-password') {
@@ -1242,6 +1393,21 @@
       var mine = String(user.email || '').toLowerCase();
       return at && mine && at !== mine ? null : user;
     } catch (_) { return null; }
+  }
+
+  /* The club's own sign-in, with the address already typed.
+
+     A door, not a subsystem. The address is carried so it is not asked for twice,
+     and it is the same door everybody else uses -- the page that answers for the
+     account, refuses it, or restores its password, rather than a second set of
+     rules living on a form for swimmers.
+
+     The address is put in the fragment rather than the query so it is not written
+     into a server log on the way, and because a fragment is never sent anywhere:
+     it is a value the page reads and then drops. */
+  function platformSignIn(email) {
+    var at = String(email || '').trim();
+    return '/?signin=1#' + (at ? 'email=' + encodeURIComponent(at) : '');
   }
 
   /* Signing in to an account that already exists. Every way this can go wrong has
@@ -1378,6 +1544,10 @@
           if (!r.ok) {
             var err = new Error(data.error || 'تعذّر إرسال الطلب. تحقّق من الاتصال وحاول مجدداً.');
             err.duplicate = !!data.duplicate;
+            /* The other way a person with an account ends up on a form for a new
+               swimmer: the server refuses them as a duplicate. Same door, same
+               address they have already typed. */
+            if (data.duplicate) err.door = platformSignIn(val('email'));
             throw err;
           }
           return { data: data, account: account };
@@ -1406,7 +1576,7 @@
     }).catch(function (e) {
       /* The draft is deliberately kept: nothing the person typed is lost when
          a send fails, so they can try again on the same phone. */
-      say(e.message || 'تعذّر إرسال الطلب.', 'error');
+      say(e.message || 'تعذّر إرسال الطلب.', 'error', e.door);
       notify('تعذّر إرسال الطلب.', 'error',
         'لم يُفقد ما كتبته. أعد المحاولة من نفس الهاتف.');
       button.disabled = false;
@@ -1593,12 +1763,78 @@
 
   /* ---------------- wiring ---------------- */
 
-  /* One refusal, on the document, so there is no place Escape is not caught. */
+  /* What the keyboard can reach while the gate is up.
+
+     With a mouse the gate was shut already: the overlay takes every click. With a
+     keyboard it was not -- Tab walked straight past into the fields behind, and
+     the whole form could be filled while the gate stood there refusing to open.
+     Sending it then re-opened the gate, so nothing got past, but the person who
+     had typed all of it was not told why. The club's words are that the form
+     cannot be filled before the pool is chosen, and that is what this makes true
+     for everyone rather than for those with a mouse.
+
+     Tab and Shift+Tab are wrapped at both ends; everything between them is free,
+     so the gate is walked in its own order like any other dialog. Escape is
+     refused on the same handler, in the same place, because two rules about the
+     same key would be two rules that could disagree. */
+  /* Which controls a Tab may reach.
+
+     Not by asking whether they have an `offsetParent` -- the usual way to ask
+     "is this visible", and wrong here for a reason that has nothing to do with
+     testing. The gate is `position: fixed`, and a descendant of a fixed-position
+     element reports `offsetParent` as null in every browser whether it is on
+     screen or not. So that filter threw away the whole list, the Tab handler found
+     nothing to move focus to, and answered by refusing the key without moving
+     focus anywhere: a keyboard user pressing Tab inside the gate was stuck, held
+     by a gate that would neither let them out nor let them in.
+
+     What can actually make a control unusable is asked instead -- disabled, or
+     hidden -- and the gate's own `hidden` attribute already answers for the whole
+     panel. Nothing else is filtered, so the list cannot come back empty while the
+     gate is up, which is the property the handler depends on. */
+  var gateTabbables = function () {
+    var gate = el('pool-gate');
+    if (!gate || gate.hidden) return [];
+    return [].slice.call(gate.querySelectorAll(
+      'input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+      .filter(function (node) {
+        return !node.disabled && !node.hidden && node.getAttribute('aria-hidden') !== 'true';
+      });
+  };
+
   document.addEventListener('keydown', function (e) {
-    if (gateOpen && (e.key === 'Escape' || e.key === 'Esc')) {
+    if (!gateOpen) return;
+    if (e.key === 'Escape' || e.key === 'Esc') {
       e.preventDefault();
       e.stopPropagation();
+      return;
     }
+    if (e.key !== 'Tab') return;
+
+    var inside = gateTabbables();
+    if (!inside.length) { e.preventDefault(); return; }
+    var first = inside[0], last = inside[inside.length - 1];
+    var here = document.activeElement;
+    var isIn = here && inside.indexOf(here) !== -1;
+
+    /* Wrapped at whichever end the focus is leaving from -- and, when the focus is
+       not in the gate at all, sent in from the near end rather than left to walk
+       out through the page behind. */
+    if (e.shiftKey ? (!isIn || here === first) : (!isIn || here === last)) {
+      e.preventDefault();
+      (e.shiftKey ? last : first).focus();
+    }
+  });
+
+  /* And the other direction: focus arriving from outside -- a restored browser
+     field, a browser's own find, an extension -- is brought back to the gate
+     rather than left in a form the person is not allowed to use yet. */
+  document.addEventListener('focusin', function (e) {
+    if (!gateOpen) return;
+    var gate = el('pool-gate');
+    if (!gate || gate.contains(e.target)) return;
+    var inside = gateTabbables();
+    if (inside.length) inside[0].focus();
   });
 
   form.addEventListener('submit', function (e) {
@@ -1757,9 +1993,13 @@
 
   /* The gate opens before anything else is read, so the pools on the books are
      on the gate before the club's own list arrives -- the built-in names first,
-     then replaced by the real ones. A person coming back to a half-finished form
-     finds the pool they already chose marked on the gate and has only to confirm
-     it; the gate still opens, because it opens on every load. */
+     then replaced by the real ones.
+
+     Nothing is ticked and nothing is remembered into the visit: the club asked to
+     be asked again every time, so the way through opens on a choice made in front
+     of the gate now. The pool chosen last time is named beside its option, so
+     somebody reopening a half-finished form can see it without having to
+     remember -- and still has to choose it. */
   openPoolGate();
 
   var kept = readDraft();

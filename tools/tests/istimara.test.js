@@ -1957,6 +1957,134 @@ const photo_is_required = () => {
   }).catch(e => errors.push('[photo] the check did not finish: ' + e.message));
 };
 
+/* ---- the separator is written for them ----
+   Typed as a keyboard types: a keydown, then the input that follows it. A harness
+   that only sets the value never meets a handler on `keydown`, which is how a
+   check passes against a page that has none. */
+tasks.push(() => {
+  const w = boot();
+  /* Its own, bound to its own window: this suite declares that helper inside the
+     tasks that use it, so a block at this level cannot borrow it -- and stopping
+     on a name error teaches nobody anything about the separators. */
+  const $ = name => w.document.getElementById(name);
+  /* Arabic-Indic digits, written out here rather than borrowed: the suite keeps
+     that helper inside one task, and a block at this level that reaches for it
+     stops on a name error. */
+  const arabic = str => Array.from(String(str)).map(c =>
+    (c >= '0' && c <= '9') ? String.fromCodePoint(0x0660 + Number(c)) : c).join('');
+  const latin = str => String(str).replace(/[\u0660-\u0669]/g,
+    d => String(d.charCodeAt(0) - 0x0660));
+  const node = $('birth_date');
+
+  /* In the order a keyboard does it: the keydown first, and the character only if
+     nothing prevented it. The first version appended the digit *before*
+     dispatching the key, so the handler and the harness disagreed about when the
+     character arrives -- and the handler's arithmetic came out right by accident,
+     which is the worst way for a check to pass.
+
+     And it is also what makes the handler's own choice checkable: a handler that
+     prevented the key to insert the separator itself would swallow the digit, and
+     the field would read `17/` for `17/0`. */
+  const typeInto = (field, text) => {
+    for (const ch of String(text)) {
+      const e = new w.KeyboardEvent('keydown', { key: ch, bubbles: true, cancelable: true });
+      field.dispatchEvent(e);
+      if (!e.defaultPrevented) {
+        field.value += ch;
+        try { field.setSelectionRange(field.value.length, field.value.length); }
+        catch (_) { /* not every field allows it */ }
+      }
+      field.dispatchEvent(new w.Event('input', { bubbles: true }));
+    }
+  };
+  const fresh = () => {
+    node.value = '';
+    node.focus();
+    try { node.setSelectionRange(0, 0); } catch (_) { /* not every field allows it */ }
+  };
+
+  /* Eight digits in, the club's shape out -- and every digit still there, which
+     is what a handler that cancels the key would lose. */
+  fresh();
+  typeInto(node, '17031998');
+  if (latin(node.value) !== '17/03/1998') {
+    errors.push('[date] typing 17031998 gave "' + latin(node.value) + '" and not 17/03/1998');
+  }
+
+  /* The caret ends after the last digit, ready for the next thing typed: a
+     separator put in at the end of the value with the caret left behind is the
+     cursor-in-the-middle fault wearing a different hat. */
+  if (node.selectionStart !== node.value.length) {
+    errors.push('[date] the caret was left at ' + node.selectionStart + ' of '
+      + node.value.length + ', so the next character lands in the wrong place');
+  }
+
+  /* A separator typed by hand is one separator. */
+  fresh();
+  typeInto(node, '1703');
+  node.value += '/';
+  try { node.setSelectionRange(node.value.length, node.value.length); } catch (_) { /* */ }
+  typeInto(node, '1998');
+  if (latin(node.value) !== '17/03/1998') {
+    errors.push('[date] a separator typed by hand came out as "' + latin(node.value)
+      + '" and not 17/03/1998 -- somebody who types their own slash must not end up with two');
+  }
+
+  /* Arabic-Indic digits count the same. They are what the club writes with and
+     what every example on this page is written in, so a handler that only accepts
+     Latin keys leaves the people filling the form in with no separator at all. */
+  fresh();
+  typeInto(node, arabic('17031998'));
+  if (latin(node.value) !== '17/03/1998') {
+    errors.push('[date] the same digits in Arabic-Indic gave "' + latin(node.value)
+      + '" and not 17/03/1998');
+  }
+
+  /* A whole date is left exactly as it is: the calendar writes one, and a paste
+     arrives whole. */
+  fresh();
+  node.value = '17/03/1998';
+  node.focus();
+  try { node.setSelectionRange(node.value.length, node.value.length); } catch (_) { /* */ }
+  typeInto(node, '9');
+  if (latin(node.value) !== '17/03/1998') {
+    errors.push('[date] typing into a date that was already whole changed it to "'
+      + latin(node.value) + '" -- the calendar writes a whole date and this must not touch it');
+  }
+
+  /* And the digits themselves are never swallowed: eight in, eight out. */
+  fresh();
+  typeInto(node, '01021980');
+  if (latin(node.value).replace(/[^0-9]/g, '') !== '01021980') {
+    errors.push('[date] a digit was swallowed: "' + latin(node.value) + '"');
+  }
+
+  /* Storage does not move. The field shows the club's order; the request goes out
+     in the order the database has always held -- the queue, the weekly bars and
+     every equality query depend on it. */
+  fill(w, 'adult');
+  fresh();
+  typeInto(node, '17031998');
+  if (latin(node.value) !== '17/03/1998') {
+    errors.push('[date] typing into a filled form gave "' + latin(node.value) + '"');
+    return Promise.resolve();
+  }
+  w.SADARA_FORM.setPhoto(TINY_PHOTO);
+  $('terms').checked = true;
+  $('form-msg').hidden = true;
+  passTheGate(w);
+  $('reg-form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+  return waitFor(w, () => w.__calls.some(c => c.method === 'POST')).then(() => {
+    const posts = w.__calls.filter(c => c.method === 'POST' && /\/api\/applications$/.test(c.url));
+    const body = posts.length ? JSON.parse(posts[posts.length - 1].body) : null;
+    if (!body) { errors.push('[date] nothing was sent, so the stored shape is untested'); return; }
+    if (body.birth_date !== '1998-03-17') {
+      errors.push('[date] the field shows the club\'s order but the request went out as "'
+        + JSON.stringify(body.birth_date) + '" -- storage must stay yyyy-mm-dd');
+    }
+  }).catch(() => errors.push('[date] the request never went, so the stored shape is untested'));
+});
+
 tasks.push(() => calendar_writes().catch(
   e => errors.push('[cal] the check did not finish: ' + e.message)));
 tasks.push(() => photo_is_required().catch(

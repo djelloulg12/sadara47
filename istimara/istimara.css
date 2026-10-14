@@ -553,6 +553,20 @@ body.gate-open { overflow: hidden; }
 
 .gate-pool-name { font-weight: 600; color: #16324f; }
 
+/* The pool chosen last time, named and not ticked. Somebody who reopens a
+   half-finished form can see what they chose without having to remember, and
+   still has to choose it -- so this is set apart from the name rather than
+   folded into it, in the voice of a note and not of a label. */
+.gate-pool-again {
+  margin-inline-start: auto;
+  padding: .1rem .45rem;
+  border-radius: 999px;
+  background: #e8eef6;
+  color: #5a6b80;
+  font-size: .72rem;
+  white-space: nowrap;
+}
+
 .gate-pool:has(input:checked) {
   border-color: #0d6efd;
   background: #eef5ff;
@@ -592,6 +606,41 @@ body.gate-open { overflow: hidden; }
 @media (max-width: 480px) {
   .gate-panel { padding: 1.15rem .9rem 1rem; border-radius: 14px; }
   .gate-notice p { font-size: .86rem; line-height: 1.75; }
+}
+
+/* A door out of the form: shown when the address is already on file, so nobody
+   with an account is left on a page for a new swimmer with no way forward. */
+.form-msg-door-row {
+  margin: .5rem 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: .35rem;
+  flex-wrap: wrap;
+}
+
+.form-msg-door {
+  color: #0d5fbf;
+  font-weight: 700;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+.form-msg-door:hover { color: #08458c; }
+
+.form-msg-door:focus-visible {
+  outline: 3px solid #9dc2e8;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* The note beside it says the link leaves the page. It is a footnote to the link,
+   so it is set in the same muted grey as every other hint on this page and never
+   in the link's own colour -- which would make it read as part of the link and so
+   pressable. */
+.form-msg-door-note {
+  color: #6b7c8f;
+  font-size: .82rem;
+  font-weight: 400;
 }
 
 @media print {

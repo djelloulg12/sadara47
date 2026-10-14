@@ -4,7 +4,7 @@
    A date typed by hand is a date that goes wrong: a day and a
    month swapped are both real dates, so nothing complains and the
    member is the wrong age on the card for ever. That is why the
-   fields ask for year first -- 1998/03/17, never 17/03/1998 --
+   fields ask for year first -- 17/03/1998, never 17/03/1998 --
    and this is the other half of the answer: let the calendar write
    the date instead of the hands.
 

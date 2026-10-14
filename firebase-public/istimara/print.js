@@ -110,12 +110,12 @@
   }
 
   /* A date, written the way the club writes it: year first, then month, then
-     day -- 2026/10/11 -- and in Arabic-Indic digits.
+     day -- 11/10/2026 -- and in Arabic-Indic digits.
 
      The value arrives from a date input as YYYY-MM-DD, so only the separators
      change and the order is already the one asked for. It used to be day first;
      the same function was doing the opposite of this. */
-  /* The date the way the club writes it: 2026/10/11.
+  /* The date the way the club writes it: 11/10/2026.
 
      A date typed with slashes rather than dashes, or with a one-digit month, is
      still a date and is laid out the same way -- the point is that every date on

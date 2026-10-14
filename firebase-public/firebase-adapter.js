@@ -106,6 +106,41 @@
   const REJECTED = ['rejected', 'refused', 'مرفوض', 'مرفوضة'];
   const PENDING = ['pending', 'قيد المعالجة', 'قيد الدراسة', 'قيد الانتظار'];
 
+  /* Whether this account has already been let in by some other request.
+
+     Asked before a refusal is written onto the account, because a refusal is a
+     statement about one request and not about the person: refusing the second
+     request of somebody whose first was accepted must not close an account the
+     club has already opened.
+
+     `transferred_to` counts as accepted whatever the status column says. It is
+     written at the moment of acceptance, never invented, and it is the truer
+     record -- a request that became a member was taken, whatever happened to its
+     status afterwards.
+
+     Read only, and read by management: the rules will not let a member read
+     their own requests, which is why this cannot also be done at sign-in time and
+     why the fix is at the moment of writing rather than at the moment of reading.
+
+     A failure to read is answered "no", not "yes": the conservative answer is the
+     one that leaves an account open, and the consequence of getting it wrong in
+     that direction is one refusal that has to be done again. */
+  const accountAcceptedElsewhere = async (uid, except) => {
+    if (!uid) return false;
+    try {
+      const snap = await db.collection('applications')
+        .where('applicant_uid', '==', uid).get();
+      return snap.docs.some(doc => {
+        if (except && doc.id === except) return false;
+        const v = doc.data() || {};
+        return !!v.transferred_to
+          || ACCEPTED.indexOf(String(v.status || '').trim().toLowerCase()) !== -1;
+      });
+    } catch (_) {
+      return false;
+    }
+  };
+
   const loginGate = profile => {
     /* An account that has become another account. Not refused as though it were
        wrong -- answered, with the account it became, so the person knows which
@@ -131,10 +166,29 @@
       const why = String((profile && profile.rejection_reason) || '').trim();
       return {
         gate: 'rejected',
-        message: why || 'رُفض طلب التسجيل.',
-        /* The club's own words, kept apart from the sentence around them so the
-           reason is never trimmed into something that reads differently. */
-        reason: why
+        /* Said about the account, because that is what was refused. The old words
+           described a piece of paper to somebody who had just signed in with a
+           correct password, and left them with a decision somebody else had made,
+           no date, and nobody to ask. A password reset does not help here: it
+           brings them straight back to this door, which is why the sentence says
+           so rather than sending them round in circles.
+
+           And it says what does help, because there is something to do: accepting
+           a request for the account writes `request_status: 'accepted'` and
+           removes the reason, in one click in the management screen. A refusal
+           that says what to do with it is answered at the counter; one that does
+           not is a telephone call and an afternoon.
+
+           The reason is a refusal that does not explain itself, and it is a
+           decision the club took and can lift -- so it is named first, in the
+           club's own words, and kept apart from the sentence around it so it is
+           never trimmed into something that reads differently. */
+        message: why
+          ? 'حسابك غير مفعّل على المنصة. السبب الذي كتبته الإدارة: ' + why
+          : 'حسابك غير مفعّل على المنصة.',
+        reason: why,
+        what_now: 'تواصل مع إدارة النادي، أو اطلب إعادة تفعيل حسابك.'
+          + ' استعادة كلمة المرور لا تفيد هنا: الحساب نفسه هو المرفوض، لا كلمة مروره.'
       };
     }
     /* A status nobody wrote a meaning for is not a door to be shut on somebody
@@ -1465,13 +1519,29 @@
           if (!why) {
             return jsonResponse({ error: 'اكتب سبب الرفض قبل رفض الطلب —Applicantd يقرأه عند محاولته الدخول.' }, 400);
           }
-          if (stored.applicant_uid) {
+          /* The refusal belongs to this request. It goes onto the account only
+             when no other request for that account was accepted -- which is the
+             only case in which closing the account is what refusing means.
+
+             Refusing a duplicate is exactly what a manager means to do, and the
+             word they type for it is the one this whole arrangement turns on. So
+             the refusal is not blocked; what must not happen is the person
+             losing the door their earlier request opened. */
+          const accountStaysOpen = await accountAcceptedElsewhere(stored.applicant_uid, appMatch[1]);
+          if (stored.applicant_uid && !accountStaysOpen) {
             await db.collection('users').doc(stored.applicant_uid).set({
               request_status: 'rejected',
               rejection_reason: why,
               decided_at: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
           }
+          return jsonResponse({
+            ok: true,
+            expected_amount: patch.expected_amount,
+            /* Said, not done quietly: somebody must be able to see that the
+               decision was taken and what it did. */
+            account_left_open: accountStaysOpen
+          });
         }
         return jsonResponse({ ok: true, expected_amount: patch.expected_amount });
       }

@@ -1103,6 +1103,160 @@ test('the refusal is remembered, so the second registration is not slowed by it'
   }
 });
 
+/* ---- refusing a duplicate must not close the account ---- */
+
+const REFUSAL = 'مسجّل مسبقًا';
+
+/* The account, one accepted request and one duplicate, in the three shapes that
+   decide whether the account is closed. */
+function accountWith(uid, otherRequests) {
+  DATA.users[uid] = { name: 'وليّ أمر', role: 'member', request_status: 'accepted' };
+  DATA.applications = Object.assign({
+    APP_DUP: {
+      application_no: 'APP-DUP', applicant_uid: uid, status: 'pending',
+      first_name_ar: 'أمين', national_id_key: '1990010100001'
+    }
+  }, otherRequests);
+}
+
+test('refusing a duplicate leaves an account its first request opened', async () => {
+  const savedApps = DATA.applications;
+  const savedUser = DATA.users['u9'];
+  try {
+    accountWith('u9', {
+      /* The ordinary shape: an earlier request, accepted. */
+      APP_ONE: { application_no: 'APP-ONE', applicant_uid: 'u9', status: 'accepted' }
+    });
+    const w = boot(asUser('u1'));
+    const r = await call(w, '/api/applications/APP_DUP', 'PATCH', {
+      status: 'rejected', rejection_reason: REFUSAL
+    });
+
+    /* The decision itself is not blocked: refusing a duplicate is exactly what a
+       manager means to do. */
+    if (!r.ok) errors.push('refusing a duplicate was refused: ' + JSON.stringify(r.data));
+    if (DATA.applications.APP_DUP.status !== 'rejected') {
+      errors.push('the duplicate was not recorded as rejected, so the club\'s decision '
+        + 'was taken and then lost');
+    }
+    /* And the account was not closed. */
+    if (DATA.users.u9.request_status !== 'accepted') {
+      errors.push('refusing a duplicate closed an account an earlier request had '
+        + 'opened: the person can no longer sign in to a club they are on the books of '
+        + '(request_status is now ' + JSON.stringify(DATA.users.u9.request_status) + ')');
+    }
+    /* And the manager is told, rather than left to work it out. */
+    if (!r.data || r.data.account_left_open !== true) {
+      errors.push('the answer does not say the account stayed open, so somebody cannot '
+        + 'see that the decision was taken and what it did: ' + JSON.stringify(r.data));
+    }
+  } finally {
+    DATA.applications = savedApps;
+    if (savedUser) DATA.users.u9 = savedUser; else delete DATA.users.u9;
+  }
+});
+
+test('a request that became a member counts as accepted, whatever its status says', async () => {
+  const savedApps = DATA.applications;
+  const savedUser = DATA.users['u9'];
+  try {
+    accountWith('u9', {
+      /* `transferred_to` is written at the moment of acceptance and never
+         invented, so it is the truer record of what happened than a status column
+         somebody may have edited since. */
+      APP_ONE: {
+        application_no: 'APP-ONE', applicant_uid: 'u9', status: 'pending',
+        transferred_to: 'SDR-7'
+      }
+    });
+    const w = boot(asUser('u1'));
+    await call(w, '/api/applications/APP_DUP', 'PATCH', {
+      status: 'rejected', rejection_reason: REFUSAL
+    });
+    if (DATA.users.u9.request_status !== 'accepted') {
+      errors.push('a request that had already become a member did not count as accepted, '
+        + 'so refusing a second request closed an account the club had already opened');
+    }
+  } finally {
+    DATA.applications = savedApps;
+    if (savedUser) DATA.users.u9 = savedUser; else delete DATA.users.u9;
+  }
+});
+
+test('a refusal still closes an account that nothing else opened', async () => {
+  const savedApps = DATA.applications;
+  const savedUser = DATA.users.u9;
+  try {
+    /* No other request at all. Here refusing *does* mean closing the door, and a
+       fix that stopped that from happening would have swapped one wrong answer for
+       another: a refused person quietly able to walk in. */
+    DATA.users.u9 = { name: 'مقدّم', role: 'member' };
+    DATA.applications = {
+      APP_ONE: {
+        application_no: 'APP-ONE', applicant_uid: 'u9', status: 'pending',
+        first_name_ar: 'أمين', national_id_key: '1990010100001'
+      }
+    };
+    const w = boot(asUser('u1'));
+    const r = await call(w, '/api/applications/APP_ONE', 'PATCH', {
+      status: 'rejected', rejection_reason: REFUSAL
+    });
+    if (!r.ok) errors.push('refusing a lone request was refused: ' + JSON.stringify(r.data));
+    if (DATA.users.u9.request_status !== 'rejected') {
+      errors.push('refusing the only request for an account did not close it, so a person '
+        + 'the club turned away can still sign in');
+    }
+    if (r.data && r.data.account_left_open) {
+      errors.push('the answer claims the account stayed open when nothing else had opened it');
+    }
+  } finally {
+    DATA.applications = savedApps;
+    if (savedUser) DATA.users.u9 = savedUser; else delete DATA.users.u9;
+  }
+});
+
+/* ---- and the refusal says what is refused, and what to do about it ---- */
+
+test('a refusal names the account, and says that restoring the password will not help', async () => {
+  const saved = DATA.users.u3;
+  try {
+    /* A member whose request was refused, signing in with a correct password.
+       What they must be told: what is refused is the account, and the one thing on
+       that screen that looks helpful will not fix it -- because the reset link
+       brings them straight back to this same door with a correct new password and
+       the same answer. That loop is the whole of what was reported. */
+    DATA.users.u3 = {
+      name: 'عضو', role: 'member',
+      request_status: 'rejected', rejection_reason: 'مسجل'
+    };
+    const w = boot(asUser('u3'));
+    const r = await call(w, '/api/login', 'POST', { email: 'u3@x.dz', password: 'x' });
+
+    const g = r.data && r.data.gate;
+    if (!g || g.gate !== 'rejected') {
+      errors.push('a refused account was not refused at sign-in: ' + JSON.stringify(r.data));
+      return;
+    }
+    const said = String(g.message || '');
+    if (said.indexOf('طلب التسجيل') !== -1) {
+      errors.push('the refusal describes a piece of paper rather than the account: "'
+        + said + '"');
+    }
+    if (g.reason !== 'مسجل') {
+      errors.push("the club's own reason was not carried through: " + JSON.stringify(g.reason));
+    }
+    if (!/كلمة المرور|كلمة مروره/.test(said + ' ' + (g.what_now || ''))) {
+      errors.push('the refusal does not say that restoring the password will not help, so '
+        + 'the only control on the screen that looks helpful still sends them round again');
+    }
+    if (!/إدارة النادي|تفعيل/.test(g.what_now || '')) {
+      errors.push('the refusal does not say what to do instead: ' + JSON.stringify(g.what_now));
+    }
+  } finally {
+    if (saved) DATA.users.u3 = saved;
+  }
+});
+
 const FAMILY_NID = '0999123456789';
 const daysAgo = n => ({ toDate: () => new Date(Date.UTC(2026, 2, n)) });
 

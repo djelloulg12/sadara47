@@ -147,10 +147,130 @@ function boot(seedDraft) {
 
 const id = (w, name) => w.document.getElementById(name);
 
+/* The gate's choices, read from the document every time they are needed.
+
+   A repaint replaces every element in the box, so a list captured earlier points
+   at something no longer on the page -- and ticking that looks like a choice while
+   the form sees none. Held as a function rather than as a list for that reason,
+   and defined at the top so that where a check sits in the file cannot change what
+   it is able to ask: a check that reads a name initialised further down stops the
+   whole suite the moment it is moved, which is not a fault anybody learns from. */
+const options = w => [...id(w, 'pool-gate-pools').querySelectorAll('input')];
+
 async function run() {
 
 /* --- it opens when the page does ------------------------------------------- */
 const w = boot();
+
+/* --- and it does not throw the keyboard out --------------------------------- */
+/* With a mouse the gate was shut already, the overlay taking every click. With a
+   keyboard it was not: Tab walked past it into the fields behind, and the whole
+   form could be filled while the gate stood there refusing to open. The club's
+   words are that the form cannot be filled before the pool is chosen, and that is
+   what this asks.
+
+   The controls are read the way the page reads them, and one detail matters: the
+   continue button is `disabled` until a pool is chosen, so it cannot take focus
+   and is not what Tab lands on last while the gate is shut. Asking about focus on
+   a control that cannot receive it would report a page that is working. */
+const kb = boot();
+/* Escape asked twice: once the instant the window exists, and once after the wait.
+   A page that refuses it in the first and not the second has had something done to
+   it in between -- a timer, a late callback, a repaint -- and that is a different
+   fault from one that never refuses it, though the two look the same from here. */
+/* The event is held and then dispatched, never assigned from the call:
+   `dispatchEvent` answers a boolean -- false when the event *was* cancelled -- so
+   reading `.defaultPrevented` off its answer asks a different question and answers
+   "not attached" for a page that is refusing perfectly well. */
+const escNow = new kb.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+kb.document.dispatchEvent(escNow);
+check(escNow.defaultPrevented,
+  'the page did not refuse Escape the moment the window existed');
+await new Promise(r => setTimeout(r, 120));
+const kbTab = (shift) => {
+  const e = new kb.KeyboardEvent('keydown',
+    { key: 'Tab', shiftKey: !!shift, bubbles: true, cancelable: true });
+  kb.document.dispatchEvent(e);
+  return e;
+};
+const inGate = () => id(kb, 'pool-gate').contains(kb.document.activeElement);
+const where = () => {
+  const a = kb.document.activeElement;
+  if (!a) return 'nothing';
+  const label = a.id || a.value || a.tagName;
+  return label + ' [' + (id(kb, 'pool-gate').contains(a) ? 'in the gate' : 'OUTSIDE') + ']';
+  };
+const liveControls = () =>
+  [...id(kb, 'pool-gate').querySelectorAll('input:not([disabled]), button:not([disabled])')];
+
+const controls = liveControls();
+check(controls.length >= 2,
+  'the gate holds ' + controls.length + ' controls that can take focus, so keeping the '
+  + 'keyboard inside it is not asking about anything');
+
+/* Forward from the last one comes back to the first -- so Tab cannot leave.
+   Escape is asked in the same breath, because if the handler were not attached at
+   all both would fail identically, and "Tab did not move" and "nothing is
+   listening" are different faults that look the same from here. */
+const escKb = new kb.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+kb.document.dispatchEvent(escKb);
+check(!id(kb, 'pool-gate').hidden,
+  'the gate is not even up in this window (' + id(kb, 'pool-gate').hidden + '), so nothing '
+  + 'below is asking about a gate');
+check(kb.document.body.classList.contains('gate-open'),
+  'the gate is on screen but the page does not think it is open, so the refusals below '
+  + 'are looking at a gate the page has already let go of');
+check(escKb.defaultPrevented,
+  'the page is not refusing Escape in this window at all. The gate is on screen ('
+  + !id(kb, 'pool-gate').hidden + '), the page says it is open ('
+  + kb.document.body.classList.contains('gate-open')
+  + '), and focus is on ' + where() + ' -- so if a Tab check below fails, it is this '
+  + 'line that is wrong, not the wrapping.');
+
+controls[controls.length - 1].focus();
+check(inGate(), 'the last control in the gate could not even be focused (' + where() + ')');
+let e = kbTab(false);
+check(e.defaultPrevented && inGate(),
+  'Tab from the last control escaped to ' + where() + ' in the form behind the gate, so '
+  + 'the form can be filled before the pool is chosen');
+
+/* And backwards from the first does not leave the other way. */
+controls[0].focus();
+e = kbTab(true);
+check(e.defaultPrevented && inGate(),
+  'Shift+Tab from the first control escaped backwards to ' + where() + ' outside the gate');
+
+/* Focus arriving from outside is brought back, rather than left in a form the
+   person is not allowed to use yet. */
+id(kb, 'first_name_ar').focus();
+check(inGate(),
+  'focus landed on ' + where() + ' in the form behind the gate and stayed there, so the '
+  + 'form can be filled in without ever being passed through the gate');
+
+/* And with a pool chosen, the way through joins the list -- reachable by Tab and
+   not only by mouse. */
+options(kb)[0].checked = true;
+options(kb)[0].dispatchEvent(new w.Event('change', { bubbles: true }));
+await new Promise(r => setTimeout(r, 20));
+const withGo = liveControls();
+withGo[withGo.length - 1].focus();
+check(id(kb, 'pool-gate-go').contains(kb.document.activeElement),
+  'the continue button cannot be reached by Tab even once a pool is chosen, so the gate '
+  + 'can only be passed with a mouse');
+kbTab(false);
+check(inGate(), 'Tab escaped the gate once a pool was chosen (' + where() + ')');
+
+
+/* The same two questions asked here, on the first window, before anything else
+   has happened. The keyboard block below asks them again on a later window; if
+   they answer differently there and here, then something the earlier windows did
+   has changed the world, and that is worth knowing on its own account rather than
+   discovering as a mystery in the fourth window. */
+const firstEscape = new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+w.document.dispatchEvent(firstEscape);
+check(firstEscape.defaultPrevented,
+  'the page does not refuse Escape in the very first window either, so the refusals '
+  + 'are not being attached at all');
 const gate = id(w, 'pool-gate');
 check(!!gate, 'there is no gate in the page');
 check(gate && !gate.hidden,
@@ -269,38 +389,105 @@ check(said.indexOf('لم يعد متاح') !== -1,
   'a pool that has closed is cleared without telling anybody, so the person is not '
   + 'warned: the page says "' + said + '"');
 
-/* --- a choice kept is offered back --------------------------------------- */
-/* Coming back to a half-finished form: the gate still opens, because it opens on
-   every load, and the pool already chosen is marked, so it is confirmed rather
-   than asked again.
+/* --- a saved pool is named, and never ticked ------------------------------ */
+/* Coming back to a half-finished form, the club is asked again. So the pool is
+   shown beside its option and nothing else: no tick, and the way through shut.
 
-   The way through being open here is not the gate being a formality, and the
-   first version of this check asserted that it was shut -- which was this check
-   inventing a requirement the club did not state, and would have had the button
-   disabled over a choice the person had already made. What makes it a gate is
-   that the form stays unreachable until the button is pressed, and that pressing
-   it is what admits them. So that is what is asked.
+   This block replaces one that checked the opposite -- that the pool was marked
+   and the button already open -- and it passed. That failure is worth recording:
+   a check written against whatever the page happened to be doing is a check on
+   habits, and it will go on enforcing the habit after the club has changed their
+   mind.
 
-   Either way the form is unreachable: shut with nothing chosen, open with a
-   choice to confirm, and unreachable behind the overlay in both cases. */
+   Every element below is read from the document at the moment it is used, never
+   from a list captured earlier. An earlier version captured the radios once and
+   reused them; sending the form re-asserts the gate, which repaints the box and
+   replaces every element in it, so the captured reference pointed at something no
+   longer on the page. Ticking it fired its own listener and opened the button
+   while the form saw no choice, and the check reported that the gate could not be
+   passed. Holding on to nodes across a repaint makes a correct page look broken.
+
+   Two traps are named here because both look right on screen:
+
+     clicking a radio that is already ticked fires no `change`, so a gate that
+       restores the saved pool as ticked and opens on `change` is one the person
+       who chose that very pool cannot get out of
+
+     a gate that re-opens without emptying itself hands back the last answer, and
+       the form does re-open it whenever it is sent with no pool */
+
+
 const back = boot({ selected_pool: 'غابة غرداية' });
-await new Promise(r => setTimeout(r, 120));
+await new Promise(r => setTimeout(r, 150));
+
 check(!id(back, 'pool-gate').hidden,
   'the gate was skipped for somebody coming back to a half-finished form');
-const marked = [...id(back, 'pool-gate-pools').querySelectorAll('input')]
-  .find(r => r.checked);
-check(marked && marked.value === 'غابة غرداية',
-  'the pool already chosen is not marked on the gate, so the person is asked again for '
-  + 'something they already answered');
-/* Unreachable while it stands, which is the whole claim, whatever the button says. */
+check(!options(back).some(r => r.checked),
+  'the pool saved on this device came back ticked, so the gate was not really asked '
+  + 'again -- it was answered for the person, and they only had to press a button');
+check(id(back, 'pool-gate-go').disabled,
+  'the way through was open before a choice was made, so the gate is a formality');
+check(!!id(back, 'selected_pool').value,
+  'the saved pool was lost from the form while the gate was open, so a person who '
+  + 'cannot finish would come back to an empty field');
+
+/* But it is named, so somebody who reopens on a phone can see what they chose
+   rather than having to remember -- the difference between asking again and
+   asking again in the dark. */
+const namedValue = 'غابة غرداية';
+const named = options(back).find(r => r.value === namedValue);
+check(!!named,
+  'the pool this device chose last time is not even offered now, so what the gate '
+  + 'shows and what is on the form disagree');
+const label = named ? named.closest('label') : null;
+check(label && /المرة الماضية/.test(label.textContent),
+  'the pool chosen last time is not named on the gate, so the person is asked again '
+  + 'without being told what they answered before');
+
+/* And nothing goes out from behind an open gate. */
 id(back, 'reg-form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
 await new Promise(r => setTimeout(r, 60));
 check(!back.__calls.some(c => c.method === 'POST'),
   'a request was sent from behind an open gate, so the gate can be passed without '
-  + 'pressing anything');
+  + 'choosing anything');
+check(!id(back, 'pool-gate').hidden,
+  'sending the form with the gate up took the gate down, so the gate is not a gate');
+
+/* Choosing it -- actually choosing it, which is the only thing that counts now --
+   opens the way through. Clicking a radio that was already ticked fires no
+   `change`, which is why nothing arrives pre-ticked. */
+options(back).find(r => r.value === namedValue).checked = true;
+options(back).find(r => r.value === namedValue)
+  .dispatchEvent(new w.Event('change', { bubbles: true }));
+check(!id(back, 'pool-gate-go').disabled,
+  'choosing the pool they chose last time did not open the way through, so the gate '
+  + 'cannot be passed by the person who already answered it');
 id(back, 'pool-gate-go').dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
-check(id(back, 'pool-gate').hidden && id(back, 'selected_pool').value === 'غابة غرداية',
-  'confirming the pool they had already chosen did not let them through, or lost it');
+check(id(back, 'pool-gate').hidden && id(back, 'selected_pool').value === namedValue,
+  'confirming the pool they had chosen did not let them through, or lost it');
+
+/* --- and a gate that re-opens asks again ------------------------------------ */
+/* The form re-opens the gate whenever it is sent with no pool, so a second visit
+   to the same page is not hypothetical. If it came back with the last answer
+   marked, the button would already be open, and the requirement would hold on the
+   first visit and quietly not hold on the next. */
+const again = boot();
+await new Promise(r => setTimeout(r, 120));
+const firstPool = options(again)[0];
+firstPool.checked = true;
+firstPool.dispatchEvent(new w.Event('change', { bubbles: true }));
+id(again, 'pool-gate-go').dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+check(id(again, 'pool-gate').hidden, 'the gate did not close, so this proves nothing');
+
+id(again, 'selected_pool').value = '';
+id(again, 'reg-form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+check(!id(again, 'pool-gate').hidden, 'the form did not put the gate back up');
+const reopenedTicked = !!id(again, 'pool-gate-pools').querySelector('input:checked');
+const reopenedOpen = !id(again, 'pool-gate-go').disabled;
+check(!(reopenedTicked || reopenedOpen),
+  'the gate came back with its last answer already chosen (ticked: ' + reopenedTicked
+  + ') or the way through already open (open: ' + reopenedOpen
+  + '), which is the same fault on the second visit as on the first');
 
 /* --- the messages that were lost to a duplicate key ------------------------ */
 /* `MESSAGES` declared two of its keys twice, and an object literal takes the later

@@ -84,14 +84,14 @@
           <label class="f">
             <span class="lbl">تاريخ الميلاد <i class="req">*</i></span>
             <!-- Written as a text field rather than a date picker, because the
-                 club writes dates as 2026/10/11 and a picker shows whatever shape
+                 club writes dates as 11/10/2026 and a picker shows whatever shape
                  the browser's language happens to use -- a shape that is neither
                  that nor anything the club has ever printed. Arabic-Indic digits
                  are what it shows and what it accepts. -->
             <input id="birth_date" name="birth_date" type="text" required
                    inputmode="numeric" autocomplete="bday" maxlength="12"
-                   placeholder="1998/03/17" class="date-in" aria-describedby="birth_date-hint"  data-cal-max="today" />
-            <small class="hint" id="birth_date-hint">بصيغة سنة/شهر/يوم — 1998/03/17</small>
+                   placeholder="17/03/1998" class="date-in" aria-describedby="birth_date-hint"  data-cal-max="today" />
+            <small class="hint" id="birth_date-hint">بصيغة يوم/شهر/سنة — 17/03/1998</small>
           </label>
           <label class="f">
             <span class="lbl">الجنس</span>
@@ -141,9 +141,9 @@
           <label class="f" data-adult-only>
             <span class="lbl">تاريخ انتهاء البطاقة <i class="req">*</i></span>
             <input id="national_id_expiry" name="national_id_expiry" type="text"
-                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2031/04/17"
+                   inputmode="numeric" class="date-in" maxlength="12" placeholder="17/04/2031"
                    aria-describedby="national_id_expiry-hint"  data-cal-min-year="1980"  required />
-            <small class="hint" id="national_id_expiry-hint">بصيغة سنة/شهر/يوم — 2031/04/17</small>
+            <small class="hint" id="national_id_expiry-hint">بصيغة يوم/شهر/سنة — 17/04/2031</small>
           </label>
         </div>
 
@@ -219,7 +219,8 @@
           <label class="f">
             <span class="lbl">تاريخ ميلاد الولي</span>
             <input id="guardian_birth_date" name="guardian_birth_date" type="text"
-                   inputmode="numeric" maxlength="12" placeholder="1975/06/02" class="date-in"  data-cal-max="today"  required />
+                   inputmode="numeric" maxlength="12" placeholder="02/06/1975" class="date-in"  data-cal-max="today"  required />
+               <small class="hint">بصيغة يوم/شهر/سنة — 02/06/1975</small>
           </label>
           <label class="f">
             <span class="lbl">صفة القرابة</span>
@@ -245,13 +246,14 @@
           <label class="f">
             <span class="lbl">تاريخ انتهاء بطاقة الولي <i class="req">*</i></span>
             <input id="guardian_national_id_expiry" name="guardian_national_id_expiry" type="text"
-                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2031/06/02"  data-cal-min-year="1980"  required />
-            <small class="hint">بصيغة سنة/شهر/يوم — 2031/06/02</small>
+                   inputmode="numeric" class="date-in" maxlength="12" placeholder="02/06/2031"  data-cal-min-year="1980"  required />
+            <small class="hint">بصيغة يوم/شهر/سنة — 02/06/2031</small>
           </label>
           <label class="f">
             <span class="lbl">تاريخ إصدار بطاقة الولي</span>
             <input id="guardian_card_issued" name="guardian_card_issued" type="text"
-                   inputmode="numeric" class="date-in" maxlength="12" placeholder="2021/06/02"  data-cal-min-year="1980"  required />
+                   inputmode="numeric" class="date-in" maxlength="12" placeholder="02/06/2021"  data-cal-min-year="1980"  required />
+               <small class="hint">بصيغة يوم/شهر/سنة — 02/06/2021</small>
             <small class="hint">اختياري — خانة «الصادرة بتاريخ» في استمارة النادي.</small>
           </label>
         </div>
