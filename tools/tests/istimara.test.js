@@ -338,6 +338,34 @@ function boot(seedDraft) {
   return w;
 }
 
+/* The form cannot be filled until a pool is chosen, so every check that means to
+   send a request chooses one first -- through the gate, the way a person does,
+   rather than by writing the hidden field. Writing the field would let these
+   checks pass on a gate that had been removed, which is the fault they exist to
+   catch, and it cost this suite a failure before the point was noticed.
+
+   The pool is the one already in step four when the gate offers it, so the rest
+   of each check sees what its own `answerEverything` chose. The fallback is the
+   gate's first option, which once the club's list arrives is the club's first
+   pool -- never a name written here, which would be a pool the club may not
+   have. */
+function passTheGate(w) {
+  const gate = w.document.getElementById('pool-gate');
+  if (!gate || gate.hidden) return;
+  const wanted = (w.document.getElementById('facility') || {}).value || '';
+  const radios = [...w.document.querySelectorAll('#pool-gate-pools input[type=radio]')];
+  if (!radios.length) return;
+  const radio = radios.find(r => r.value === wanted) || radios[0];
+  radio.checked = true;
+  radio.dispatchEvent(new w.Event('change', { bubbles: true }));
+  const go = w.document.getElementById('pool-gate-go');
+  if (go) go.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+  if (!w.document.getElementById('pool-gate').hidden) {
+    errors.push('[gate] the gate did not open after a pool was chosen, so this check '
+      + 'would pass for the wrong reason if it went on to ask about anything else');
+  }
+}
+
 /* Picks a photo the way the person would, through the real file input. */
 function choosePhoto(w, bytes) {
   /* The small photograph every other check carries is taken away first. Waiting
@@ -453,6 +481,7 @@ tasks.push(() => {
   type('birth_date', typed('1998/03/07'));
   type('national_id', typed('198501011'));
   type('phone', typed('0661000001'));
+  passTheGate(w);
   field('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   return waitFor(w, () => !field('done').hidden || !!field('form-msg').textContent)
     .catch(() => errors.push('[store] nothing came back after sending'))
@@ -758,6 +787,7 @@ function fill(w, category) {
 tasks.push(() => {
   const w = boot();
   fill(w, 'adult');
+  passTheGate(w);
   w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   /* The POST is recorded the moment it is sent, but the confirmation is painted
      a few promises later, so wait for the confirmation and not for the request. */
@@ -865,6 +895,7 @@ tasks.push(() => {
   /* an adult sends without touching a guardian field. Wait for the outcome, not
      for the request: the POST is recorded before the confirmation is painted. */
   fill(w, 'adult');
+  passTheGate(w);
   w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   return waitFor(w, () => !w.document.getElementById('done').hidden
     || !!w.document.getElementById('form-msg').textContent)
@@ -888,6 +919,7 @@ tasks.push(() => {
   const name = w.document.getElementById('guardian_first_name');
   name.value = '';
   name.dispatchEvent(new w.Event('input', { bubbles: true }));
+  passTheGate(w);
   w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   return waitFor(w, () => w.document.getElementById('form-msg').textContent)
     .catch(() => errors.push('[minor] no message explaining what is missing'))
@@ -953,6 +985,7 @@ tasks.push(() => {
      so one heavy enough to tip it over must be left out rather than costing the
      whole request -- and the person has to be told, not left guessing. */
   return choosePhoto(w, 1100 * 1024).then(() => {
+    passTheGate(w);
     w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
     return waitFor(w, () => !w.document.getElementById('done').hidden
       || !!w.document.getElementById('form-msg').textContent);
@@ -979,6 +1012,7 @@ tasks.push(() => {
   const w = boot();
   fill(w, 'adult');
   return choosePhoto(w, 40 * 1024).then(() => {
+    passTheGate(w);
     w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
     return waitFor(w, () => !w.document.getElementById('done').hidden);
   })
@@ -1032,6 +1066,7 @@ tasks.push(() => {
     w.__calls.push({ url: String(u), method: (i && i.method || 'GET').toUpperCase(), body: i && i.body });
     return Promise.resolve({ ok: false, json: async () => ({ error: 'تعذّر إرسال الطلب.' }) });
   };
+  passTheGate(w);
   w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   return waitFor(w, () => !w.document.getElementById('form-msg').hidden)
     .catch(() => errors.push('[draft] a failed send said nothing'))
@@ -1056,6 +1091,7 @@ tasks.push(() => {
 tasks.push(() => {
   const w = boot();
   fill(w, 'adult');
+  passTheGate(w);
   w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   return waitFor(w, () => w.__calls.some(c => c.method === 'POST'))
     .catch(() => errors.push('[send] the request was never sent'))
@@ -1175,6 +1211,7 @@ tasks.push(() => {
       }
       fill(w, 'adult');
       place.value = 'بئر قاصد';
+      passTheGate(w);
       w.document.getElementById('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
       return waitFor(w, () => w.__calls.some(c => c.method === 'POST'))
         .catch(() => errors.push('[wilaya] the form would not send once the lists were gone'))
@@ -1446,8 +1483,8 @@ const card_fields = () => {
     set('password_confirm', 'correct-horse');
   };
 
-  const submit = () => id('reg-form').dispatchEvent(
-    new w.Event('submit', { bubbles: true, cancelable: true }));
+  const submit = () => { passTheGate(w); return id('reg-form').dispatchEvent(
+    new w.Event('submit', { bubbles: true, cancelable: true })); };
 
   const lastBody = () => {
     const posts = w.__calls.filter(c => c.method === 'POST' && /\/api\/applications$/.test(c.url));
@@ -1523,8 +1560,8 @@ const adult_card = () => {
   const set = (f, v) => { const n = id(f); n.value = v; n.dispatchEvent(new w.Event('input', { bubbles: true })); };
   /* Everybody's fields, from the one list. */
   answerEverything(w, set);
-  const submit = () => id('reg-form').dispatchEvent(
-    new w.Event('submit', { bubbles: true, cancelable: true }));
+  const submit = () => { passTheGate(w); return id('reg-form').dispatchEvent(
+    new w.Event('submit', { bubbles: true, cancelable: true })); };
 
   return waitFor(w, () => id('wilaya') && id('wilaya').options.length > 1).then(() => {
     const radio = w.document.querySelector('input[name="category"][value="adult"]');
@@ -1732,6 +1769,7 @@ const guardian_returns = () => {
     id('password_confirm').value = '';
     id('username').value = '';
     id('form-msg').hidden = true;
+    passTheGate(w);
     id('reg-form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
     return waitFor(w, () => w.__calls.some(c => c.method === 'POST'))
       .catch(() => errors.push('[sibling] the second child was never sent: ' + say()));
@@ -1893,6 +1931,7 @@ const photo_is_required = () => {
     fill(w, 'adult');
     /* Taken away again, which is the state a person is in who has not chosen one. */
     w.SADARA_FORM.setPhoto('');
+    passTheGate(w);
     id('reg-form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
     const after = w.__calls.filter(c => c.method === 'POST').length;
     if (after !== before) {
@@ -1905,6 +1944,7 @@ const photo_is_required = () => {
     /* And with one, it goes. */
     w.SADARA_FORM.setPhoto(TINY_PHOTO);
     id('form-msg').hidden = true;
+    passTheGate(w);
     id('reg-form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
     return waitFor(w, () => w.__calls.some(c => c.method === 'POST'))
       .catch(() => errors.push('[photo] the request never went with a photograph on it'));

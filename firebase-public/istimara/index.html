@@ -291,6 +291,12 @@
         </div>
 
         <div class="row">
+          <!-- The pool asked for at the gate, in the club's own words. Separate from
+               the select below on purpose: this is where the request was aimed, and
+               that select is where the person may change their mind. Keeping the
+               two apart is what lets the committee see both. -->
+          <input type="hidden" id="selected_pool" name="selected_pool" value="" />
+
           <label class="f">
             <span class="lbl">المسبح أو المنشأة</span>
             <!-- Filled from /api/facilities, which the club edits in Settings.
@@ -495,6 +501,42 @@
        things arriving at once are both readable and neither hides the other. -->
   <div class="toasts" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 
+  <!-- The gate comes before every script on purpose.
+
+       A script without `defer` runs the moment it is parsed, so anything the page
+       touches while starting up has to be above it. This block sat at the end of
+       the body once, and the page then asked to open a gate that was not in the
+       document yet: it found nothing, and returned quietly. The markup was served,
+       the options painted, the button was disabled, and every check passed -- the
+       gate simply never appeared. -->
+
+    <!-- ================= اختيار المسبح: cannot be passed =================
+         Shown the moment the page loads and refused until a pool is chosen.
+         The overlay covers the page, Escape is refused and a click outside is
+         refused, because a gate that opens is not a gate. -->
+    <div class="gate" id="pool-gate" role="dialog" aria-modal="true"
+         aria-labelledby="pool-gate-title" hidden>
+      <div class="gate-panel">
+        <h2 id="pool-gate-title">تحديد المسبح</h2>
+        <p class="gate-lead">اختر المسبح الذي تريد التسجيل فيه.</p>
+
+        <div class="gate-pools" id="pool-gate-pools" role="radiogroup"
+             aria-labelledby="pool-gate-title"></div>
+
+        <!-- The club's own words, unaltered, in a frame of its own. This is the
+             sentence that tells a parent where their request stands, and a notice
+             that looks like the rest of the page is a notice nobody reads before
+             agreeing to it. -->
+        <div class="gate-notice">
+          <p>⚠️ تنبيه إداري هام: تعبئة هذه الاستمارة تُمثل "طلباً أولياً" ولا تُعد قبولاً نهائياً في المسبح المختار. تحتفظ لجنة الإدارة بالصلاحية المطلقة في قبول، أو رفض، أو إعادة توجيه الطلبات بناءً على معايير تنظيمية صارمة (من أهمها مقر الإقامة وطاقة الاستيعاب). جميع قرارات اللجنة بخصوص ضبط القوائم النهائية هي قرارات سيادية وغير قابلة للمراجعة.</p>
+        </div>
+
+        <button type="button" class="btn btn-primary gate-go" id="pool-gate-go" disabled>
+          متابعة
+        </button>
+      </div>
+    </div>
+
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -507,5 +549,6 @@
   <script>if ('serviceWorker' in navigator && location.protocol === 'https:')
     window.addEventListener('load', function () {
       navigator.serviceWorker.register('/sw.js').catch(function () {}); });</script>
+
 </body>
 </html>

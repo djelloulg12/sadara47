@@ -402,6 +402,16 @@
     'national_id_expiry', 'guardian_national_id_expiry', 'guardian_card_issued'
   ]);
 
+  /* The pool a request was aimed at, in the club's own spelling of it.
+     Trimmed and otherwise untouched: a name is not something to reformat, and a
+     number would be meaningless the moment a pool is inserted or reordered.
+
+     Trimmed is not a formality. Two spellings of one pool are two pools when the
+     committee counts who asked for where -- the same reason a card number is
+     folded before it is compared, and the same failure if it is skipped. */
+  const poolName = value => String((value && value.name) || value || '')
+    .trim();
+
   const normaliseIncoming = body => {
     if (!body || typeof body !== 'object') return body;
     const out = { ...body };
@@ -410,6 +420,7 @@
       if (DATE_FIELDS.has(key)) out[key] = isoDate(out[key]);
       else if (DIGIT_FIELDS.has(key)) out[key] = latinDigits(out[key]);
     }
+    if ('selected_pool' in out) out.selected_pool = poolName(out.selected_pool);
     return out;
   };
 

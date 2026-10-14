@@ -138,6 +138,12 @@ def normalise_incoming(body):
             out[key] = iso_date(value)
         elif key in DIGIT_FIELDS:
             out[key] = latin_digits(value)
+    # The pool the request was aimed at. Trimmed, and otherwise untouched: a name
+    # is the club's own spelling of it, and two spellings of one pool are two
+    # pools when the committee counts who asked for where. The same reason
+    # `norm_id` folds a card number, for the same failure if it is skipped.
+    if 'selected_pool' in out:
+        out['selected_pool'] = str(out['selected_pool'] or '').strip()
     return out
 
 
@@ -359,6 +365,15 @@ def init_db():
         # was issued.
         'national_id_expiry': 'TEXT', 'guardian_national_id_expiry': 'TEXT',
         'guardian_card_issued': 'TEXT'})
+    # The pool a request was aimed at, asked for before the form can be filled
+    # and kept apart from `facility`, which is where the person may change their
+    # mind. Added here rather than in a migration of its own, so it is added by
+    # the same path every other column was added by -- and added only when it is
+    # missing, so a database that already has it is left untouched.
+    #
+    # `ALTER TABLE ... ADD COLUMN` appends to the definition and rewrites no row.
+    # A request already on file reads NULL here, which is true: nobody asked.
+    ensure_columns(c, 'applications', {'selected_pool': 'TEXT'})
     ensure_columns(c, 'users', {
         'username': 'TEXT', 'registration_id': 'TEXT', 'request_status': 'TEXT',
         'rejection_reason': 'TEXT'})
@@ -690,6 +705,11 @@ class App(SimpleHTTPRequestHandler):
                     'gender':d.get('gender',''),'blood_group':d.get('blood_group',''),'level':d.get('level','مبتدئ'),
                     'phone':d.get('phone','') or d.get('coach_phone',''),'whatsapp':d.get('whatsapp',''),'address':d.get('address',''),
                     'facility':d.get('facility','المسبح الأولمبي'),
+                    # The pool asked for at the gate. Kept beside `facility` and not
+                    # merged with it: the committee's notice says a request may be
+                    # redirected, and it cannot do that without knowing where the
+                    # request was aimed before they moved it.
+                    'selected_pool':str(d.get('selected_pool') or '').strip(),
                     'subscription_code':d.get('subscription_code','quarter'),
                     'transport':int(bool(d.get('transport'))),'uniform':int(bool(d.get('uniform'))),
                     'payment_method':d.get('payment_method','cash'),'expected_amount':amount,

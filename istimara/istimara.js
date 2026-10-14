@@ -480,6 +480,129 @@
 
   /* The pool names come from the club, so a rename in Settings reaches this form
      without a code change. An empty or failed list keeps the built-in four. */
+  /* ================= the pool gate =================
+
+     The person cannot touch the form until they have said which pool they are
+     asking for. It opens with the page and is refused until a pool is chosen:
+     Escape, a click outside, scrolling the form underneath, and the keyboard all
+     find it closed.
+
+     Escape is refused rather than answered. Somebody who presses Escape is not
+     asking a question, and a message over the notice they have just read is
+     noise -- the notice is what they are refusing to skip past, so it stays
+     quiet and the gate stays shut. */
+
+  var gateOpen = false;
+
+  function poolNames() {
+    return facilities.length ? facilities : FALLBACK_FACILITIES;
+  }
+
+  function paintGatePools() {
+    var box = el('pool-gate-pools');
+    if (!box) return;
+    var chosen = val('selected_pool');
+    var names = poolNames();
+
+    box.innerHTML = names.map(function (name, i) {
+      return '<label class="gate-pool">'
+        + '<input type="radio" name="selected_pool_choice" value="' + F.esc(name) + '"'
+        + (name === chosen ? ' checked' : '')
+        + (i === 0 && !chosen ? ' data-first' : '') + ' />'
+        + '<span class="gate-pool-name">' + F.esc(name) + '</span>'
+        + '</label>';
+    }).join('');
+
+    /* The way through opens on a choice and only on a choice. It is disabled in
+       the markup as well, so it is disabled before this runs. */
+    var go = el('pool-gate-go');
+    if (go) go.disabled = !chosen;
+
+    Array.prototype.forEach.call(box.querySelectorAll('input'), function (radio) {
+      radio.addEventListener('change', function () {
+        var button = el('pool-gate-go');
+        if (button) button.disabled = false;
+      });
+    });
+  }
+
+  function gateRefuse() { /* a gate that opens is not a gate */ }
+
+  function openPoolGate() {
+    var gate = el('pool-gate');
+    if (!gate) return;
+    gateOpen = true;
+    gate.hidden = false;
+    document.body.classList.add('gate-open');
+    paintGatePools();
+
+    if (!gate.dataset.bound) {
+      gate.dataset.bound = '1';
+      /* Outside the panel is refused: the click is taken and answered with
+         nothing, rather than left to reach whatever is behind the overlay. */
+      gate.addEventListener('mousedown', gateRefuse);
+      gate.addEventListener('click', gateRefuse);
+      var go = el('pool-gate-go');
+      if (go) go.addEventListener('click', acceptPoolGate);
+    }
+
+    /* The keyboard finds the gate first, so the first thing a person reaches is
+       a choice rather than the top of a form they may not use yet. */
+    var first = gate.querySelector('.gate-pool input[data-first]')
+      || gate.querySelector('.gate-pool input');
+    if (first) { try { first.focus(); } catch (_) { /* older browsers */ } }
+  }
+
+  function closePoolGate() {
+    var gate = el('pool-gate');
+    if (!gate) return;
+    gateOpen = false;
+    gate.hidden = true;
+    document.body.classList.remove('gate-open');
+  }
+
+  function acceptPoolGate() {
+    var picked = el('pool-gate-pools')
+      ? (el('pool-gate-pools').querySelector('input:checked') || {}).value
+      : '';
+    if (!picked) return;
+
+    /* The name, never an index: a number breaks the day the club reorders. */
+    var field = el('selected_pool');
+    if (field) field.value = String(picked);
+
+    /* Step four gets the same pool, when that pool is among its options, so a
+       request sent straight through does not arrive asking for one pool and
+       naming another. The person may still change it in step four -- the notice
+       tells them they may -- and `selected_pool` keeps what they asked for. */
+    var select = el('facility');
+    if (select && select.options) {
+      for (var i = 0; i < select.options.length; i++) {
+        if (select.options[i].value === picked) { select.value = picked; break; }
+      }
+    }
+
+    updateTotal();
+    saveDraft();
+    closePoolGate();
+    /* The form is theirs now, so the form takes the focus. */
+    var firstField = form.querySelector('input:not([type=hidden]):not([type=radio]):not([type=checkbox])');
+    if (firstField) { try { firstField.focus(); } catch (_) { /* not focusable */ } }
+  }
+
+  /* A pool on file that is no longer offered. The form cannot be sent claiming a
+     pool nobody is taking requests for, and it is not worth a silence: the club
+     has to be told the list moved under them. */
+  function reconcilePool(data) {
+    var saved = String((data && data.selected_pool) || '').trim();
+    if (!saved) return;
+    var names = poolNames();
+    if (names.indexOf(saved) !== -1) return;
+    say('المسبح المحفوظ لم يعد متاحاً. اختر المسبح من جديد.', 'error');
+    var field = el('selected_pool');
+    if (field) field.value = '';
+  }
+
   function paintFacilities() {
     var names = facilities.length ? facilities : FALLBACK_FACILITIES;
     var select = el('facility');
@@ -488,6 +611,11 @@
       return '<option value="' + F.esc(n) + '">' + F.esc(n) + '</option>';
     }).join('');
     if (keep && names.indexOf(keep) !== -1) select.value = keep;
+    /* The gate's choices are this list. It is drawn from here rather than from a
+       second copy in the script, so a pool renamed in Settings is renamed in both
+       places at once -- and an open gate is repainted, so the list replacing the
+       built-in names is not something the person has to reload to see. */
+    if (typeof paintGatePools === 'function') paintGatePools();
   }
 
   function loadFacilities() {
@@ -791,12 +919,11 @@
     birth_certificate_no: 'اكتب رقم شهادة الميلاد.',
     wilaya: 'اختر الولاية.',
     facility: 'اختر المسبح.',
+    selected_pool: 'اختر المسبح الذي تريد التسجيل فيه.',
     whatsapp: 'اكتب رقم واتساب. إن لم يكن لديك رقم آخر فاكتب نفس رقم الهاتف.',
     payment_method: 'اختر طريقة الدفع.',
     guardian_relation: 'اختر صلة القرابة.',
     guardian_phone: 'اكتب هاتف الولي.',
-    guardian_national_id_expiry: 'اكتب تاريخ انتهاء بطاقة الولي بصيغة سنة/شهر/يوم — 2031/06/02.',
-    guardian_card_issued: 'اكتب تاريخ إصدار بطاقة الولي بصيغة سنة/شهر/يوم — 2021/06/02.',
     photo: 'الصورة إجبارية. اختر صورة واضحة، والوجه داخل الإطار.',
     birth_place: 'اختر بلدية الميلاد من القائمة -- تُكتب في استمارة النادي بعد «ب:».',
     password: 'كلمة المرور ثماني خانات على الأقل.',
@@ -924,6 +1051,11 @@
       guardian_child: (val('first_name_ar') + ' ' + val('last_name_ar')).trim(),
       subscription_code: val('subscription_code'),
       plan_name: plan.name,
+      /* Where the request was aimed at the gate, kept apart from `facility`,
+         which is where the person may change their mind in step four. The
+         committee is entitled to see both: the notice says they may redirect a
+         request, and it cannot do that without knowing where it was sent. */
+      selected_pool: val('selected_pool'),
       facility: val('facility'),
       /* The account the request is filed under. The password is not among them
          and never is: Firebase hashed it before it was ever written anywhere, and
@@ -1461,9 +1593,23 @@
 
   /* ---------------- wiring ---------------- */
 
+  /* One refusal, on the document, so there is no place Escape is not caught. */
+  document.addEventListener('keydown', function (e) {
+    if (gateOpen && (e.key === 'Escape' || e.key === 'Esc')) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  });
+
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     say('');
+    /* The gate is not decoration, so it is checked here too and not only in the
+       overlay. A form that can be sent without a pool would put a request on
+       file that nobody can answer, and the committee's first question about it
+       would be which pool it was for. */
+    if (gateOpen) { openPoolGate(); return; }
+    if (!val('selected_pool')) { openPoolGate(); return; }
     var bad = validate();
     if (bad.length) {
       var first = flag(bad);
@@ -1609,10 +1755,22 @@
   updateTotal();
   paintPhoto();
 
-  if (applyDraft(readDraft())) {
+  /* The gate opens before anything else is read, so the pools on the books are
+     on the gate before the club's own list arrives -- the built-in names first,
+     then replaced by the real ones. A person coming back to a half-finished form
+     finds the pool they already chose marked on the gate and has only to confirm
+     it; the gate still opens, because it opens on every load. */
+  openPoolGate();
+
+  var kept = readDraft();
+  if (applyDraft(kept)) {
     say('استعدنا مسودة حفظتها على هذا الجهاز. راجعها ثم أرسل.', 'ok');
     notify('استُعيدت مسودة من هذا الجهاز.', 'info', 'راجعها ثم أرسل.');
   }
+  /* After the draft is back in, because that is when there is a saved pool to
+     check against the pools on offer. */
+  reconcilePool(kept);
+  paintGatePools();
   loadPlans();
   loadFacilities();
 })();

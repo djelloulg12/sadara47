@@ -470,6 +470,135 @@ input.bad, select.bad, textarea.bad { border-color: var(--danger); background: #
    on its own. These rules only guard against a stray Ctrl+P on
    the page itself.
    ========================================================== */
+/* ===================================================================
+   The pool gate. Shown when the page loads and refused until a pool
+   is chosen -- Escape is caught, a click outside is caught, and the
+   page behind cannot be scrolled or focused.
+   =================================================================== */
+.gate[hidden] { display: none; }
+
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;                     /* over everything on this page */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(9, 16, 28, .72); /* dark enough to read as closed off */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* The page behind does not move while the gate is up. A gate that lets you
+   scroll the form under it is telling you the form is still open. */
+body.gate-open { overflow: hidden; }
+
+.gate-panel {
+  width: 100%;
+  max-width: 34rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .32);
+  padding: 1.5rem 1.25rem 1.25rem;
+  text-align: center;
+}
+
+.gate-panel h2 {
+  margin: 0 0 .25rem;
+  font-size: 1.3rem;
+  color: #0d2a4a;
+}
+
+.gate-lead {
+  margin: 0 0 1rem;
+  color: #556;
+  font-size: .95rem;
+}
+
+/* ---- the choices ---- */
+.gate-pools {
+  display: grid;
+  gap: .5rem;
+  margin-bottom: 1.1rem;
+  text-align: right;
+}
+
+.gate-pool {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  padding: .7rem .85rem;
+  border: 2px solid #dbe3ec;
+  border-radius: 12px;
+  background: #fbfdff;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+
+.gate-pool:hover { border-color: #9dc2e8; }
+
+/* The radio itself is kept, not replaced. It is the thing that is submitted and
+   the thing a keyboard moves between, so it stays visible: a circle that fills
+   is the plainest answer to "did it take?". */
+.gate-pool input {
+  margin: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+  accent-color: #0d6efd;
+}
+
+.gate-pool-name { font-weight: 600; color: #16324f; }
+
+.gate-pool:has(input:checked) {
+  border-color: #0d6efd;
+  background: #eef5ff;
+}
+
+.gate-pool:has(input:focus-visible) {
+  outline: 3px solid #9dc2e8;
+  outline-offset: 2px;
+}
+
+/* ---- the notice ---- */
+.gate-notice {
+  margin: 0 0 1.1rem;
+  padding: .85rem 1rem;
+  border: 1px solid #f0c36d;
+  border-right: 5px solid #e0a11a;
+  border-radius: 10px;
+  background: #fff8e8;
+  text-align: right;
+}
+
+.gate-notice p {
+  margin: 0;
+  color: #6b4a06;
+  font-size: .92rem;
+  line-height: 1.8;
+}
+
+/* ---- the way through ---- */
+.gate-go { width: 100%; }
+
+.gate-go:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .gate-panel { padding: 1.15rem .9rem 1rem; border-radius: 14px; }
+  .gate-notice p { font-size: .86rem; line-height: 1.75; }
+}
+
+@media print {
+  /* A gate printed on top of a form is a gate with no way past it. */
+  .gate { display: none !important; }
+}
+
 @media print {
   body { background: #fff; }
   .page-head, .page-foot, .steps, .action-bar, .done-actions, .summary, .form-msg { display: none !important; }
