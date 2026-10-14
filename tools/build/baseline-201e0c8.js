@@ -481,13 +481,100 @@ function printGroupsSheet(){
     +(groups().length?groups().map(g=>'<h4 class="roster-group">'+esc(g.name)+' — '+swimmersOf(g.name).length+' سباح</h4>'+buildMembersTable(swimmersOf(g.name))).join(''):'');
   printArea(box,{title:'قائمة الأفواج والمدربين',variant:'roster'});
 }
+/* A swimmer's name in the two columns a sheet has for it.
+
+   Accepted requests carry the two names apart, which is how the registration form
+   collects them. Older records and anything added by hand carry one string, so it
+   is split on the first space -- the surname is what is left, and in this club the
+   second half is the family. */
+function swimmerNames(s){
+  const first=String(s.first_name_ar||'').trim();
+  const last=String(s.last_name_ar||'').trim();
+  if(first||last)return {first:first,last:last};
+  const whole=String(s.name||'').trim().split(/\s+/);
+  return {first:whole[0]||'',last:whole.slice(1).join(' ')};
+}
+
+/* The attendance sheet: the club's five columns, and a pen's row.
+
+   What a coach reads off paper is the name, the surname, the day they were born
+   -- so a junior is not confused with a senior who shares the first name -- whether
+   they came, and somewhere to write. All five, and nothing else.
+
+   Each row is 1.2 cm: what a pen needs and no more, so thirty swimmers are one
+   page rather than one and a half. The header is a line rather than a panel,
+   because a sheet carried to the pool is not read on a screen.
+
+   What was recorded is printed and the cell is left tall enough to correct by
+   hand -- a printed sheet is usually there because somebody was not in the room
+   when the mark was made, and a sheet that can only be read cannot be fixed. */
+/* Where a member's photograph is.
+
+   The photograph has been collected since the form was built -- it is mandatory,
+   and it is already printed on the registration form -- and it stopped at the
+   request. So every accepted member was written without it, and both card engines
+   found nothing: the club's batch and the member's own card printed a name, a
+   number, and the club's logo standing in for a face.
+
+   Three sources, in the order they should be believed. The member's own copy
+   first, so neither card depends on the requests being loaded -- and a coach's
+   browser cannot read the requests, so a card that reached for them would print a
+   blank face on exactly the screen where a face is wanted. Then the request the
+   member came from, which is where the photograph has always been for everybody
+   who joined before the member carried it. Then the picture the member uploaded
+   for themselves, which is what a member printing their own card should see. */
+function memberPhoto(s, profile){
+  const direct=s&&(s.photo||s.photo_url||s.photoDataUrl);
+  if(direct&&/^(data:|https?:)/.test(String(direct)))return direct;
+  const from=s&&(s.from_application||s.application_no||s.application_id);
+  if(from){
+    const req=((state.applications||[]).find(a=>String(a.id)===String(from)
+      ||String(a.application_no||'')===String(from))||{});
+    const old=req&&(req.photo||req.photo_url||req.photoDataUrl);
+    if(old&&/^(data:|https?:)/.test(String(old)))return old;
+  }
+  const own=profile&&(profile.photo||profile.photo_url||profile.photoDataUrl);
+  return own&&/^(data:|https?:)/.test(String(own))?own:'';
+}
+
 function printAttendanceSheet(){
-  const list=state.swimmers||[];
+  const group=state.attendanceGroup||'all';
+  const list=group==='all'?(state.swimmers||[]):swimmersOf(group);
+  const day=attendanceDay();
+  const session=attendanceSessionLabel();
+  const present=list.filter(s=>{const m=dayMark(day,s.id);return m&&m.status==='present';}).length;
+  const absent=list.filter(s=>{const m=dayMark(day,s.id);return m&&m.status==='absent';}).length;
+  const late=list.filter(s=>{const m=dayMark(day,s.id);return m&&m.status==='late';}).length;
+  const marked=list.filter(s=>dayMark(day,s.id)).length;
+
+  const statusCell=s=>{
+    const m=dayMark(day,s.id);
+    const cls=m&&m.status==='present'?'ok':m&&m.status==='absent'?'no':m&&m.status==='late'?'late':'';
+    const word=m?(ATTENDANCE_LABELS[m.status]||m.status):'';
+    return '<td class="att-state'+(cls?' is-'+cls:'')+'">'+esc(word)+'</td>';
+  };
+
   const box=document.createElement('section');
-  box.className='roster';
-  box.innerHTML='<div class="roster-head"><div><h3>كشف حضور حصة '+esc(slashDate(todayISO()))+'</h3><p>مسبح الصدارة · '+esc(slashDate(todayISO()))+'</p></div><div class="roster-count"><b>'+clubDigits(list.length)+'</b><small>سباح</small></div></div>'
-    +(list.length?buildMembersTable(list,'<th>الحالة</th><th>وقت الدخول</th>',s=>{const a=attendanceOf(s.id);return '<span class="status '+(a?(a.status==='present'?'success':'pending'):'pending')+'">'+(a?ATTENDANCE_LABELS[a.status]||a.status:'لم يُسجّل')+'</span><br><small>'+esc(a&&a.at?String(a.at).slice(11,16):'—')+'</small>';}):'<p class="empty-cell">لا يوجد سباحة مسجلون.</p>');
-  printArea(box,{title:'كشف الحضور',sub:longDate(),variant:'roster'});
+  box.className='roster att-sheet';
+  box.innerHTML='<div class="att-line"><b>كشف حضور '+esc(session)+'</b>'
+    +'<span>'+esc(CLUB.name)+' · '+esc(slashDate(day))
+    +(group==='all'?'':' · '+esc(groups().find(g=>g.name===group)?groups().find(g=>g.name===group).name:group))
+    +'</span>'
+    +'<span class="att-tally">حاضر '+clubDigits(present)+' · غائب '+clubDigits(absent)+' · متأخر '+clubDigits(late)+' · بلا تسجيل '+clubDigits(list.length-marked)+'</span></div>'
+    +(list.length
+      ? '<table class="print-table att-table"><thead><tr>'
+        +'<th>الاسم</th><th>اللقب</th><th>تاريخ الميلاد</th><th>حاضر / غائب</th><th>ملاحظة</th>'
+        +'</tr></thead><tbody>'
+        +list.map(s=>{const n=swimmerNames(s);return '<tr>'
+          +'<td>'+esc(n.first)+'</td>'
+          +'<td>'+esc(n.last)+'</td>'
+          +'<td dir="ltr">'+esc(slashDate(s.birth_date||''))+'</td>'
+          +statusCell(s)
+          +'<td></td></tr>';}).join('')
+        +'</tbody></table>'
+      : '<p class="empty-cell">لا يوجد سباحون في هذه القائمة.</p>')
+    +'<div class="sheet-sign"><span>توقيع المشرف</span><span>التاريخ</span><span>ختم النادي</span></div>';
+  printArea(box,{title:'كشف الحضور',sub:slashDate(day),variant:'roster'});
 }
 function printCardsSheet(){
   const list=state.swimmers||[];
@@ -524,20 +611,84 @@ state.schedules=state.schedules||[];
 state.cards=state.cards||[];
 state.attendance=state.attendance||{};
 state.attendanceByDay=state.attendanceByDay||{};
+state.attendanceDate=state.attendanceDate||'';
+
+/* ---------------------- the session being recorded ----------------------
+
+   The club fills attendance in after the session, not during it: a coach who was
+   at the pool on Saturday writes it on Sunday. Every mark used to be filed under
+   whatever day it happened to be clicked, so a sheet filled in late landed on the
+   wrong day and the weekly bars and the printed sheet were quietly wrong about it.
+
+   A week back is as far as it goes. A week is how long a forgotten sheet stays a
+   forgotten sheet; further back is either a different mistake or a different
+   season. A day in the future is not a session yet, so it is refused rather than
+   offered -- and a stored day that falls outside the window falls back to today
+   rather than being trusted, because a page left open across a week would otherwise
+   offer a week-old session as though it were this morning's. */
+const ATTENDANCE_BACK_DAYS=7;
+function attendanceEarliest(){
+  const d=new Date();d.setDate(d.getDate()-ATTENDANCE_BACK_DAYS);
+  return isoDay(d);
+}
+function attendanceDay(){
+  const today=todayISO();
+  const chosen=String(state.attendanceDate||'');
+  if(/^\d{4}-\d{2}-\d{2}$/.test(chosen)&&chosen>=attendanceEarliest()&&chosen<=today)return chosen;
+  return today;
+}
+function attendanceIsPast(){return attendanceDay()!==todayISO();}
+
+/* The sessions a sheet can be written for, oldest last. A select rather than a
+   date box: a date box shows its format in whatever language the browser is set
+   to, and this platform writes dates one way. Seven named days in the club's
+   digits promise that without the browser's help -- and put the limit where it
+   can be seen, which is the reason the club asked for one. */
+function attendanceDayChoices(){
+  const out=[];
+  for(let i=ATTENDANCE_BACK_DAYS;i>=0;i--){
+    const d=new Date();d.setDate(d.getDate()-i);
+    const key=isoDay(d);
+    out.push({key:key,label:AR_DAYS[d.getDay()]+' \u00b7 '+slashDate(key)});
+  }
+  return out;
+}
+function attendanceDayPicker(){
+  const day=attendanceDay();
+  return '<select class="filter" id="attendance-date" aria-label="حصة اليوم">'
+    +attendanceDayChoices().map(c=>'<option value="'+c.key+'"'+(c.key===day?' selected':'')+'>'+esc(c.label)+'</option>').join('')
+    +'</select>';
+}
+/* What to call it. A page showing Saturday must not call itself today. */
+function attendanceSessionLabel(){
+  return attendanceIsPast()?('حصة يوم '+slashDate(attendanceDay())):'حصة اليوم';
+}
+
+/* One place reads a mark, because the day map holds the status and the moment it
+   was written, and a browser still holding last month's page holds the old shape:
+   a bare status string. Read raw, an object reads as "[object Object]" and every
+   swimmer looks absent -- quietly, and only for the people who had not reloaded. */
+function dayMark(day,id){
+  const rec=((state.attendanceByDay||{})[day]||{})[String(id)];
+  if(!rec)return null;
+  if(typeof rec==='string')return {status:rec,at:''};
+  return {status:rec.status||'present',at:rec.at||''};
+}
 state.extras=state.extras||{transport:900,uniform:2500};
 state.groups=state.groups||[];
 
 function attendanceOf(id){
-  const rec=(state.attendance||{})[String(id)];
-  if(!rec)return null;
-  const last=Array.isArray(rec)?rec[rec.length-1]:rec;
-  if(!last)return null;
-  return {status:last.status||'present',at:last.check_in||last.marked_at||last.time||'',date:last.session_date||last.date||''};
+  /* The day being recorded, and not the swimmer's last mark anywhere: a page
+     showing Saturday must not show what happened to them on Sunday. */
+  const m=dayMark(attendanceDay(),id);
+  if(!m)return null;
+  return {status:m.status,at:m.at,date:attendanceDay()};
 }
-function attendanceRate(list){
+function attendanceRate(list,day){
   const src=list||state.swimmers||[];
   if(!src.length)return null;
-  const present=src.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='present';}).length;
+  const on=day||attendanceDay();
+  const present=src.filter(s=>{const a=dayMark(on,s.id);return a&&a.status==='present';}).length;
   return Math.round(present/src.length*100);
 }
 function weeklyAttendance(){
@@ -548,7 +699,7 @@ function weeklyAttendance(){
     const key=isoDay(d);
     const day=(state.attendanceByDay||{})[key]||{};
     const ids=Object.keys(day);
-    out.push({key,label:AR_DAYS[d.getDay()],value:ids.length?Math.round(ids.filter(k=>day[k]==='present').length/ids.length*100):null,isToday:i===0});
+    out.push({key,label:AR_DAYS[d.getDay()],value:ids.length?Math.round(ids.filter(k=>{const m=dayMark(key,k);return m&&m.status==='present';}).length/ids.length*100):null,isToday:i===0});
   }
   return out;
 }
@@ -775,18 +926,19 @@ function pageAttendance(){
   const group=state.attendanceGroup||'all';
   const shown=group==='all'?list:swimmersOf(group);
   const opts=['present','late','absent'];
-  return '<div class="attendance-summary"><div><b>نسبة الحضور اليوم</b><strong>'+(rate===null?'—':clubDigits(rate)+'%')+'</strong></div>'
+  return '<div class="attendance-summary"><div><b>'+esc(attendanceSessionLabel())+'</b><strong>'+(rate===null?'—':clubDigits(rate)+'%')+'</strong></div>'
     +'<div><b>حاضر</b><strong class="green">'+shownCount('present')+'</strong></div>'
     +'<div><b>غائب</b><strong class="red-text">'+shownCount('absent')+'</strong></div>'
     +'<div><b>متأخر</b><strong class="orange">'+shownCount('late')+'</strong></div></div>'
     +'<div class="toolbar"><div class="toolbar-group">'
+    +attendanceDayPicker()
     +'<select class="filter" id="attendance-group"><option value="all">كل الأفواج</option>'+groups().map(g=>'<option'+(g.name===group?' selected':'')+'>'+esc(g.name)+'</option>').join('')+'</select>'
     +printBtn('print-attendance','طباعة كشف الحضور')
     +'<button class="btn btn-outline" data-action="mark-all-present">✓ تأكيد الجميع</button>'
     +'<button class="btn btn-outline" data-action="reset-attendance">↺ تصفير</button>'
     +'<button class="btn btn-outline" data-action="refresh-data">↻ تحديث</button>'
-    +'</div><span class="page-description">'+esc(slashDate(longDate()))+' · '+esc(slashDate(todayISO()))+'</span></div>'
-    +'<section class="panel table-panel"><div class="panel-head"><div><h3>حضور حصة اليوم</h3><p>'+clubDigits(shown.length)+' سباح · اضغط على الحالة لتغييرها</p></div></div>'
+    +'</div><span class="page-description">'+esc(slashDate(longDate()))+'</span></div>'
+    +'<section class="panel table-panel"><div class="panel-head"><div><h3>حضور '+esc(attendanceSessionLabel())+'</h3><p>'+clubDigits(shown.length)+' سباح · اضغط على الحالة لتغييرها</p></div></div>'
     +'<div class="table-scroll"><table><thead><tr><th>السباح</th><th>الفوج</th><th>وقت الدخول</th><th>الحالة</th><th>تغيير الحالة</th></tr></thead><tbody>'
     +(shown.length?shown.map(s=>{const a=attendanceOf(s.id);const cur=a?a.status:'';return '<tr><td><span class="table-avatar">'+esc((s.name||'?')[0])+'</span><b>'+esc(s.name||'')+'</b></td>'
       +'<td>'+esc(s.group||'—')+'</td><td dir="ltr">'+(a&&a.at?esc(String(a.at).slice(11,16)||'—'):'—')+'</td>'
@@ -893,7 +1045,7 @@ function myAttendance(){
   const me=mySwimmer();
   const out=[];
   const days=state.attendanceByDay||{};
-  if(me)Object.keys(days).sort().forEach(k=>{const st=days[k][me.id];if(st)out.push({date:k,status:st});});
+  if(me)Object.keys(days).sort().forEach(k=>{const m=dayMark(k,me.id);if(m)out.push({date:k,status:m.status});});
   return out.reverse();
 }
 function roleHome(role){
@@ -939,11 +1091,12 @@ function roleAttendance(){
   if(role==='coach'||role==='parent'){
     const list=role==='coach'?(state.swimmers||[]):[mySwimmer()].filter(Boolean);
     const rate=attendanceRate(list);
-    return '<div class="attendance-summary"><div><b>نسبة الحضور اليوم</b><strong>'+(rate===null?'—':clubDigits(rate)+'%')+'</strong></div>'
+    return '<div class="attendance-summary"><div><b>'+esc(attendanceSessionLabel())+'</b><strong>'+(rate===null?'—':clubDigits(rate)+'%')+'</strong></div>'
       +'<div><b>حاضر</b><strong class="green">'+clubDigits(list.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='present';}).length)+'</strong></div>'
       +'<div><b>غائب</b><strong class="red-text">'+clubDigits(list.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='absent';}).length)+'</strong></div>'
       +'<div><b>متأخر</b><strong class="orange">'+clubDigits(list.filter(s=>{const a=attendanceOf(s.id);return a&&a.status==='late';}).length)+'</strong></div></div>'
       +'<div class="toolbar"><span class="page-description">'+esc(slashDate(longDate()))+'</span><div class="toolbar-group">'
+      +(role==='coach'?attendanceDayPicker():'')
       +printBtn('print-role-attendance','طباعة الكشف')+(role==='coach'?'<button class="btn btn-primary" data-action="mark-all-present">✓ تأكيد الجميع</button>':'')+'</div></div>'
       +'<section class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>السباح</th><th>الفوج</th><th>الحالة</th>'+(role==='coach'?'<th>تغيير الحالة</th>':'')+'</tr></thead><tbody>'
       +(list.length?list.map(s=>{const a=attendanceOf(s.id);const cur=a?a.status:'';return '<tr><td><b>'+esc(s.name||'')+'</b></td><td>'+esc(s.group||'—')+'</td>'
@@ -953,7 +1106,9 @@ function roleAttendance(){
       +'</tbody></table></div></section>';
   }
   const rows=myAttendance();
-  const rate=attendanceRate(mySwimmer()?[mySwimmer()]:[]);
+  /* A member is shown today, not whichever session a manager left open on the
+     same device -- and said as today, which is what it is. */
+  const rate=attendanceRate(mySwimmer()?[mySwimmer()]:[],todayISO());
   return '<div class="attendance-summary"><div><b>نسبة حضوري</b><strong>'+(rate===null?'—':clubDigits(rate)+'%')+'</strong></div>'
     +'<div><b>حصص حضرتها</b><strong class="green">'+rows.filter(a=>a.status==='present').length+'</strong></div>'
     +'<div><b>غياب</b><strong class="red-text">'+rows.filter(a=>a.status==='absent').length+'</strong></div>'
@@ -1259,11 +1414,12 @@ function applicationsSheet(){
   /* ---------- الحضور ---------- */
   if(a==='mark-attendance'){
     const id=el.dataset.id,status=el.dataset.status;
+    const day=attendanceDay();
     try{
-      await api('/api/attendance','POST',{member_id:id,swimmer_id:id,status});
+      await api('/api/attendance','POST',{member_id:id,swimmer_id:id,status,session_date:day});
       const bucket=state.attendance[id]=state.attendance[id]||[];
-      bucket.push({status,at:new Date().toISOString(),date:todayISO()});
-      (state.attendanceByDay[todayISO()]||(state.attendanceByDay[todayISO()]={}))[id]=status;
+      bucket.push({status,at:new Date().toISOString(),date:day});
+      (state.attendanceByDay[day]||(state.attendanceByDay[day]={}))[id]={status,at:new Date().toISOString()};
       save();render();
     }catch(e){showToast(e.message||'تعذر تسجيل الحضور.','error')}
     return;
@@ -1356,6 +1512,9 @@ bind=function(){
   live('#user-search',e=>{state.userQuery=e.target.value;renderPageOnly()});
   live('#group-filter',e=>{state.groupFilter=e.target.value;renderPageOnly()});
   live('#attendance-group',e=>{state.attendanceGroup=e.target.value;renderPageOnly()});
+  /* Which session is being recorded. Saved, so a coach who is interrupted comes
+     back to the same session rather than to today without meaning to. */
+  live('#attendance-date',e=>{state.attendanceDate=e.target.value;save();renderPageOnly()});
 };
 function renderPageOnly(){
   const p=state.page;
@@ -1419,11 +1578,15 @@ async function syncApi(){
       if(!key)return;
       const status=r.status||'present';
       const at=tsToIso(r.check_in||r.marked_at||r.time);
-      let date=r.session_date||r.date||todayISO();
-      const m=String(at).match(/(\d{4}-\d{2}-\d{2})/);
-      if(m)date=m[1];
+      /* The session is the day on the record; the timestamp is when the writing
+         happened. These are different facts, and they used to be confused: the
+         date was taken out of the timestamp, so a mark written on Sunday for
+         Saturday was filed under Sunday -- and the whole point of asking which
+         session is being recorded would have been to watch it not work. */
+      const stamped=String(at).match(/(\d{4}-\d{2}-\d{2})/);
+      const date=r.session_date||r.date||(stamped&&stamped[1])||todayISO();
       (bucket[key]=bucket[key]||[]).push({status,at,date});
-      (byDay[date]=byDay[date]||{})[key]=status;
+      (byDay[date]=byDay[date]||{})[key]={status,at};
     });
     state.attendance=bucket;
     state.attendanceByDay=byDay;

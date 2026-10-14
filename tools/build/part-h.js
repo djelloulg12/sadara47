@@ -162,13 +162,19 @@ action=async function(a,el){
 
 /* بطاقة الانخراط redesigned */
 function cardMarkup(s,i){
+  const photo=memberPhoto(s, state.profile);
   return '<article class="print-card" data-member="'+esc(s.id)+'">'
     +'<div class="card-band"></div>'
     +'<div class="print-card-inner">'
     +'<div class="print-card-rail"><span class="logo"></span><i>'+esc(CLUB.unit)+'</i></div>'
     +'<div class="print-card-content">'
     +'<div class="print-card-brand"><b>'+esc(CLUB.name)+'</b><small>'+esc(CLUB.season)+'</small></div>'
-    +'<div class="print-card-body"><div><strong>'+esc(s.name||'')+'</strong>'
+    /* A card with no photograph is a card anybody can be handed by somebody else,
+       so the frame is always printed -- empty it reads as a missing photograph on
+       a card that has one, rather than as a card that never had one. */
+    +'<div class="print-card-body">'
+    +'<div class="card-photo">'+(photo?'<img src="'+esc(photo)+'" alt="صورة المنخرط">':'<span>بلا صورة</span>')+'</div>'
+    +'<div><strong>'+esc(s.name||'')+'</strong>'
     +'<small>'+esc(s.group||CLUB.unit)+'</small><small class="id" dir="ltr">No: '+esc(s.id||'')+'</small></div>'
     +'<div class="qr-code" data-qr="'+esc(s.id)+'"></div></div>'
     +'<footer><span>'+esc(CLUB.address)+'</span><span dir="ltr">'+esc(CLUB.phone)+'</span></footer>'

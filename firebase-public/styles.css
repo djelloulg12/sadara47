@@ -583,3 +583,72 @@ body.printing .print-sheet10{display:block!important}
   .roster-block .print-table td:nth-child(8) { white-space: nowrap; }
   .sheet-summary { break-inside: avoid; }
 }
+
+/* ---------------- كشف الحضور ---------------- */
+/* The header is one line. The screen's panel header is sized for a screen and
+   prints as a band of nothing above the content. */
+.att-line {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; padding-bottom: 6px; margin-bottom: 8px;
+  border-bottom: 2px solid var(--line); break-inside: avoid;
+}
+.att-line b { font-size: 13pt; color: var(--teal-dark); }
+.att-line span { font-size: 9.5pt; color: var(--muted); }
+.att-tally { font-weight: 600; color: var(--ink) !important; }
+
+/* The name and the surname are separate columns because the club writes them
+   separately, and a sheet whose names are in one column gets a junior confused
+   with a senior who shares a first name. */
+.att-table th:nth-child(1) { width: 20%; }
+.att-table th:nth-child(2) { width: 20%; }
+.att-table th:nth-child(3) { width: 16%; }
+.att-table th:nth-child(4) { width: 16%; }
+.att-table th:nth-child(5) { width: 28%; }
+.att-table td { vertical-align: middle; }
+.att-table td:nth-child(3) { text-align: center; }
+
+/* Colour is lost to a monochrome printer, a fax and the club's own laser. The
+   status is written as well, because the one thing a sheet has to survive is the
+   one thing that says whether the child turned up. */
+.att-state { font-weight: 700; text-align: center; }
+.att-state.is-ok { color: var(--ok); }
+.att-state.is-no { color: var(--danger); }
+.att-state.is-late { color: #b26a00; }
+
+@media print {
+  /* 1.2 cm is the club's figure and about what a pen needs to write a note in.
+     Left to a browser the rows come out at whatever height the content wants,
+     which for a sheet whose cells are mostly empty is a short sheet padded to
+     full height -- thirty swimmers across one and a half pages. */
+  .att-table tr { height: 1.2cm; }
+  .att-table td,
+  .att-table th { padding: 1mm 2mm !important; vertical-align: middle; }
+  .att-table thead th { border-bottom: 2px solid #9fb6bd !important; background: #f2f7f8 !important; }
+  /* Hairlines: at this density a table without them reads as a grey block, and the
+     eye has to find one name among thirty. */
+  .att-table tbody td { border-bottom: 1px solid #d8e2e6 !important; }
+  .att-table { font-size: 10.5pt; }
+  .att-sheet { break-inside: auto; }
+  .att-sheet .sheet-sign { margin-top: 10px; padding-top: 8px; }
+  .att-sheet .sheet-sign span { padding-bottom: 14px; }
+}
+
+/* ---------------- صورة بطاقة الانخراط ---------------- */
+.card-photo {
+  width: 16mm; height: 21mm; flex: none;
+  border: 1px solid #c8dced; border-radius: 2mm;
+  overflow: hidden; background: #fff;
+}
+/* Cover, not contain: a photograph taken on a phone is rarely the shape a form
+   asked for, and the printed form already crops. A stretched face on a membership
+   card reads as a mistake and is treated as one. */
+.card-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* An empty rectangle is ambiguous -- it reads as a photograph that failed to
+   load, on a card that has one -- so the frame is written instead. */
+.card-photo span {
+  width: 100%; height: 100%; display: grid; place-items: center;
+  font-size: 6.5pt; color: #9db4bb; letter-spacing: .3px;
+}
+@media print {
+  .card-photo { border-color: #b9cfd8; }
+}

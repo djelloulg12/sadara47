@@ -202,6 +202,178 @@ let auditPosted = false;
    is in the club's language rather than the code's, and there is no control left
    that removes anybody. */
 
+/* Three things the club asked for, checked where they can be seen.
+
+   The sheet's five columns and its row height, because a row height left to a
+   browser is whatever the content wants -- and for a sheet whose cells are mostly
+   empty that is a short sheet padded to full height, thirty swimmers across one
+   and a half pages, which is the waste the club named.
+
+   The week, because a limit that is only drawn on the page is a courtesy. It is
+   checked here as an offer: seven days back and today, no more, and nothing in
+   the future -- and the mark itself is checked to land under the day that was
+   chosen, which is the part that can be quietly wrong and look right.
+
+   And the photograph on the card, from both places it can be: the member's own
+   copy, and the request they came from, which is where it is for everybody who
+   joined before the member carried one. */
+
+const PIXEL = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+const dayKey = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+
+/* What a sheet carries for a roster of eight, with the third day's marks on it. */
+const attendance_fixture = () => {
+  const names = [
+    ['مريم', 'بلعيد', '2014/03/12'], ['يوسف', 'قندوز', '2016/07/01'],
+    ['آدم', 'بلعيد', '2012/11/30'], ['ليلى', 'قندوز', '1998/02/19'],
+    ['سفيان', 'بلعيد', '2015/09/05'], ['نور', 'قندوز', '2013/01/22']
+  ];
+  const day = dayKey(2);
+  const byDay = { [day]: {
+    sw0: { status: 'present', at: day + 'T16:05:00.000Z' },
+    sw1: { status: 'absent', at: '' },
+    sw2: { status: 'late', at: '' }
+  } };
+  return {
+    user: { role: 'president', id: 'u1' },
+    groups: [{ name: 'المبتدئون' }, { name: 'المتقدمون' }],
+    attendanceDate: day,
+    attendanceByDay: byDay,
+    swimmers: names.map((n, i) => ({
+      id: 'sw' + i, name: n[0] + ' ' + n[1], first_name_ar: n[0], last_name_ar: n[1],
+      birth_date: n[2], group: i % 2 ? 'المتقدمون' : 'المبتدئون'
+    }))
+  };
+};
+
+pending.push(Promise.resolve().then(() => {
+  const w = boot(attendance_fixture());
+  w.__t.state.page = 'attendance';
+  w.__t.render();
+  w.__t.action('print-attendance');
+  const host = w.document.querySelector('.print-host');
+  if (!host) { errors.push('[sheet] the attendance sheet printed nothing'); return; }
+
+  /* The club's five columns, and not the screen's eight. */
+  const heads = [...host.querySelectorAll('thead th')].map(t => t.textContent.trim());
+  for (const want of ['الاسم', 'اللقب', 'تاريخ الميلاد', 'ملاحظة']) {
+    if (heads.indexOf(want) === -1) errors.push('[sheet] the attendance sheet has no column for ' + want);
+  }
+  if (heads.indexOf('حاضر / غائب') === -1) {
+    errors.push('[sheet] the attendance sheet has no column for presence: ' + heads.join(' | '));
+  }
+  if (heads.length !== 5) {
+    errors.push('[sheet] the attendance sheet has ' + heads.length + ' columns; the club asked for five');
+  }
+
+  /* One swimmer, one row, with the two names apart and the day of birth read. */
+  const first = host.querySelector('tbody tr');
+  if (!first) { errors.push('[sheet] the sheet has no rows'); return; }
+  const cells = [...first.querySelectorAll('td')].map(td => td.textContent.trim());
+  if (cells[0] !== 'مريم' || cells[1] !== 'بلعيد') {
+    errors.push('[sheet] the name is not in two columns: ' + cells[0] + ' / ' + cells[1]);
+  }
+  if (!/^\d{4}\/\d{2}\/\d{2}$/.test(cells[2])) {
+    errors.push('[sheet] the day of birth is not in the club\'s date: ' + cells[2]);
+  }
+  /* And the marks are that day's, not today's -- the whole point of choosing. */
+  if (cells[3] !== 'حاضر') {
+    errors.push('[sheet] the status printed is "' + cells[3] + '" for a swimmer marked present two days back');
+  }
+  if ((host.querySelector('.att-line') || {}).textContent.indexOf(dayKey(2).replace(/-/g, '/')) === -1) {
+    errors.push('[sheet] the sheet does not name the session it is for');
+  }
+
+  /* The row height. A number in a stylesheet, checked here because the club gave
+     the figure and it is the one number in this sheet that decides how much paper
+     it uses. */
+  const css = fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8');
+  if (!/\.att-table tr\s*\{[^}]*height:\s*1\.2cm/.test(css)) {
+    errors.push('[sheet] the rows are not 1.2 cm tall, which is the figure the club gave');
+  }
+  if (!/\.att-table tbody td\s*\{[^}]*border-bottom/.test(css)) {
+    errors.push('[sheet] the rows have no rule between them, so a full sheet reads as a grey block');
+  }
+}));
+
+pending.push(Promise.resolve().then(() => {
+  const w = boot(attendance_fixture());
+  w.__t.state.page = 'attendance';
+  w.__t.render();
+
+  const picker = w.document.getElementById('attendance-date');
+  if (!picker) {
+    errors.push('[session] the attendance page asks nothing about which session is being recorded');
+    return;
+  }
+  /* A week back and today: eight days, and not one more. The limit the club asked
+     for, drawn on the page rather than hidden in an attribute. */
+  const keys = [...picker.options].map(o => o.value);
+  if (keys.length !== 8) {
+    errors.push('[session] the page offers ' + keys.length + ' sessions; a week back and today is eight');
+  }
+  if (keys[keys.length - 1] !== dayKey(0)) {
+    errors.push('[session] the page offers a session in the future');
+  }
+  if (keys[0] !== dayKey(7)) {
+    errors.push('[session] the page offers further back than a week: ' + keys[0]);
+  }
+  /* Written the club's way, with the day named -- a native date box would show its
+     format in whatever language the browser is set to. */
+  for (const o of picker.options) {
+    if (!/\d{4}\/\d{2}\/\d{2}/.test(o.textContent)) {
+      errors.push('[session] a session is offered without the club\'s date: "' + o.textContent.trim() + '"');
+      break;
+    }
+  }
+  if (picker.value !== dayKey(2)) {
+    errors.push('[session] the page opened on ' + picker.value + ' rather than the session chosen');
+  }
+
+  /* And nothing on the page calls a backdated session "today". */
+  const heading = (w.document.querySelector('.attendance-summary b') || {}).textContent || '';
+  if (heading.indexOf('اليوم') !== -1) {
+    errors.push('[session] the page still calls a backdated session "today": ' + heading);
+  }
+}));
+
+pending.push(Promise.resolve().then(() => {
+  const w = boot({
+    user: { role: 'admin', id: 'u1' },
+    swimmers: [
+      /* Joined today: the member carries the photograph. */
+      { id: 'sw1', name: 'مريم بلعيد', group: 'المبتدئون', photo: PIXEL },
+      /* Joined before that: it is on the request they came from. */
+      { id: 'APP-1', name: 'يوسف قندوز', group: 'المتقدمون', from_application: 'APP-1' },
+      /* Nobody has a photograph at all. */
+      { id: 'sw3', name: 'آدم بلعيد', group: 'المبتدئون' }
+    ],
+    applications: [{ id: 'APP-1', application_no: 'APP-1', photo: PIXEL }]
+  });
+  w.__t.state.page = 'card';
+  w.__t.render();
+  w.__t.action('print-cards');
+  const host = w.document.querySelector('.print-host');
+  if (!host) { errors.push('[card] printing the cards produced nothing'); return; }
+
+  const cards = [...host.querySelectorAll('.lux-card')];
+  if (cards.length !== 3) { errors.push('[card] ' + cards.length + ' cards were printed rather than three'); return; }
+
+  /* Two of the three have a face: one from the member, one from the request. The
+     photograph has been collected since the form was built and printed on the
+     registration form; it stopped at the request, so the card printed the club's
+     logo where a face should be. */
+  const withFace = cards.filter(c => c.querySelector('.lux-photo-img')).length;
+  if (withFace !== 2) {
+    errors.push('[card] ' + withFace + ' of 3 cards carry a photograph; two of these three people have one');
+  }
+  /* And the one that has none is not given a face by mistake. */
+  const last = cards[2];
+  if (last.querySelector('.lux-photo-img')) {
+    errors.push('[card] a member with no photograph was printed with one');
+  }
+}));
+
 const accounts_panel = () => {
   const w = boot({
     user: { role: 'admin', id: 'u1' },

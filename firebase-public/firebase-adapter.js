@@ -76,6 +76,27 @@
     };
   };
 
+  /* ---------------- which session a mark belongs to ----------------
+
+     A week back and no further. A week is how long a forgotten sheet stays a
+     forgotten sheet -- filling one in late is an ordinary thing to do -- and
+     further back is either a different mistake or a different season.
+
+     A day that is refused is refused by name. Filing it under a day nobody asked
+     for would leave a complete sheet that is wrong, which is the worst state
+     there is: nobody finds out until the season's totals are. */
+  const ATTENDANCE_BACK_DAYS = 7;
+  const attendanceSession = value => {
+    const raw = latinDigits(String(value === undefined || value === null ? '' : value)).trim().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    if (!raw) return { day: today, error: '' };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return { day: today, error: 'تاريخ الحصة غير مفهوم.' };
+    if (raw > today) return { day: today, error: 'لا تُسجَّل حضور حصة لم تبدأ بعد.' };
+    const earliest = new Date(Date.now() - ATTENDANCE_BACK_DAYS * 86400000).toISOString().slice(0, 10);
+    if (raw < earliest) return { day: today, error: 'لا تُسجَّل حضور حصة أقدم من أسبوع.' };
+    return { day: raw, error: '' };
+  };
+
   /* ---------------- what the state of a request means at the door ----------------
      A pending request has not been refused, so the account exists but the club
      has not said yes yet; it is answered with the waiting message rather than
@@ -1079,7 +1100,11 @@
           return jsonResponse({ error: 'تسجيل الحضور من صلاحية المدرب أو الإدارة فقط' }, 403);
         const memberId = body.member_id || body.swimmer_id || '';
         if (!memberId) return jsonResponse({ error: 'يجب تحديد السباح' }, 400);
-        const day = new Date().toISOString().slice(0, 10);
+        /* The session, asked for, and the moment of writing, which are not the
+           same thing: a coach writes Sunday's sheet on Monday morning. */
+        const session = attendanceSession(body.session_date);
+        if (session.error) return jsonResponse({ error: session.error }, 400);
+        const day = session.day;
         const status = body.status || 'present';
         await db.collection('attendance').doc('att_' + day + '_' + String(memberId).replace(/[^\w-]/g, '_')).set({
           member_id: memberId, session_date: day, status,
@@ -1304,6 +1329,12 @@
               level: src.level || '', facility: src.facility || '',
               group_name: src.group_name || src.level || 'المبتدئون',
               national_id: src.national_id || '',
+              /* The photograph travels with the member. It was collected, it is
+                 printed on the registration form, and it stopped here -- so the
+                 membership card printed a name and a number, and the one thing
+                 that cannot be handed over by somebody else was the one thing the
+                 card did not carry. */
+              photo: src.photo || src.photo_url || src.photoDataUrl || '',
               status: 'active', from_application: no,
               /* Whose account this came from. Beside `from_application`, which
                  says the request; this says the door it was filed through, and it

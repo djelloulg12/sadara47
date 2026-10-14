@@ -8,7 +8,14 @@ function coachCardModel(c){
 }
 function swimmerCardModel(s){
   const p = state.profile && state.profile.member_no === s.id ? state.profile : null;
-  return Object.assign({}, s, p || {}, { membership_no:s.id, group_name:s.group });
+  /* The photograph is put in here, so the batch of cards the club prints and the
+     card a member prints for themselves ask the same question and get the same
+     answer. Left to the card, each engine found the photograph its own way and
+     neither of them found one. */
+  return Object.assign({}, s, p || {}, {
+    membership_no:s.id, group_name:s.group,
+    photo: memberPhoto(Object.assign({}, s, p || {}), state.profile)
+  });
 }
 
 const coreAction3=action;

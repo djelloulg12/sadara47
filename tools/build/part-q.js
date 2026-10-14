@@ -80,24 +80,36 @@ action=async function(a,el){
   if(a==='mark-all-present'){
     const list=state.swimmers||[];
     if(!list.length){showToast('لا يوجد سباحون لتسجيل حضورهم.','error');return}
-    confirmDialog('تسجيل حضور ' + list.length + ' سباح اليوم؟','تأكيد الجميع', async () => {
+    /* The day on the page, in the question, in the record and in the answer --
+        three places that used to say today whatever the screen said, so a coach
+        who had picked Saturday was asked about today and answered about today. */
+    const day=attendanceDay();
+    confirmDialog('تسجيل حضور ' + list.length + ' سباح لـ' + attendanceSessionLabel() + '؟','تأكيد الجميع', async () => {
       let done=0;
       for(const s of list){
-        try{ await api('/api/attendance','POST',{member_id:s.id,swimmer_id:s.id,status:'present'}); done++; }
+        try{ await api('/api/attendance','POST',{member_id:s.id,swimmer_id:s.id,status:'present',session_date:day}); done++; }
         catch(_){}
       }
-      list.forEach(s=>{const b=state.attendance[s.id]=state.attendance[s.id]||[];b.push({status:'present',at:new Date().toISOString(),date:todayISO()});
-        (state.attendanceByDay[todayISO()]||(state.attendanceByDay[todayISO()]={}))[s.id]='present';});
-      logDecision('تأكيد حضور الجميع','attendance','today',{count:done});
-      save(); render(); showToast('تم تسجيل حضور ' + done + ' سباح.');
+      list.forEach(s=>{const b=state.attendance[s.id]=state.attendance[s.id]||[];b.push({status:'present',at:new Date().toISOString(),date:day});
+        (state.attendanceByDay[day]||(state.attendanceByDay[day]={}))[s.id]={status:'present',at:new Date().toISOString()};});
+      logDecision('تأكيد حضور الجميع','attendance',day,{count:done});
+      save(); render(); showToast('تم تسجيل حضور ' + done + ' سباح لـ' + attendanceSessionLabel() + '.');
     });
     return;
   }
   if(a==='reset-attendance'){
-    confirmDialog('تصفير سجل حضور اليوم على هذه الشاشة؟','تصفير', () => {
-      state.attendance={}; state.attendanceByDay={};
-      logDecision('تصفير الحضور','attendance','today',{});
-      save(); render(); showToast('تم تصفير سجل اليوم.');
+    /* One day, named. The other days were never touched and must not sound as
+       though they were: "the record has been cleared", with no day in it, is a
+       sentence about nothing. */
+    const day=attendanceDay();
+    confirmDialog('تصفير سجل حضور ' + attendanceSessionLabel() + ' على هذه الشاشة؟','تصفير', () => {
+      if(state.attendanceByDay&&state.attendanceByDay[day])delete state.attendanceByDay[day];
+      for(const id of Object.keys(state.attendance||{})){
+        state.attendance[id]=(state.attendance[id]||[]).filter(r=>String(r.date)!==day);
+        if(!state.attendance[id].length)delete state.attendance[id];
+      }
+      logDecision('تصفير الحضور','attendance',day,{});
+      save(); render(); showToast('تم تصفير سجل ' + attendanceSessionLabel() + '.');
     });
     return;
   }

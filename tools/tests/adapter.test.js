@@ -846,6 +846,110 @@ test('the database holds one form of a number and a date', async () => {
    A merge that deleted instead would pass every count here and lose the three
    requests, which is why they are counted. */
 
+/* The week, and the session a mark belongs to.
+
+   The club fills attendance in after the session -- a coach who was at the pool on
+   Saturday writes it on Sunday -- so the mark has to name the session, and it has
+   to refuse to go further back than a week. A week is how long a forgotten sheet
+   stays a forgotten sheet; further back is either a different mistake or a
+   different season.
+
+   What matters most here is that a refusal is a refusal. Filing a date nobody
+   asked for under a day of its own leaves a complete sheet that is wrong, and
+   nobody finds out until the season's totals are: the worst state there is for a
+   record whose whole purpose is being right. */
+
+const isoDaysAgo = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+const PIXEL = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+
+/* The attendance rows this check cares about, and the ones it does not.
+
+   Every attendance check in this file writes to the same collection, so counting
+   rows without taking them with you measures the file and not the check -- the
+   earlier test's row and this one's look exactly alike, and "the backdated mark
+   wrote two rows" was really "the earlier test wrote one too". */
+async function withCleanAttendance(fn) {
+  const saved = DATA.attendance;
+  DATA.attendance = {};
+  try { return await fn(); } finally { DATA.attendance = saved; }
+}
+
+test('a mark belongs to the session it names, and not to today', () => withCleanAttendance(async () => {
+  const w = boot(asUser('u1'));
+  const saturday = isoDaysAgo(2);
+  const r = await call(w, '/api/attendance', 'POST',
+    { member_id: 'SDR-A1', status: 'present', session_date: saturday });
+  if (!r.ok) { errors.push('a session two days back was refused: ' + JSON.stringify(r.data)); return; }
+  const rows = Object.values(DATA.attendance);
+  if (rows.length !== 1) errors.push('the backdated mark wrote ' + rows.length + ' rows rather than one');
+  if (rows[0].session_date !== saturday) {
+    errors.push('the mark was filed under ' + rows[0].session_date + ' rather than the session named, ' + saturday);
+  }
+  /* And it is a different document from today's, so filling Saturday does not
+     overwrite Monday -- the whole point of naming a session. */
+  if (('att_' + saturday + '_SDR-A1') !== Object.keys(DATA.attendance)[0]) {
+    errors.push('the mark is not filed under the session it names: ' + Object.keys(DATA.attendance)[0]);
+  }
+}));
+
+test('no session further back than a week, and none that has not happened', () => withCleanAttendance(async () => {
+  const w = boot(asUser('u1'));
+  const before = Object.keys(DATA.attendance).length;
+
+  const tooOld = await call(w, '/api/attendance', 'POST',
+    { member_id: 'SDR-A1', status: 'present', session_date: isoDaysAgo(8) });
+  if (tooOld.ok) errors.push('a session eight days back was accepted');
+  if (!/أقدم من أسبوع/.test(tooOld.data.error || '')) {
+    errors.push('a session eight days back was not refused by name: ' + JSON.stringify(tooOld.data));
+  }
+
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const notYet = await call(w, '/api/attendance', 'POST',
+    { member_id: 'SDR-A1', status: 'present', session_date: tomorrow });
+  if (notYet.ok) errors.push('a session that has not happened yet was accepted');
+
+  const nonsense = await call(w, '/api/attendance', 'POST',
+    { member_id: 'SDR-A1', status: 'present', session_date: 'السبت' });
+  if (nonsense.ok) errors.push('a session named in words was accepted');
+
+  if (Object.keys(DATA.attendance).length !== before) {
+    errors.push('a refused mark was written anyway');
+  }
+
+  /* And the edge of the week is inside it, or the limit means nothing. */
+  const edge = await call(w, '/api/attendance', 'POST',
+    { member_id: 'SDR-A1', status: 'present', session_date: isoDaysAgo(7) });
+  if (!edge.ok) errors.push('the seventh day back was refused, though a week is allowed');
+}));
+
+test('the photograph travels with the member it became', async () => {
+  const w = boot(asUser('u1'));
+  /* The way the neighbouring check calls it: PATCH on the request's own path.
+     A check that invents its own way of calling a thing is not checking the
+     thing -- this one guessed, got "path not found", and reported it as though
+     the photograph had broken acceptance. */
+  const NO = 'APP-PHOTO-1';
+  const created = await call(w, '/api/applications', 'POST', {
+    application_no: NO, category: 'minor', first_name_ar: 'زينب',
+    last_name_ar: 'سالم', birth_date: '2015-01-01',
+    phone: '0661000009', address: 'حي الثانية', subscription_code: 'quarter',
+    guardian_first_name: 'كريم', guardian_last_name: 'سالم', guardian_consent: true,
+    photo: PIXEL
+  });
+  if (created.status !== 201) { errors.push('the request with a photograph was not taken: ' + created.status); return; }
+  const accepted = await call(w, '/api/applications/' + NO, 'PATCH', { status: 'approved' });
+  if (!accepted.ok) { errors.push('the request could not be accepted: ' + JSON.stringify(accepted.data)); return; }
+
+  const member = DATA.swimmers[NO];
+  if (!member) { errors.push('accepting a request wrote no member'); return; }
+  /* The photograph has been collected and printed on the registration form since
+     the form was built. It stopped at the request, so the membership card printed
+     a name and a number and the club's logo standing in for a face. */
+  if (member.photo !== PIXEL) {
+    errors.push('the member was written without the photograph: ' + JSON.stringify(member.photo));
+  }
+});
+
 const FAMILY_NID = '0999123456789';
 const daysAgo = n => ({ toDate: () => new Date(Date.UTC(2026, 2, n)) });
 
