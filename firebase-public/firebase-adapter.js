@@ -351,15 +351,34 @@
     .replace(FOLD_DIGIT, d => String(d.charCodeAt(0) - 0x0660))
     .replace(FOLD_DIGIT_ALT, d => String(d.charCodeAt(0) - 0x06F0));
 
+  /* Three numbers, and which of them is the year -- see the reading of a date in
+     app.js. What is stored does not move: this still writes yyyy-mm-dd, so a date
+     that comes back out of a field after somebody edited it lands in the database
+     in the one shape the queue order and every equality query depend on.
+
+     Four digits first is a year and the old order. Otherwise the day is first,
+     always: the club writes 11/10/2026 and reads 11/10/2026, and anything else
+     turns a date that comes out of a field into a different date going back in. */
+  const DAY_FIRST_DATE = /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/;
   const ISO_DATE = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/;
+  const readDate = raw => {
+    const year = ISO_DATE.exec(raw);
+    if (year) return { y: year[1], m: year[2], d: year[3] };
+    const day = DAY_FIRST_DATE.exec(raw);
+    if (!day) return null;
+    /* The one rescue that costs nothing: a first number that cannot be a day at
+       all is read the only way it can be. It fires on nothing the club writes. */
+    if (Number(day[1]) > 31) return { y: day[3], m: day[2], d: day[1] };
+    return { y: day[3], m: day[2], d: day[1] };
+  };
   const isoDate = v => {
     const raw = latinDigits(v).trim();
-    const m = ISO_DATE.exec(raw);
+    const m = readDate(raw);
     if (!m) return raw;
-    const month = Number(m[2]), day = Number(m[3]);
+    const month = Number(m.m), day = Number(m.d);
     if (month < 1 || month > 12 || day < 1 || day > 31) return raw;
     const p = n => String(n).length < 2 ? '0' + n : String(n);
-    return m[1] + '-' + p(m[2]) + '-' + p(day);
+    return m.y + '-' + p(m.m) + '-' + p(day);
   };
 
   /* Named rather than guessed from the shape of the field. A field called

@@ -75,7 +75,7 @@ function clubShows(v) {
   let sheet = '';
   try { sheet = w.__t.overlaySheet(applicant); } catch (e) { errors.push('overlaySheet threw: ' + e.message); }
   const pairs = [['background image','assets/form-registration-01.jpg'],['first name','\u0623\u0645\u064a\u0646'],
-    ['surname','\u0628\u0644\u0639\u064a\u062f'],['birth date','2012/04/17'],['blood','O+'],
+    ['surname','\u0628\u0644\u0639\u064a\u062f'],['birth date','17/04/2012'],['blood','O+'],
     ['phone','0661000001'],['guardian','\u0643\u0631\u064a\u0645'],['guardian id','1970011122334'],
     ['pool','\u0627\u0644\u0645\u0633\u0628\u062d \u0627\u0644\u062c\u0648\u0627\u0631\u064a \u0628\u0648\u0647\u0631\u0627\u0648\u0629']];
   for (const [label, needle] of pairs) if (!sheet.includes(needle)) errors.push('official overlay missing [' + label + ']');
@@ -134,22 +134,25 @@ function clubShows(v) {
   const bottoms = [...sheet.matchAll(/bottom:([\d.]+)mm/g)].map(m => 297 - Number(m[1]) - 0.4);
   for (const y of order) if (!bottoms.some(v => Math.abs(v - y) < 0.02)) errors.push('no overlay on the rule at ' + y + 'mm');
 
-  /* The club writes its documents in Arabic-Indic digits and dates year first,
-     but a reference number stays in the digits it is quoted and looked up in.
-     Checked on both sides of that line, because getting either one wrong is the
-     failure that matters: a date the club reads as 2050, or a membership number
-     that cannot be typed back in. */
+  /* The club writes its documents in Arabic-Indic digits, dates day first, and
+     reference numbers in the digits they are quoted and looked up in. Checked on
+     both sides of that line, because getting either one wrong is the failure that
+     matters: a date the club reads as 2050, or a membership number that cannot be
+     typed back in. */
   const printed = sheet.replace(/<[^>]+>/g, ' ');
   for (const [what, want] of [
-    ['the birth date', '2012/04/17'],
+    ['the birth date', '17/04/2012'],
     ['the telephone number', '0661000001'],
     ["the guardian's identity number", '1970011122334']
   ]) {
     if (!sheet.includes(want)) errors.push('the printed form has no ' + what
       + ' in Arabic digits: ' + want);
   }
-  if (/17\/04\/2012/.test(printed)) {
-    errors.push('a date is still printed day-first');
+  /* Day first is the club's order, so this is now the direction that is wrong --
+     and it is checked because a document that is right on screen and wrong on paper
+     is the one nobody catches until the club does. */
+  if (/2012\/04\/17/.test(printed)) {
+    errors.push('a date is still printed year-first, and the club reads the day first');
   }
   /* The serial on the sheet must be the applicant's request number and nothing
      else -- whole, in the club's digits, with its letters and punctuation left

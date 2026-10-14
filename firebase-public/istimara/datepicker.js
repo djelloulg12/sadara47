@@ -43,12 +43,28 @@
       .replace(/[\u06F0-\u06F9]/g, function (d) { return String(d.charCodeAt(0) - 0x06F0); });
   };
 
-  /* The one date the club writes: 2026/10/11. '' when the text is not a date,
-     which is how the form knows to say so rather than storing a guess. */
+  /* The one date the club writes, read: 11/10/2026. Both orders are read,
+     because a person with the old shape in front of them will type it -- and what
+     is stored is decided elsewhere and is still yyyy-mm-dd. '' when the text is
+     not a date, which is how the form knows to say so rather than storing a
+     guess. */
   var parse = function (value) {
-    var m = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/.exec(latin(value).trim());
-    if (!m) return null;
-    var y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    var text = latin(value).trim();
+    var m = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/.exec(text);
+    var y, mo, d;
+    if (m) {
+      y = Number(m[1]); mo = Number(m[2]); d = Number(m[3]);
+    } else {
+      var f = /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/.exec(text);
+      if (!f) return null;
+      y = Number(f[3]);
+      /* The day is first, always -- the club writes 11/10/2026 and means the
+         eleventh of October, and reading eleven as a month here turns every such
+         date into a different one. The only rescue kept is a first number that
+         cannot be a day at all, which the club never writes. */
+      d = Number(f[1]); mo = Number(f[2]);
+      if (d > 31) { mo = Number(f[1]); d = Number(f[2]); }
+    }
     if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
     /* The 31st of February is not a date the calendar offers and the form should
        not accept one either. */
@@ -57,7 +73,8 @@
     return { y: y, m: mo, d: d };
   };
 
-  var format = function (p) { return p.y + '/' + pad(p.m) + '/' + pad(p.d); };
+  /* Day first, as the club writes it: 11/10/2026. */
+  var format = function (p) { return pad(p.d) + '/' + pad(p.m) + '/' + p.y; };
 
   var isLeap = function (y) { return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0; };
   var daysIn = function (y, m) {

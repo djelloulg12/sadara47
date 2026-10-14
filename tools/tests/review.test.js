@@ -26,7 +26,7 @@ function boot(seed) {
   w.URL.revokeObjectURL = () => {};
   w.Blob = class { constructor(parts, o) { this.parts = parts; this.type = o && o.type; } };
   w.__blobs = () => blobs;
-  try { w.eval(APP + '\n;window.__t={get state(){return state},render:render,action:action,exportSwimmers:exportSwimmers,logDecision:logDecision,writeStorage:writeStorage,auditPage:auditPage,loadPublicData:loadPublicData};'); }
+  try { w.eval(APP + '\n;window.__t={get state(){return state},render:render,action:action,exportSwimmers:exportSwimmers,logDecision:logDecision,writeStorage:writeStorage,auditPage:auditPage,loadPublicData:loadPublicData,slashDate:slashDate,isoDate:isoDate,memberPhoto:memberPhoto,memberField:memberField};'); }
   catch (e) { errors.push('load: ' + e.message); }
   if (!w.__t) { console.error('LOAD ERROR:', errors.join(' | ')); throw new Error('app failed to load'); }
   if (seed && seed.user) w.__t.state.user = seed.user;
@@ -273,14 +273,15 @@ pending.push(Promise.resolve().then(() => {
   if (cells[0] !== 'مريم' || cells[1] !== 'بلعيد') {
     errors.push('[sheet] the name is not in two columns: ' + cells[0] + ' / ' + cells[1]);
   }
-  if (!/^\d{4}\/\d{2}\/\d{2}$/.test(cells[2])) {
-    errors.push('[sheet] the day of birth is not in the club\'s date: ' + cells[2]);
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(cells[2])) {
+    errors.push('[sheet] the day of birth is not in the club\'s date, day first: ' + cells[2]);
   }
   /* And the marks are that day's, not today's -- the whole point of choosing. */
   if (cells[3] !== 'حاضر') {
     errors.push('[sheet] the status printed is "' + cells[3] + '" for a swimmer marked present two days back');
   }
-  if ((host.querySelector('.att-line') || {}).textContent.indexOf(dayKey(2).replace(/-/g, '/')) === -1) {
+  const ddmm = dayKey(2).split('-').reverse().join('/');
+  if ((host.querySelector('.att-line') || {}).textContent.indexOf(ddmm) === -1) {
     errors.push('[sheet] the sheet does not name the session it is for');
   }
 
@@ -321,7 +322,7 @@ pending.push(Promise.resolve().then(() => {
   /* Written the club's way, with the day named -- a native date box would show its
      format in whatever language the browser is set to. */
   for (const o of picker.options) {
-    if (!/\d{4}\/\d{2}\/\d{2}/.test(o.textContent)) {
+    if (!/\d{2}\/\d{2}\/\d{4}/.test(o.textContent)) {
       errors.push('[session] a session is offered without the club\'s date: "' + o.textContent.trim() + '"');
       break;
     }
@@ -371,6 +372,234 @@ pending.push(Promise.resolve().then(() => {
   const last = cards[2];
   if (last.querySelector('.lux-photo-img')) {
     errors.push('[card] a member with no photograph was printed with one');
+  }
+}));
+
+/* The club's four standing rules about this round, checked.
+
+   The date order, because it is the change that could quietly destroy records:
+   what a person reads is day first, what is stored is not. Both halves are
+   asserted, and the second is the one that matters -- a platform that reads a date
+   two ways is untidy, and a platform that stores it two ways is a queue whose order
+   silently depends on which field was edited last.
+
+   The photograph's size, because it was 8 mm on an 85 mm card for as long as the
+   card existed, and it is checked here as a number rather than as a picture: two
+   CSS rules were writing to the same photograph and the wrong one won on
+   specificity, which is invisible on a screen and obvious on paper.
+
+   The rows at 0.7 cm, and the attendance sheet at 1.2, both asserted separately
+   -- because the point of writing the first is not to lose the second.
+
+   And the note being optional: the field, the validator, and the message that told
+   people to type "nothing" all three, because any one of them alone leaves a form
+   that cannot be sent. */
+
+pending.push(Promise.resolve().then(() => {
+  const w = boot({ user: { role: 'admin', id: 'u1' } });
+  w.__t.state.page = 'home';
+  w.__t.render();
+
+  const read = w.__t.slashDate, store = w.__t.isoDate;
+  if (!read || !store) { errors.push('[dates] the platform has no date reader or writer to check'); return; }
+
+  /* Day first out, for both orders in. */
+  for (const [given, want] of [
+    ['2026-10-11', '11/10/2026'],
+    ['11/10/2026', '11/10/2026'],
+    ['2026/1/5', '05/01/2026'],
+    ['5-1-2026', '05/01/2026'],
+    ['2026.01.05', '05/01/2026']
+  ]) {
+    const got = read(given);
+    if (got !== want) errors.push('[dates] ' + JSON.stringify(given) + ' is read as ' + JSON.stringify(got) + ', not ' + want);
+  }
+
+  /* And stored in one shape whatever it was written in -- which is the whole
+     reason the reader reads two orders. */
+  for (const [given, want] of [
+    ['2026-10-11', '2026-10-11'],
+    ['11/10/2026', '2026-10-11'],
+    ['2026/1/5', '2026-01-05'],
+    ['5-1-2026', '2026-01-05'],
+    ['13-9-2013', '2013-09-13'],
+    ['13/09/2013', '2013-09-13']
+  ]) {
+    const got = store(given);
+    if (got !== want) errors.push('[dates] ' + JSON.stringify(given) + ' is stored as ' + JSON.stringify(got) + ', not ' + want);
+  }
+
+  /* A first number that cannot be a day is read the only way it can be, rather
+     than refused: refusing a date somebody meant is worse than reading it. */
+  if (store('13/09/2013') !== '2013-09-13') errors.push('[dates] the 13th of September was not read');
+
+  /* And text that is not a date is the empty string rather than a guess: a birth
+     date that has been guessed is a member who is the wrong age for ever. */
+  if (store('not a date') !== '') errors.push('[dates] a note was turned into a date');
+}));
+
+pending.push(Promise.resolve().then(() => {
+  const css = fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8');
+
+  /* The photograph: the fill rule has to beat the size rule on specificity, or the
+     card prints a thumbnail. Checked as the pair, because either alone passes. */
+  if (!/\.lux-photo > img\.lux-photo-img[^{]*\{[^}]*width:\s*100%\s*!important/.test(css)) {
+    errors.push('[card] the photograph on the card is not sized by its frame, so a size rule wins on specificity');
+  }
+  if (!/\.lux-photo \{[^}]*width:\s*16mm[^}]*height:\s*21mm/.test(css)) {
+    errors.push('[card] the photograph frame is not the size of an identity photograph');
+  }
+  /* The code, in one place and not three. */
+  const qr = css.match(/\.lux-card \.qr-code,\s*\.lux-qr \.qr-code\s*\{[^}]*width:\s*9mm[^}]*height:\s*9mm/);
+  if (!qr) errors.push('[card] the code on the card is not sized in one place at 9 mm');
+  /* What governs, not what exists. An older rule from a print block is still in
+     the file and is harmless only because the new one carries !important -- so
+     asking that it be absent would be asking for something untrue. What can change
+     is the rule that applies, and that is the last one to speak about the code. */
+  const sizes = [...css.matchAll(/\.qr-code[^{]*\{[^{}]*width:\s*([\d.]+)mm/g)].map(m => m[1]);
+  if (!sizes.length) {
+    errors.push('[card] nothing in the stylesheet gives the code a size');
+  } else if (sizes[sizes.length - 1] !== '9') {
+    errors.push('[card] the code prints at ' + sizes[sizes.length - 1]
+      + ' mm, which is the size that made it a quarter of the card');
+  }
+}));
+
+pending.push(Promise.resolve().then(() => {
+  const css = fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8');
+
+  if (!/@media print\s*\{[^@]*\.print-table tr\s*\{\s*height:\s*0\.7cm/.test(css)) {
+    errors.push('[rows] a printed table row is not 0.7 cm');
+  }
+  /* The attendance sheet is written on, and keeps the height a pen needs. Writing
+     the first figure must not lose the second -- which is the whole risk in a
+     blanket "every table". */
+  if (!/\.att-table tr\s*\{\s*height:\s*1\.2cm\s*!important/.test(css)) {
+    errors.push('[rows] the attendance sheet lost the 1.2 cm a pen needs');
+  }
+}));
+
+pending.push(Promise.resolve().then(() => {
+  const w = boot();
+  const html = fs.readFileSync(path.join(PUBLIC, 'istimara', 'index.html'), 'utf8');
+  const js = fs.readFileSync(path.join(PUBLIC, 'istimara', 'istimara.js'), 'utf8');
+
+  /* Optional in three places, because any one alone leaves a form that cannot be
+     sent: the browser's own check, the validator's list, and the message that told
+     people to type "nothing". */
+  const note = (html.match(/<textarea id="notes"[^>]*>/) || [''])[0];
+  if (/\brequired\b/.test(note)) {
+    errors.push('[notes] the note is still required by the browser');
+  }
+  const list = js.match(/var required = \[[\s\S]*?\];/) || [''];
+  if (/'notes'/.test(list[0])) {
+    errors.push('[notes] the validator still asks for the note');
+  }
+  if (/اكتب ملاحظة/.test(js)) {
+    errors.push('[notes] the form still tells people to write "nothing" in the note');
+  }
+  if (!/اختياري/.test(note)) {
+    errors.push('[notes] the note does not say it is optional, so people will still write something');
+  }
+}));
+
+pending.push(Promise.resolve().then(() => {
+  const w = boot();
+  const html = fs.readFileSync(path.join(PUBLIC, 'istimara', 'index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(PUBLIC, 'istimara', 'istimara.css'), 'utf8');
+
+  /* The button that changes what happens next, in the middle and in red -- the
+     one control on the confirmation screen that is not a document. */
+  const btn = (html.match(/<button[^>]*id="another"[^>]*>/) || [''])[0];
+  if (!/btn-more/.test(btn)) {
+    errors.push('[another] the button is still an outline, which is what it was when it went unnoticed');
+  }
+  if (!/\.btn-more\s*\{[^}]*margin:\s*0 auto/.test(css)) {
+    errors.push('[another] the button is not centred on its own line');
+  }
+  if (!/\.btn-more\s*\{[^}]*background:\s*(var\(--danger|#[0-9a-f]{3,6})/i.test(css)) {
+    errors.push('[another] the button is not red');
+  }
+
+  /* An eye on every password field, and on the registration form's two. */
+  const app = fs.readFileSync(path.join(PUBLIC, 'app.js'), 'utf8');
+  if (!/function passwordEyes/.test(app)) {
+    errors.push('[eye] the platform has no eye for a password field');
+  }
+  if (!/addEyes/.test(js())) {
+    errors.push('[eye] the registration form has no eye for its password fields');
+  }
+  for (const id of ['password', 'password_confirm']) {
+    if (!new RegExp('id="' + id + '"[^>]*type="password"').test(html)) {
+      errors.push('[eye] the registration form no longer has a ' + id + ' field');
+    }
+  }
+  function js() { return fs.readFileSync(path.join(PUBLIC, 'istimara', 'istimara.js'), 'utf8'); }
+
+  /* And the two ways it usually goes wrong. */
+  const eyes = (app.match(/function passwordEyes[\s\S]{0,2600}/) || [''])[0];
+  if (eyes && !/eye\.type\s*=\s*'button'/.test(eyes)) {
+    errors.push('[eye] the eye is not type="button", so it submits the form it sits in');
+  }
+  if (eyes && !/aria-pressed/.test(eyes)) {
+    errors.push('[eye] the eye does not say whether the password is showing');
+  }
+}));
+
+/* The eye, on a window that is built when it is opened.
+
+   Checked by opening the sign-in window and counting, because the first version of
+   this passed while doing nothing: the call was put in the `bind` written near the
+   top of the platform, and a later layer reassigns `bind` -- so the call was in a
+   function nothing reaches. Calling the helper directly put the eye there
+   perfectly, which is what made it look right.
+
+   So the check presses the thing that opens the window and then counts. The number
+   of calls cannot be asserted, only the number of eyes -- and the number of eyes is
+   what a person sees.
+
+   And it is pressed twice, because a decoration that can be applied twice is a
+   decoration that grows: two eyes in a field is a field nobody can read. */
+
+pending.push(Promise.resolve().then(() => {
+  const w = boot({ user: { role: 'admin', id: 'u1' } });
+  w.__t.state.page = 'home';
+  w.__t.render();
+
+  w.__t.action('login');
+  const field = w.document.getElementById('password');
+  if (!field) { errors.push('[eye] the sign-in window did not open'); return; }
+
+  const eyes = () => field.parentNode.querySelectorAll('.eye-toggle');
+  if (eyes().length !== 1) {
+    errors.push('[eye] the sign-in window has ' + eyes().length + ' eyes on its password field; it should have one');
+    return;
+  }
+
+  /* Redrawing is what happens on every navigation, so that is when a second eye
+     would appear -- and it is done through render(), which is how the page
+     actually reaches the code, rather than by calling the binder by hand. */
+  w.__t.render();
+  w.__t.render();
+  if (eyes().length !== 1) {
+    errors.push('[eye] the password field grew to ' + eyes().length + ' eyes after being bound again');
+  }
+
+  const eye = eyes()[0];
+  field.value = 'correct horse';
+  const before = field.type;
+  eye.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+  if (field.type === before) errors.push('[eye] pressing it did not show the password');
+  if (eye.getAttribute('aria-pressed') !== 'true') {
+    errors.push('[eye] the eye does not say that the password is showing');
+  }
+  eye.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+  if (field.type !== before) errors.push('[eye] pressing it again did not hide the password');
+  if (eye.getAttribute('aria-pressed') !== 'false') {
+    errors.push('[eye] the eye still says the password is showing');
+  }
+  if (field.value !== 'correct horse') {
+    errors.push('[eye] looking at the password changed it');
   }
 }));
 

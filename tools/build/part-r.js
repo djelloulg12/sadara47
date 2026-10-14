@@ -49,6 +49,11 @@ const coreBindFinal = bind;
 bind = function () {
   coreBindFinal();
   bindDialogA11y(document);
+  /* The eye on every password field on the page, and beside the two calls that
+     are actually made rather than in the `bind` above, which a later layer
+     reassigns: an eye called from a function nothing reaches is an eye nobody
+     sees. */
+  passwordEyes();
 };
 const saveRaw = save;
 save = function () { return writeStorage(JSON.stringify(state)) || saveRaw && false; };

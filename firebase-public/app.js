@@ -523,17 +523,89 @@ function swimmerNames(s){
    who joined before the member carried it. Then the picture the member uploaded
    for themselves, which is what a member printing their own card should see. */
 function memberPhoto(s, profile){
-  const direct=s&&(s.photo||s.photo_url||s.photoDataUrl);
-  if(direct&&/^(data:|https?:)/.test(String(direct)))return direct;
-  const from=s&&(s.from_application||s.application_no||s.application_id);
-  if(from){
-    const req=((state.applications||[]).find(a=>String(a.id)===String(from)
-      ||String(a.application_no||'')===String(from))||{});
-    const old=req&&(req.photo||req.photo_url||req.photoDataUrl);
-    if(old&&/^(data:|https?:)/.test(String(old)))return old;
-  }
   const own=profile&&(profile.photo||profile.photo_url||profile.photoDataUrl);
-  return own&&/^(data:|https?:)/.test(String(own))?own:'';
+  return memberField(s, 'photo') || (own&&/^(data:|https?:)/.test(String(own))?own:'');
+}
+
+/* A member's field, from the member or from the request it came from.
+
+   A member accepted before the platform began copying a field across does not
+   carry it, and the request they were accepted from still does in full -- it is
+   marked `transferred_to`, never deleted, precisely so that what was decided
+   stays on file.
+
+   Nothing is written back. This answers what to print, and the answer can be read
+   rather than repaired: writing it onto the member record would change data the
+   club owns to fix a printing fault, which is the opposite of what was asked for.
+
+   One function, so the photograph and the day of birth cannot each grow their own
+   fallback and disagree about where a member's details are. */
+function memberField(s, field){
+  const here=s&&s[field];
+  if(here)return here;
+  const from=s&&(s.from_application||s.application_no||s.application_id);
+  if(!from)return '';
+  const req=((state.applications||[]).find(a=>String(a.id)===String(from)
+    ||String(a.application_no||'')===String(from))||{});
+  return (req&&req[field])||'';
+}
+
+/* An eye on every password field, added after the page is built.
+
+   Decorated rather than written into the markup, because not every password field
+   exists when the page does: the sign-in window is put together when it is opened,
+   and a settings panel that was closed has no fields in it at all. Whatever is on
+   the page gets one, without anything having to remember to ask.
+
+   Three things it gets right, and each is a way this usually goes wrong. The button
+   is type="button", because a button with no type inside a form submits it, and an
+   eye that posts the registration form is worse than no eye. It gives the focus
+   back to the field, because toggling is something you do while typing and an eye
+   that takes the caret away means finding where you were afterwards. And it says
+   its state with aria-pressed, which is what tells somebody who cannot see the eye
+   whether the password is on the screen.
+
+   Marked as done, so being called twice does not grow two eyes.
+
+   It is called from the final layer's bind, not from the bind written here: a
+   later layer reassigns bind, so a call in this one is a call nothing makes. */
+function passwordEyes(root) {
+  const scope = (root && root.querySelectorAll) ? root : document;
+  const fields = scope.querySelectorAll('input[type="password"]');
+  for (let i = 0; i < fields.length; i++) {
+    const input = fields[i];
+    if (!input || input.dataset.eyeReady) continue;
+    const host = input.parentNode;
+    if (!host || !host.insertBefore) continue;
+    input.dataset.eyeReady = '1';
+    if (host.classList) host.classList.add('with-eye');
+
+    const eye = document.createElement('button');
+    eye.type = 'button';
+    eye.className = 'eye-toggle';
+    eye.setAttribute('aria-pressed', 'false');
+    eye.setAttribute('aria-label', '\u0625\u0638\u0647\u0627\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u062b\u0648\u0631');
+    eye.title = '\u0625\u0638\u0647\u0627\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u062b\u0648\u0631';
+    eye.textContent = '\u25CB';
+    eye.addEventListener('click', () => {
+      const shown = input.type === 'text';
+      input.type = shown ? 'password' : 'text';
+      eye.setAttribute('aria-pressed', shown ? 'false' : 'true');
+      eye.setAttribute('aria-label', shown
+        ? '\u0625\u0638\u0647\u0627\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u062b\u0648\u0631'
+        : '\u0625\u062e\u0641\u0627\u0621 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u062b\u0648\u0631');
+      eye.title = eye.getAttribute('aria-label');
+      eye.textContent = shown ? '\u25CB' : '\u25C9';
+      /* The caret back where it was: toggling is something you do while typing. */
+      try {
+        const at = input.value.length;
+        input.focus();
+        input.setSelectionRange(at, at);
+      } catch (_) {}
+    });
+    if (input.nextSibling) host.insertBefore(eye, input.nextSibling);
+    else host.appendChild(eye);
+  }
 }
 
 function printAttendanceSheet(){
@@ -567,7 +639,11 @@ function printAttendanceSheet(){
         +list.map(s=>{const n=swimmerNames(s);return '<tr>'
           +'<td>'+esc(n.first)+'</td>'
           +'<td>'+esc(n.last)+'</td>'
-          +'<td dir="ltr">'+esc(slashDate(s.birth_date||''))+'</td>'
+          /* From the member, or from the request it came from: a member accepted
+             before the platform began copying it across does not carry one, and a
+             column that is silently empty on half a sheet is a column nobody can
+             read a junior's age from. */
+          +'<td dir="ltr">'+esc(slashDate(memberField(s,'birth_date')))+'</td>'
           +statusCell(s)
           +'<td></td></tr>';}).join('')
         +'</tbody></table>'
@@ -1699,23 +1775,56 @@ function clubDigits(v) {
    rather than dashes, or with a one-digit month, is still a date and is laid out
    the same way, because the whole point is that every date on every sheet reads
    the same. */
+/* Three numbers, and which of them is the year.
+
+   What is stored does not move: dates are kept `yyyy-mm-dd`, because that is what
+   makes the queue order, the weekly bars and every equality query work, and none of
+   that is touched. This is how a date is *read*, and the club's order is the day
+   first.
+
+     four digits first   it is a year: the old order
+     otherwise           the day is first
+
+   Not "day first unless the day could be a month". That rule reads `11/10/2026` as
+   the tenth of November, because eleven is also a month -- and the club wrote the
+   eleventh of October. The guess was rescuing somebody typing month first and cost
+   every date the club writes where both halves could be either.
+
+   The one rescue kept costs nothing: a first number that cannot be a day at all is
+   read the only way it can be. That fires on nothing the club writes and refuses
+   nothing it should accept.
+
+   Day first, always, is also what makes a value round-trip: a field that comes out
+   as `11/10/2026` and goes back in must come out as `11/10/2026`. */
+function readDateParts(v) {
+  const raw = latinDigits(v).trim();
+  const year = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw);
+  if (year) return { y: year[1], m: year[2], d: year[3] };
+  const day = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/.exec(raw);
+  if (!day) return null;
+  if (Number(day[1]) > 31) return { y: day[3], m: day[2], d: day[1] };
+  return { y: day[3], m: day[2], d: day[1] };
+}
 function slashDate(v) {
   const raw = latinDigits(v);
-  const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw.trim());
+  const m = readDateParts(raw);
   if (!m) return raw;
-  return m[1] + '/' + String(m[2]).padStart(2, '0') + '/' + String(m[3]).padStart(2, '0');
+  return String(m.d).padStart(2, '0') + '/' + String(m.m).padStart(2, '0') + '/' + m.y;
 }
 
 /* The same date for the database and for arithmetic: 2026-10-11, Latin digits.
    '' when the text is not a date at all, rather than a guess: a birth date that
    has been guessed is a member who is the wrong age on the card for ever. */
 function isoDate(v) {
+  /* The way back into the database, and it reads both orders for exactly that
+     reason: a field is shown as dd/mm/yyyy, somebody edits it and sends it back in
+     that shape, and what lands in the database is still yyyy-mm-dd. */
   const raw = latinDigits(v).trim();
-  const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw);
+  const m = readDateParts(raw);
   if (!m) return '';
-  const year = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
+  const month = Number(m.m), day = Number(m.d);
   if (month < 1 || month > 12 || day < 1 || day > 31) return '';
-  return m[1] + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  return m.y + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
 }
 
 /* The same date typed back into a field for editing, so a person correcting a
@@ -2270,11 +2379,18 @@ function spotStyle(s) {
 }
 function formValues(a){
   const v = (k, fb) => (a && a[k] ? a[k] : (fb || ''));
-  /* Arabic-Indic digits on the sheet, and dates written year first -- 2026/10/11
-     -- the way the club writes them. A reference number is the exception and is
-     left alone: it is the one thing a person has to read back and look up. */
-  const slashDate = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))
-    ? clubDigits(String(d).split('-').join('/')) : clubDigits(String(d || ''));
+  /* Arabic-Indic digits on the sheet, and dates written the way the club writes
+     them: 11/10/2026. It was year first, which made a platform that reads one way
+     on the screen and another on the paper not one thing. A reference number is the
+     exception and is left alone: it is the one thing a person has to read back and
+     look up.
+
+     Stored dates are untouched. This is only how one is written out. */
+  const slashDate = d => {
+    const raw = String(d === undefined || d === null ? '' : d).trim();
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+    return m ? clubDigits(m[3] + '/' + m[2] + '/' + m[1]) : clubDigits(raw);
+  };
   return {
     /* The pool, on the line the scan draws for it. */
     facility: v('facility'),
@@ -4464,6 +4580,11 @@ const coreBindFinal = bind;
 bind = function () {
   coreBindFinal();
   bindDialogA11y(document);
+  /* The eye on every password field on the page, and beside the two calls that
+     are actually made rather than in the `bind` above, which a later layer
+     reassigns: an eye called from a function nothing reaches is an eye nobody
+     sees. */
+  passwordEyes();
 };
 const saveRaw = save;
 save = function () { return writeStorage(JSON.stringify(state)) || saveRaw && false; };

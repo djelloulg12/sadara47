@@ -550,20 +550,82 @@
     });
   }
 
+
+  /* ---------------- عين كلمة المرور ----------------
+     The same eye the platform has on its own password fields, written here rather
+     than shared: this page is served on its own and loads none of the platform's
+     scripts.
+
+     type="button" because this is inside a form and a button with no type submits
+     it -- an eye that posts a registration is worse than no eye. The focus goes
+     back to the field, because toggling is something you do while typing. And
+     aria-pressed says the state to somebody who cannot see the eye, which is what
+     tells them whether the password is on the screen. */
+  function addEyes() {
+    var fields = document.querySelectorAll('input[type="password"]');
+    for (var i = 0; i < fields.length; i++) {
+      (function (input) {
+        if (input.dataset.eyeReady) return;
+        var host = input.parentNode;
+        if (!host) return;
+        input.dataset.eyeReady = '1';
+        if (host.classList) host.classList.add('with-eye');
+
+        var eye = document.createElement('button');
+        eye.type = 'button';
+        eye.className = 'eye-toggle';
+        eye.setAttribute('aria-pressed', 'false');
+        eye.setAttribute('aria-label', '\u0625\u0638\u0647\u0627\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u062b\u0648\u0631');
+        eye.title = '\u0625\u0638\u0647\u0627\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u062b\u0648\u0631';
+        eye.textContent = '\u25CB';
+        eye.addEventListener('click', function () {
+          var shown = input.type === 'text';
+          input.type = shown ? 'password' : 'text';
+          eye.setAttribute('aria-pressed', shown ? 'false' : 'true');
+          eye.setAttribute('aria-label', shown
+            ? '\u0625\u0638\u0647\u0627\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u062b\u0648\u0631'
+            : '\u0625\u062e\u0641\u0627\u0621 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u062b\u0648\u0631');
+          eye.title = eye.getAttribute('aria-label');
+          eye.textContent = shown ? '\u25CB' : '\u25C9';
+          try {
+            var at = input.value.length;
+            input.focus();
+            input.setSelectionRange(at, at);
+          } catch (e) {}
+        });
+        if (input.nextSibling) host.insertBefore(eye, input.nextSibling);
+        else host.appendChild(eye);
+      })(fields[i]);
+    }
+  }
+
+  /* The scripts sit at the foot of the page, so the fields are there by now. The
+     guard is for the day this page is edited and that stops being true: a page
+     that loads without an eye and does not say so is the worst of the outcomes. */
+  addEyes();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', addEyes);
+  }
+
   /* ---------------- validation ---------------- */
 
   /* Returns the fields that still need an answer, in the order they appear, so
      the person is walked to the first one that is missing. */
   function validate() {
     var missing = [];
-    /* Everything the form asks, except the one field a person can honestly leave
+    /* Everything the form asks, except the two fields a person can honestly leave
        empty: a previous registration number, which they have if they are
-       renewing and do not if they are new. */
+       renewing and do not if they are new; and a note to the club, which is a
+       courtesy rather than an answer.
+
+       Both are optional because asking for them produces a worse form, not a
+       better one: somebody who believes the note is needed writes something to
+       fill it, and the club reads it. */
     var required = ['first_name_ar', 'last_name_ar', 'first_name_fr', 'last_name_fr',
                     'birth_date', 'gender', 'blood_group', 'level',
                     'birth_certificate_no', 'wilaya', 'facility',
                     'phone', 'whatsapp', 'address',
-                    'payment_method', 'notes',
+                    'payment_method',
                     'email', 'username', 'password', 'password_confirm'];
     /* The photograph is part of the registration and not something the club asks
        for at the counter. The official form has a frame for it and the membership
@@ -694,7 +756,6 @@
     facility: 'اختر المسبح.',
     whatsapp: 'اكتب رقم واتساب. إن لم يكن لديك رقم آخر فاكتب نفس رقم الهاتف.',
     payment_method: 'اختر طريقة الدفع.',
-    notes: 'اكتب ملاحظة للنادي — إن لم يكن لديك شيء اكتب: لا شيء.',
     guardian_relation: 'اختر صلة القرابة.',
     guardian_phone: 'اكتب هاتف الولي.',
     guardian_national_id_expiry: 'اكتب تاريخ انتهاء بطاقة الولي بصيغة سنة/شهر/يوم — 2031/06/02.',

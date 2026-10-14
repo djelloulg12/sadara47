@@ -652,3 +652,96 @@ body.printing .print-sheet10{display:block!important}
 @media print {
   .card-photo { border-color: #b9cfd8; }
 }
+
+/* ---------------- بطاقة الانخراط: الصورة والرمز ----------------
+   Both of these are print faults, and neither was visible on the screen: a card is
+   only ever looked at at the size it is printed.
+
+   The photograph was 8 mm wide on an 85 mm card. Two rules were writing to it and
+   the wrong one won --
+
+     .lux-photo img     width: 8mm      (a class and an element)
+     .lux-photo-img     width: 100%     (a class alone)
+
+   and a selector worth more wins whichever came later, so the size beat the fill.
+   Every printed card carried a thumbnail of the person.
+
+   It is spoken through the frame now -- one class deeper, so it wins on both counts
+   -- and in one place, so there is nothing left to disagree with it. */
+.lux-photo {
+  width: 16mm; height: 21mm;              /* the shape of an identity photograph */
+  border-radius: 1.4mm; overflow: hidden;
+  border: .2mm solid #9fc4cb; background: #fff; padding: 0;
+}
+.lux-photo > img.lux-photo-img,
+.lux-photo > img.lux-photo-fallback {
+  width: 100% !important; height: 100% !important;
+  display: block; opacity: 1;
+}
+/* Cover, not contain: the printed registration form crops the same frame the same
+   way, and a stretched face on a card reads as a mistake and is treated as one. */
+.lux-photo > img.lux-photo-img { object-fit: cover; }
+/* The club's mark standing in for a face is a different thing, so it is shown
+   whole and faint -- it must never look like a photograph of the member. */
+.lux-photo > img.lux-photo-fallback { object-fit: contain; padding: 1.6mm; opacity: .45; }
+
+/* The code is read by a scanner at the gate, so it wants to be big enough and
+   small enough: 9 mm on an 85 mm card, a sixth of the width, in one rule with its
+   own frame rather than a size restated in three print blocks. */
+.lux-card .qr-code,
+.lux-qr .qr-code {
+  width: 9mm !important; height: 9mm !important;
+  flex-shrink: 0; padding: 0;
+  background: #fff; border: .2mm solid #cfe2e6; border-radius: .8mm;
+}
+/* Drawn on a canvas, so the browser's antialiasing has to be kept out of it: the
+   print rules hide the canvas and print the image, and the image is sized by the
+   frame above rather than by whatever the library chose. */
+.lux-card .qr-code canvas,
+.lux-card .qr-code img { width: 100% !important; height: 100% !important; display: block !important; }
+
+@media print {
+  .lux-card .qr-code { width: 9mm !important; height: 9mm !important; }
+}
+
+/* ---------------- ارتفاع الأسطر في الجداول ----------------
+   0.7 cm on every printed row, as asked for, written once.
+
+   A row is as tall as its tallest cell, so the padding has to come down with it:
+   6 px above and below is nearly half of 0.7 cm on its own, and a figure that is
+   stated and then overridden by the cell's padding is not a figure anybody can
+   rely on.
+
+   The attendance sheet is the one exception, and it is deliberate: that sheet is
+   written on, and its rows are 1.2 cm. 0.7 cm is a listing -- right for the
+   requests, the members, the roster and the audit, every table that is read --
+   and too short to write a note in. Both figures are here, each in one rule. */
+@media print {
+  .print-table tr { height: 0.7cm; }
+  .print-table td,
+  .print-table th { padding: 0.5mm 2mm !important; }
+  /* The attendance sheet is written on, so it keeps the height a pen needs. */
+  .att-table tr { height: 1.2cm !important; }
+  .att-table td,
+  .att-table th { padding: 1mm 2mm !important; }
+}
+/* The same figure on screen, so a sheet looks on the screen like what it is on
+   paper -- a list checked here is a list the club has already seen the size of. */
+.print-table tr { height: 0.7cm; }
+.att-table tr { height: 1.2cm; }
+
+/* ---------------- عين كلمة المرور ----------------
+   The frame is the label the field already sits in; it is only made into a
+   containing block here, because there was nothing to contain before. */
+.with-eye { position: relative; }
+.with-eye input { padding-inline-end: 38px !important; }
+.eye-toggle {
+  position: absolute; inset-inline-end: 4px; top: 50%;
+  transform: translateY(-50%);
+  border: 0; background: transparent; cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 7px;
+  border-radius: 8px; color: var(--muted);
+}
+.eye-toggle:hover { background: #eef4f8; }
+.eye-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.eye-toggle[aria-pressed="true"] { color: var(--teal-dark); }

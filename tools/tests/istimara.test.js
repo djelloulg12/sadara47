@@ -1756,10 +1756,13 @@ tasks.push(() => guardian_returns().catch(
    is a rule somebody changes by accident.
 
    The calendar second, and what is checked is the writing and the refusing, not
-   the grid: a calendar that looks right and writes `14-09-2013` into a field that
-   stores `yyyy/mm/dd` has made the date worse, not better. So what the check
-   chooses is picked up off the field and compared with the one form the database
-   holds -- which is the only comparison that matters here.
+   the grid: a calendar that looks right and writes a date in a shape nobody reads
+   has made the date worse, not better. So what the check chooses is picked up off
+   the field and compared with the form the club writes -- `dd/mm/yyyy`.
+
+   What is *stored* is a separate question and is settled elsewhere: dates are kept
+   `yyyy-mm-dd`, because that is what the queue order and every equality query
+   depend on. This check is about the writing a person reads.
 
    And the two dates a person is most likely to be stopped by: a birth date three
    years from now, and a card that ran out in 1975. The field says what it will
@@ -1774,13 +1777,19 @@ const calendar_writes = () => {
     return Promise.resolve();
   }
 
-  /* One form, from everything the calendar might be handed. */
+  /* One form -- the club's -- from everything the calendar might be handed, in
+     either order: a person who has the old shape in front of them will type it,
+     and refusing their date would be refusing a date they meant. */
   const forms = [
-    ['2026/10/11', '2026/10/11'],
-    ['2026-1-5', '2026/01/05'],
-    ['2026/1/5', '2026/01/05'],
-    ['2026.01.05', '2026/01/05'],
-    ['\u0662\u0660\u0662\u0666/\u0661\u0660/\u0661\u0661', '2026/10/11']
+    ['11/10/2026', '11/10/2026'],
+    ['2026/10/11', '11/10/2026'],
+    ['2026-1-5', '05/01/2026'],
+    ['2026/1/5', '05/01/2026'],
+    ['2026.01.05', '05/01/2026'],
+    ['5-1-2026', '05/01/2026'],
+    ['13-9-2013', '13/09/2013'],
+    ['\u0661\u0661/\u0661\u0660/\u0662\u0660\u0662\u0666', '11/10/2026'],
+    ['\u0662\u0660\u0662\u0666/\u0661\u0660/\u0661\u0661', '11/10/2026']
   ];
   for (const [typed, want] of forms) {
     const got = cal.format(cal.parse(typed) || {});
@@ -1790,7 +1799,14 @@ const calendar_writes = () => {
   }
   /* And what is not a date is refused rather than guessed. The 31st of February
      is the one everybody's finger writes. */
-  for (const bad of ['', '2013/02/31', '2013/13/01', 'not a date', '13/09/2013']) {
+  /* The 31st of February, written the way the club writes dates as well as the
+     way it used to: the refusal has to cover both orders or it covers neither. */
+  /* Impossibilities in both orders, and nothing else. `13/09/2013` was on this
+     list and is not on it now: it was a refusal because a year last is not a year,
+     and since the club writes the day first it is the plainest date there is. A
+     check that wants a value and refuses it in the same file is not a check. */
+  for (const bad of ['', '2013/02/31', '2013/13/01', 'not a date',
+                     '31/02/2013', '01/13/2013', '2013/00/10', '32/01/2013']) {
     if (cal.parse(bad)) {
       errors.push('[cal] ' + JSON.stringify(bad) + ' was taken for a date');
     }
@@ -1809,7 +1825,9 @@ const calendar_writes = () => {
       return;
     }
     pick.click();
-    if (!/^\d{4}\/\d{2}\/\d{2}$/.test(field.value)) {
+    /* Day first, the way the club writes it. The date picked is the same either
+       way; the way it is written is the thing that changed. */
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(field.value)) {
       errors.push('[cal] a chosen day was written as ' + JSON.stringify(field.value));
     }
     if (!heard) errors.push('[cal] the field was written without saying so, so the draft is stale');

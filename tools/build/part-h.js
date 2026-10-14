@@ -93,23 +93,56 @@ function clubDigits(v) {
    rather than dashes, or with a one-digit month, is still a date and is laid out
    the same way, because the whole point is that every date on every sheet reads
    the same. */
+/* Three numbers, and which of them is the year.
+
+   What is stored does not move: dates are kept `yyyy-mm-dd`, because that is what
+   makes the queue order, the weekly bars and every equality query work, and none of
+   that is touched. This is how a date is *read*, and the club's order is the day
+   first.
+
+     four digits first   it is a year: the old order
+     otherwise           the day is first
+
+   Not "day first unless the day could be a month". That rule reads `11/10/2026` as
+   the tenth of November, because eleven is also a month -- and the club wrote the
+   eleventh of October. The guess was rescuing somebody typing month first and cost
+   every date the club writes where both halves could be either.
+
+   The one rescue kept costs nothing: a first number that cannot be a day at all is
+   read the only way it can be. That fires on nothing the club writes and refuses
+   nothing it should accept.
+
+   Day first, always, is also what makes a value round-trip: a field that comes out
+   as `11/10/2026` and goes back in must come out as `11/10/2026`. */
+function readDateParts(v) {
+  const raw = latinDigits(v).trim();
+  const year = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw);
+  if (year) return { y: year[1], m: year[2], d: year[3] };
+  const day = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/.exec(raw);
+  if (!day) return null;
+  if (Number(day[1]) > 31) return { y: day[3], m: day[2], d: day[1] };
+  return { y: day[3], m: day[2], d: day[1] };
+}
 function slashDate(v) {
   const raw = latinDigits(v);
-  const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw.trim());
+  const m = readDateParts(raw);
   if (!m) return raw;
-  return m[1] + '/' + String(m[2]).padStart(2, '0') + '/' + String(m[3]).padStart(2, '0');
+  return String(m.d).padStart(2, '0') + '/' + String(m.m).padStart(2, '0') + '/' + m.y;
 }
 
 /* The same date for the database and for arithmetic: 2026-10-11, Latin digits.
    '' when the text is not a date at all, rather than a guess: a birth date that
    has been guessed is a member who is the wrong age on the card for ever. */
 function isoDate(v) {
+  /* The way back into the database, and it reads both orders for exactly that
+     reason: a field is shown as dd/mm/yyyy, somebody edits it and sends it back in
+     that shape, and what lands in the database is still yyyy-mm-dd. */
   const raw = latinDigits(v).trim();
-  const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw);
+  const m = readDateParts(raw);
   if (!m) return '';
-  const year = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
+  const month = Number(m.m), day = Number(m.d);
   if (month < 1 || month > 12 || day < 1 || day > 31) return '';
-  return m[1] + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  return m.y + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
 }
 
 /* The same date typed back into a field for editing, so a person correcting a

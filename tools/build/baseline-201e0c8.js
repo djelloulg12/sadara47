@@ -524,17 +524,89 @@ function swimmerNames(s){
    who joined before the member carried it. Then the picture the member uploaded
    for themselves, which is what a member printing their own card should see. */
 function memberPhoto(s, profile){
-  const direct=s&&(s.photo||s.photo_url||s.photoDataUrl);
-  if(direct&&/^(data:|https?:)/.test(String(direct)))return direct;
-  const from=s&&(s.from_application||s.application_no||s.application_id);
-  if(from){
-    const req=((state.applications||[]).find(a=>String(a.id)===String(from)
-      ||String(a.application_no||'')===String(from))||{});
-    const old=req&&(req.photo||req.photo_url||req.photoDataUrl);
-    if(old&&/^(data:|https?:)/.test(String(old)))return old;
-  }
   const own=profile&&(profile.photo||profile.photo_url||profile.photoDataUrl);
-  return own&&/^(data:|https?:)/.test(String(own))?own:'';
+  return memberField(s, 'photo') || (own&&/^(data:|https?:)/.test(String(own))?own:'');
+}
+
+/* A member's field, from the member or from the request it came from.
+
+   A member accepted before the platform began copying a field across does not
+   carry it, and the request they were accepted from still does in full -- it is
+   marked `transferred_to`, never deleted, precisely so that what was decided
+   stays on file.
+
+   Nothing is written back. This answers what to print, and the answer can be read
+   rather than repaired: writing it onto the member record would change data the
+   club owns to fix a printing fault, which is the opposite of what was asked for.
+
+   One function, so the photograph and the day of birth cannot each grow their own
+   fallback and disagree about where a member's details are. */
+function memberField(s, field){
+  const here=s&&s[field];
+  if(here)return here;
+  const from=s&&(s.from_application||s.application_no||s.application_id);
+  if(!from)return '';
+  const req=((state.applications||[]).find(a=>String(a.id)===String(from)
+    ||String(a.application_no||'')===String(from))||{});
+  return (req&&req[field])||'';
+}
+
+/* An eye on every password field, added after the page is built.
+
+   Decorated rather than written into the markup, because not every password field
+   exists when the page does: the sign-in window is put together when it is opened,
+   and a settings panel that was closed has no fields in it at all. Whatever is on
+   the page gets one, without anything having to remember to ask.
+
+   Three things it gets right, and each is a way this usually goes wrong. The button
+   is type="button", because a button with no type inside a form submits it, and an
+   eye that posts the registration form is worse than no eye. It gives the focus
+   back to the field, because toggling is something you do while typing and an eye
+   that takes the caret away means finding where you were afterwards. And it says
+   its state with aria-pressed, which is what tells somebody who cannot see the eye
+   whether the password is on the screen.
+
+   Marked as done, so being called twice does not grow two eyes.
+
+   It is called from the final layer's bind, not from the bind written here: a
+   later layer reassigns bind, so a call in this one is a call nothing makes. */
+function passwordEyes(root) {
+  const scope = (root && root.querySelectorAll) ? root : document;
+  const fields = scope.querySelectorAll('input[type="password"]');
+  for (let i = 0; i < fields.length; i++) {
+    const input = fields[i];
+    if (!input || input.dataset.eyeReady) continue;
+    const host = input.parentNode;
+    if (!host || !host.insertBefore) continue;
+    input.dataset.eyeReady = '1';
+    if (host.classList) host.classList.add('with-eye');
+
+    const eye = document.createElement('button');
+    eye.type = 'button';
+    eye.className = 'eye-toggle';
+    eye.setAttribute('aria-pressed', 'false');
+    eye.setAttribute('aria-label', '\u0625\u0638\u0647\u0627\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u062b\u0648\u0631');
+    eye.title = '\u0625\u0638\u0647\u0627\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u062b\u0648\u0631';
+    eye.textContent = '\u25CB';
+    eye.addEventListener('click', () => {
+      const shown = input.type === 'text';
+      input.type = shown ? 'password' : 'text';
+      eye.setAttribute('aria-pressed', shown ? 'false' : 'true');
+      eye.setAttribute('aria-label', shown
+        ? '\u0625\u0638\u0647\u0627\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u062b\u0648\u0631'
+        : '\u0625\u062e\u0641\u0627\u0621 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u062b\u0648\u0631');
+      eye.title = eye.getAttribute('aria-label');
+      eye.textContent = shown ? '\u25CB' : '\u25C9';
+      /* The caret back where it was: toggling is something you do while typing. */
+      try {
+        const at = input.value.length;
+        input.focus();
+        input.setSelectionRange(at, at);
+      } catch (_) {}
+    });
+    if (input.nextSibling) host.insertBefore(eye, input.nextSibling);
+    else host.appendChild(eye);
+  }
 }
 
 function printAttendanceSheet(){
@@ -568,7 +640,11 @@ function printAttendanceSheet(){
         +list.map(s=>{const n=swimmerNames(s);return '<tr>'
           +'<td>'+esc(n.first)+'</td>'
           +'<td>'+esc(n.last)+'</td>'
-          +'<td dir="ltr">'+esc(slashDate(s.birth_date||''))+'</td>'
+          /* From the member, or from the request it came from: a member accepted
+             before the platform began copying it across does not carry one, and a
+             column that is silently empty on half a sheet is a column nobody can
+             read a junior's age from. */
+          +'<td dir="ltr">'+esc(slashDate(memberField(s,'birth_date')))+'</td>'
           +statusCell(s)
           +'<td></td></tr>';}).join('')
         +'</tbody></table>'

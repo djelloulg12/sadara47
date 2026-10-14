@@ -78,11 +78,18 @@ function spotStyle(s) {
 }
 function formValues(a){
   const v = (k, fb) => (a && a[k] ? a[k] : (fb || ''));
-  /* Arabic-Indic digits on the sheet, and dates written year first -- 2026/10/11
-     -- the way the club writes them. A reference number is the exception and is
-     left alone: it is the one thing a person has to read back and look up. */
-  const slashDate = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))
-    ? clubDigits(String(d).split('-').join('/')) : clubDigits(String(d || ''));
+  /* Arabic-Indic digits on the sheet, and dates written the way the club writes
+     them: 11/10/2026. It was year first, which made a platform that reads one way
+     on the screen and another on the paper not one thing. A reference number is the
+     exception and is left alone: it is the one thing a person has to read back and
+     look up.
+
+     Stored dates are untouched. This is only how one is written out. */
+  const slashDate = d => {
+    const raw = String(d === undefined || d === null ? '' : d).trim();
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+    return m ? clubDigits(m[3] + '/' + m[2] + '/' + m[1]) : clubDigits(raw);
+  };
   return {
     /* The pool, on the line the scan draws for it. */
     facility: v('facility'),
