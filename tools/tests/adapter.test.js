@@ -149,6 +149,13 @@ function makeFirestore() {
        a mock that put it on the reference would let a wrong call through. */
     runTransaction: async (fn) => {
       calls.push(['transaction']);
+      /* A check can make the whole counter path fail in a chosen way. A hook
+         rather than a flag on the data because the failures being modelled are
+         not states of the data: a quota is not a row, and a cancelled transaction
+         is not a row either. */
+      if (typeof makeFirestore.__transactionHook === 'function') {
+        makeFirestore.__transactionHook();
+      }
       /* Which collection a transaction wrote to. Needed because the refusal below
          is about one collection and must not touch the others -- a mock that
          refused every write would make this check pass for the wrong reason, and
@@ -211,6 +218,42 @@ const asUser = (uid) => ({ uid, email: uid + '@x.dz' });
    by every other check. Read inside the mock, so a test does not have to reach
    into it. */
 makeFirestore.__createHook = null;
+
+/* Set by a check to make the counter path fail in a chosen way, and left unset by
+   every other check. Read inside the mock, so a test does not reach into it. */
+makeFirestore.__transactionHook = null;
+
+/* Registers somebody, with the counter forced to fail the given way, and returns
+   the answer. Used by the three checks below so each says the same thing about
+   the same question: was a person registered? */
+function registerWithCounterBroken(how) {
+  return async () => {
+    const savedApps = DATA.applications;
+    const realHook = makeFirestore.__transactionHook;
+    try {
+      DATA.applications = {
+        APP_PRIOR: {
+          application_no: 'APP-PRIOR', status: 'pending', first_name_ar: 'x',
+          last_name_ar: 'y', birth_date: '1990-01-01', phone: '07',
+          application_type: 'swimmer', registration_id: 'S20260000001',
+          selected_pool: 'المسبح الجواري بوهراوة', facility: 'المسبح الجواري بوهراوة'
+        }
+      };
+      makeFirestore.__transactionHook = how;
+      const w = boot(asUser('u1'));
+      return await call(w, '/api/applications', 'POST', {
+        application_no: 'APP-NEW', category: 'adult', first_name_ar: 'a',
+        last_name_ar: 'b', birth_date: '1991-01-01', phone: '07', address: 'x',
+        national_id: 'ID-CTR', username: 'ctr.taker',
+        subscription_code: 'quarter', selected_pool: 'المسبح الجواري بوهراوة',
+        facility: 'المسبح الجواري بوهراوة'
+      });
+    } finally {
+      makeFirestore.__transactionHook = realHook;
+      DATA.applications = savedApps;
+    }
+  };
+}
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
@@ -1135,6 +1178,100 @@ test('the refusal is remembered, so the second registration is not slowed by it'
   } finally {
     DATA.counters = savedCounters;
     DATA.readOnlyCounters = savedReadOnly;
+  }
+});
+
+/* ---- a registration is not at the mercy of the counter ---- */
+
+const quotaFailure = () => {
+  /* The exact message the running site was returning, verbatim: a project quota
+     running out, which contains no word "permission" and so was re-thrown. */
+  const e = new Error('Quota exceeded.');
+  e.code = 'resource-exhausted';
+  throw e;
+};
+
+test('a person is registered even when the counter cannot be reached for quota', async () => {
+  const r = await registerWithCounterBroken(quotaFailure)();
+  if (r.status !== 201) {
+    errors.push('a project quota running out stopped a registration being filed: '
+      + r.status + ' ' + JSON.stringify(r.data).slice(0, 180));
+  }
+});
+
+test('a person is registered even when the counter transaction is cancelled', async () => {
+  const r = await registerWithCounterBroken(() => {
+    const e = new Error('The transaction was aborted.');
+    e.code = 'aborted';
+    throw e;
+  })();
+  if (r.status !== 201) {
+    errors.push('a cancelled transaction stopped a registration being filed: '
+      + r.status + ' ' + JSON.stringify(r.data).slice(0, 180));
+  }
+});
+
+test('a person is registered even when the counter refuses by permission', async () => {
+  const r = await registerWithCounterBroken(() => {
+    const e = new Error('Missing or insufficient permissions.');
+    e.code = 'permission-denied';
+    throw e;
+  })();
+  if (r.status !== 201) {
+    errors.push('a refused counter stopped a registration being filed: '
+      + r.status + ' ' + JSON.stringify(r.data).slice(0, 180));
+  }
+});
+
+test('the number is the same one the counter would have given', async () => {
+  const savedApps = DATA.applications;
+  const realHook = makeFirestore.__transactionHook;
+
+  /* The same registration, filed twice: once with the counter reachable, once
+     with it not. Anything else -- a hand-written pattern, a guessed letter -- is a
+     check written to whatever the records happen to look like today, and that
+     passes for a number that is wrong. */
+  const file = async (broken, no) => {
+    DATA.applications = {
+      APP_PRIOR: {
+        application_no: 'APP-PRIOR', status: 'pending', first_name_ar: 'x',
+        last_name_ar: 'y', birth_date: '1990-01-01', phone: '07',
+        application_type: 'swimmer', registration_id: 'S20260000007'
+      }
+    };
+    makeFirestore.__transactionHook = broken || null;
+    const w = boot(asUser('u1'));
+    const r = await call(w, '/api/applications', 'POST', {
+      application_no: no, category: 'adult', first_name_ar: 'a', last_name_ar: 'b',
+      birth_date: '1991-01-01', phone: '07', address: 'x',
+      national_id: 'ID-NUM', username: 'num.taker', subscription_code: 'quarter'
+    });
+    const filed = Object.values(DATA.applications).find(a => a.application_no === no);
+    return { status: r.status, data: r.data, id: filed && filed.registration_id };
+  };
+
+  try {
+    const withCounter = await file(null, 'APP-WITH');
+    const without = await file(quotaFailure, 'APP-WITHOUT');
+
+    if (withCounter.status !== 201) {
+      errors.push('the registration with a working counter did not succeed, so there is '
+        + 'nothing to compare against: ' + withCounter.status + ' '
+        + JSON.stringify(withCounter.data).slice(0, 160));
+    } else if (without.status !== 201) {
+      errors.push('the registration without the counter did not succeed: ' + without.status
+        + ' ' + JSON.stringify(without.data).slice(0, 160));
+    } else if (!without.id) {
+      errors.push('without the counter the registration carried no number at all');
+    } else if (withCounter.id && without.id !== withCounter.id) {
+      errors.push('the two routes disagree about the number -- the counter said '
+        + JSON.stringify(withCounter.id) + ' and counting the records said '
+        + JSON.stringify(without.id) + '. Two people could be given one number, or '
+        + 'one person two, and nothing on the form would show it.');
+    }
+  } finally {
+    makeFirestore.__transactionHook = realHook;
+    DATA.applications = savedApps;
   }
 });
 

@@ -626,9 +626,22 @@
        reads them out of the very documents the numbering is defined over, so it
        produces the same next number and needs no permission at all. Used whenever
        a counter cannot be kept. */
+    /* Counting the records is the real answer, but it is still a read, and a read
+       can fail for reasons that have nothing to do with the person in front of the
+       form. So it is guarded too, one level down.
+
+       An empty number means the club assigns it from the request itself: a request
+       that can be numbered later is a visible state somebody can fix, and a family
+       told to come back is not one anybody can. */
     const fromRecords = async () => {
-      const seq = await countedFromRecords(kind, year, pool);
-      return seq ? letter + year + String(pool) + String(seq).padStart(4, '0') : '';
+      try {
+        const seq = await countedFromRecords(kind, year, pool);
+        return seq ? letter + year + String(pool) + String(seq).padStart(4, '0') : '';
+      } catch (error) {
+        console.warn('the registration number could not be counted from the records;'
+          + ' it will be assigned by the club', String((error && error.code) || error));
+        return '';
+      }
     };
     if (!await countersAvailable()) return fromRecords();
     const ref = db.collection('counters').doc('registration_' + year + '_' + pool);
@@ -655,8 +668,30 @@
       });
       return letter + year + String(pool) + String(seq).padStart(4, '0');
     } catch (error) {
-      if (!/permission/i.test(String((error && error.message) || error))) throw error;
+      /* Every failure of the counter falls back, and none of them fails the
+         registration.
+
+         This used to catch one failure -- permission denied -- and re-throw
+         everything else, because permission denied was the failure that was there
+         when it was written. So a project quota running out produced
+
+             429  {"error":"Quota exceeded.","code":"resource-exhausted"}
+
+         after nine seconds of retrying, for every registration, because the
+         message does not contain the word "permission". Traced live, on the
+         running site: that is exactly what a family was being shown.
+
+         The test was the wrong question. The counter is not where the number comes
+         from -- `fromRecords()` counts the records and produces the same one with
+         no permission at all -- so a counter that cannot be reached is not a
+         missing answer, it is a slower route to one that is already there.
+
+         Permission, quota, an aborted transaction, a dropped connection, a rules
+         change: all of them fall back. The code is logged because a person cannot
+         act on it and somebody has to be able to. */
       markCountersUnavailable();
+      console.warn('the registration counter was unavailable; the number was counted'
+        + ' from the records instead', String((error && error.code) || error));
       return fromRecords();
     }
   };
