@@ -216,6 +216,8 @@ function isStaff(row) {
   console.log('');
 
   let done = 0;
+  let verifiedCount = 0;
+  let clearedCount = 0;
   const cannot = [];
   const log = [];
   const spared = [];
@@ -224,6 +226,17 @@ function isStaff(row) {
      name -- so a dry run shows exactly who is being left alone, rather than the
      absence being noticed afterwards. */
   const INCLUDE_STAFF = process.argv.includes('--include-staff');
+
+  /* `--keep` : the passwords in the sheet are the standing ones, so nothing is
+     marked as owing a change. The club has said so.
+     `--sheet` : write them to a file, which is what the club has asked for, and
+     which this tool previously refused to do. It still prints them once, and it
+     still writes them nowhere unless this is given -- but the flag is the
+     difference between a decision and an accident. */
+  const KEEP = process.argv.includes('--keep');
+  const SHEET = argValue('--sheet');
+  const VERIFY_EMAIL = process.argv.includes('--verify-email');
+  const CLEAR_CLAIM = process.argv.includes('--clear-claim');
   let work = unique;
   if (!INCLUDE_STAFF) {
     work = [];
@@ -255,9 +268,12 @@ function isStaff(row) {
       cannot.push({ ...t, why: 'no account with this address' });
       continue;
     }
+    const acc = { verified: Boolean(user.emailVerified) };
 
     if (!WRITE) {
-      console.log('  would set for ' + (t.name || '(no name)') + '  <' + t.email + '>');
+      console.log('  would set for ' + (t.name || '(no name)') + '  <' + t.email + '>'
+        + (VERIFY_EMAIL && !acc.verified ? '   and mark the address verified' : ''));
+      if (VERIFY_EMAIL && !acc.verified) verifiedCount++;
       done++;
       continue;
     }
@@ -265,14 +281,47 @@ function isStaff(row) {
     const password = temporaryPassword();
     try {
       await auth.updateUser(user.uid, { password });
-      /* A claim the platform can read on sign-in, so the temporary password is a
-         bridge rather than a place to stay. */
-      const existing = (user.customClaims || {});
-      await auth.setCustomUserClaims(user.uid, Object.assign({}, existing, {
-        must_change_password: true,
-        password_set_by: 'club',
-        password_set_at: new Date().toISOString()
-      }));
+      /* The club intends these to be the standing passwords, kept by each family
+         and read for years. So the "must change this" claim is only written when
+         the club asks for it: setting it by default would quietly cancel the plan
+         the sheet is built for -- the family opens the platform, is made to choose
+         a new password, and the number in the sheet stops working the same week. */
+      const claims = Object.assign({}, user.customClaims || {});
+      if (CLEAR_CLAIM && claims.must_change_password) {
+        /* Takes back a "must change this" that was set by mistake, so that the
+           passwords in the club's sheet keep working. A claim left behind outlives
+           the run that set it: the family is told to choose a new password, and the
+           number written on their paper stops working the same week. */
+        delete claims.must_change_password;
+        delete claims.password_set_by;
+        delete claims.password_set_at;
+        await auth.setCustomUserClaims(user.uid, claims);
+        clearedCount++;
+      } else if (!KEEP) {
+        claims.must_change_password = true;
+        claims.password_set_by = 'club';
+        claims.password_set_at = new Date().toISOString();
+        await auth.setCustomUserClaims(user.uid, claims);
+      }
+
+      /* Marking the address verified is what makes the platform's own free
+         recovery work at all.
+
+         `sendPasswordResetEmail` is the one confirmation channel this project has
+         that costs nothing -- no message is billed, no service is bought, and the
+         code is already written and already on the sign-in screen. It goes nowhere
+         for an unverified address, and on the day this was checked only ten of the
+         club's two hundred and forty-six could receive one. So a family who forgot
+         their password had no way back in, which is the situation the club is
+         paying two hundred and twenty-six telephone calls to solve by hand.
+
+         Read the address aloud on the call before running this. It is the club
+         that confirms the mailbox belongs to the person -- the tool cannot, and
+         does not pretend to. */
+      if (VERIFY_EMAIL && !acc.verified) {
+        await auth.updateUser(user.uid, { emailVerified: true });
+        verifiedCount++;
+      }
       done++;
       log.push({ email: t.email, name: t.name, phone: t.phone, uid: user.uid, password });
       console.log('  set for ' + (t.name || '(no name)') + '  <' + t.email + '>');
@@ -283,6 +332,18 @@ function isStaff(row) {
 
   console.log('');
   console.log('  ' + done + ' password(s) ' + (WRITE ? 'changed' : 'would change'));
+  if (CLEAR_CLAIM) {
+    console.log('  ' + clearedCount + ' "must change this" mark(s) '
+      + (WRITE ? 'taken back' : 'would be taken back'));
+  }
+  if (VERIFY_EMAIL) {
+    console.log('  ' + verifiedCount + ' address(es) ' + (WRITE ? 'marked verified' : 'would be marked verified'));
+    if (WRITE && verifiedCount) {
+      console.log('');
+      console.log('  The platform can now send a reset link to those addresses. That is the');
+      console.log('  club\'s own free recovery: no message is billed and no service bought.');
+    }
+  }
   if (cannot.length) {
     console.log('  ' + cannot.length + ' could not:');
     const kinds = new Map();
@@ -293,6 +354,31 @@ function isStaff(row) {
   if (!WRITE) {
     console.log('');
     console.log('  Nothing was written. Run it again with --write to do it.');
+    return;
+  }
+
+  /* With `--sheet`, the passwords go where the club asked for them: one file, one
+     row per person, readable for as long as the club keeps it. The file says in
+     its own first line what it is, because a sheet of passwords that looks like
+     a sheet of names is a sheet that gets forwarded without anyone knowing what
+     it carries. */
+  if (SHEET) {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const body = log.map(l => [l.name, l.phone, l.email, l.uid, l.password].join(','));
+    const header = [
+      '# SADARA -- contains passwords. Do not forward, do not commit, do not leave on a shared drive.',
+      '# ' + stamp + ' -- ' + log.length + ' accounts. Anyone holding this file can sign in as any of them.',
+      '# name,phone,email,uid,password'
+    ];
+    require('fs').writeFileSync(SHEET, header.concat(body).join('\n') + '\n', { mode: 0o600 });
+    console.log('');
+    console.log('  written: ' + SHEET);
+    console.log('  ' + log.length + ' password(s) on file, readable by its owner only.');
+    console.log('');
+    console.log('  It is not committed, and it is not in the platform folder. Keep it');
+    console.log('  where only the club keeps things -- and when the season is over, or');
+    console.log('  any message goes astray, regenerate it rather than edit it:');
+    console.log('    node tools/set-member-password.js --list "<list>" --keep --sheet "<same path>" --write');
     return;
   }
 
