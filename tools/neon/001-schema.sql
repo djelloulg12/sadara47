@@ -74,15 +74,42 @@ CREATE INDEX IF NOT EXISTS users_role_idx      ON users (role);
 
 -- Two accounts on one number is normal; two accounts sharing a *name* is not,
 -- because a name is how a person finds their own account.
-CREATE UNIQUE INDEX IF NOT EXISTS users_legacy_username_uniq
+CREATE INDEX IF NOT EXISTS users_legacy_username_idx
   ON users (legacy_username) WHERE legacy_username IS NOT NULL;
+
+-- Uniqueness declared before the data was read, and found to be wrong by it.
+-- Every one of these refused the import on the club's own records, which is the
+-- clearest statement available that a constraint written ahead of the data is a
+-- guess. A constraint earns its place by refusing something false; one that
+-- refuses something true is an obstacle wearing one.
+ALTER TABLE sadara.applications
+  DROP CONSTRAINT IF EXISTS applications_application_no_key;
+ALTER TABLE sadara.users
+  DROP CONSTRAINT IF EXISTS users_login_id_key;
+
+-- The indexes built while they were unique stay unique: `CREATE INDEX IF NOT
+-- EXISTS` leaves an existing index exactly as it is, quietly. So the old ones are
+-- dropped by name, and the plain ones are created again under a new name.
+--
+-- Worth writing down, because the failure it causes is invisible from the file:
+-- the schema no longer says unique, the database still enforces it, and the only
+-- sign is an import that stops on the club's own records.
+DROP INDEX IF EXISTS sadara.swimmers_membership_idx;
+CREATE INDEX IF NOT EXISTS swimmers_membership_lookup
+  ON sadara.swimmers (membership_no) WHERE membership_no IS NOT NULL;
 
 -- ---------------------------------------------------------------- requests
 -- A registration, exactly as it was filed. `status` is what the club's queue is
 -- built from, and `reviewed_by`/`decided_at` are what it shows as decided.
 CREATE TABLE IF NOT EXISTS applications (
   firestore_path    text PRIMARY KEY,
-  application_no    text UNIQUE,
+  -- NOT unique, and the reason was measured rather than assumed. Of the 574 request
+  -- documents there are only 353 distinct reference numbers, because one request is
+  -- filed under several keys on purpose: under the identity that filed it and under
+  -- the name it chose, so that it can be found again by either. A reference number
+  -- carried by two documents is that design working, not a duplicate -- and a
+  -- migration that refuses it is refusing the club's records as they actually are.
+  application_no    text,
   application_type  text,             -- swimmer | coach
   status            text,             -- pending | approved | rejected
   category          text,
@@ -179,7 +206,7 @@ CREATE TABLE IF NOT EXISTS swimmers (
   raw                jsonb NOT NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS swimmers_membership_idx
+CREATE INDEX IF NOT EXISTS swimmers_membership_idx
   ON swimmers (membership_no) WHERE membership_no IS NOT NULL;
 
 -- ---------------------------------------------------------------- presence
@@ -237,5 +264,62 @@ CREATE TABLE IF NOT EXISTS unmapped (
   collection     text,
   raw            jsonb NOT NULL
 );
+
+
+-- ---------------------------------------------------------------- added later
+-- The columns the club reports on, asked for by a dry run that could read the
+-- snapshot and could not read these out of it. ADD COLUMN IF NOT EXISTS, so
+-- this file is safe to run against a table holding a season of records and
+-- against a table holding nothing -- and safe to run twice.
+-- `raw` is untouched and still authoritative.
+
+ALTER TABLE sadara.applications
+  ADD COLUMN IF NOT EXISTS email text,
+  ADD COLUMN IF NOT EXISTS username text,
+  ADD COLUMN IF NOT EXISTS sport text,
+  ADD COLUMN IF NOT EXISTS plan_name text,
+  ADD COLUMN IF NOT EXISTS swimming_strokes text,
+  ADD COLUMN IF NOT EXISTS payment_status text,
+  ADD COLUMN IF NOT EXISTS paid_at date,
+  ADD COLUMN IF NOT EXISTS cashier_name text,
+  ADD COLUMN IF NOT EXISTS transport_amount numeric(12,2),
+  ADD COLUMN IF NOT EXISTS uniform_amount numeric(12,2),
+  ADD COLUMN IF NOT EXISTS photo text,
+  ADD COLUMN IF NOT EXISTS filed_under text,
+  ADD COLUMN IF NOT EXISTS claim_only boolean,
+  ADD COLUMN IF NOT EXISTS claimed_at timestamptz,
+  ADD COLUMN IF NOT EXISTS submitted_from text,
+  ADD COLUMN IF NOT EXISTS returning_account boolean,
+  ADD COLUMN IF NOT EXISTS guardian_child boolean,
+  ADD COLUMN IF NOT EXISTS guardian_card_issued date,
+  ADD COLUMN IF NOT EXISTS guardian_national_id_expiry date,
+  ADD COLUMN IF NOT EXISTS national_id_key text,
+  ADD COLUMN IF NOT EXISTS duplicate_key text,
+  ADD COLUMN IF NOT EXISTS duplicate_check boolean,
+  ADD COLUMN IF NOT EXISTS owner_uid text,
+  ADD COLUMN IF NOT EXISTS transferred_at timestamptz;
+
+ALTER TABLE sadara.swimmers
+  ADD COLUMN IF NOT EXISTS name text,
+  ADD COLUMN IF NOT EXISTS national_id text,
+  ADD COLUMN IF NOT EXISTS whatsapp text,
+  ADD COLUMN IF NOT EXISTS group_name text,
+  ADD COLUMN IF NOT EXISTS status text,
+  ADD COLUMN IF NOT EXISTS photo text,
+  ADD COLUMN IF NOT EXISTS applicant_uid text;
+
+ALTER TABLE sadara.users
+  ADD COLUMN IF NOT EXISTS name text,
+  ADD COLUMN IF NOT EXISTS birth_date date,
+  ADD COLUMN IF NOT EXISTS registration_id text,
+  ADD COLUMN IF NOT EXISTS merged_into text,
+  ADD COLUMN IF NOT EXISTS merged_name text,
+  ADD COLUMN IF NOT EXISTS merged_at timestamptz,
+  ADD COLUMN IF NOT EXISTS decided_at timestamptz;
+
+ALTER TABLE sadara.payments
+  ADD COLUMN IF NOT EXISTS application_no text,
+  ADD COLUMN IF NOT EXISTS cashier_name text;
+
 
 COMMIT;

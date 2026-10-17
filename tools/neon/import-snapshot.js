@@ -140,7 +140,14 @@ const PROMOTE = {
   users: {
     uid: asStr, email: asStr, display_name: asStr, role: asStr, phone: asStr,
     member_no: asStr, request_status: asStr, request_reason: asStr,
-    verified: asBool, created_at: asTimestamp, updated_at: asTimestamp
+    verified: asBool, created_at: asTimestamp, updated_at: asTimestamp,
+    name: asStr,
+    birth_date: asDate,
+    registration_id: asStr,
+    merged_into: asStr,
+    merged_name: asStr,
+    merged_at: asTimestamp,
+    decided_at: asTimestamp,
   },
   applications: {
     application_no: asStr, application_type: asStr, status: asStr, category: asStr,
@@ -158,7 +165,31 @@ const PROMOTE = {
     decision_reason: asStr, rejection_reason: asStr,
     reviewed_by: asStr, decided_at: asTimestamp,
     scan_name: asStr, scan_path: asStr, notes: asStr,
-    submitted_at: asTimestamp, created_at: asTimestamp, updated_at: asTimestamp
+    submitted_at: asTimestamp, created_at: asTimestamp, updated_at: asTimestamp,
+    email: asStr,
+    username: asStr,
+    sport: asStr,
+    plan_name: asStr,
+    swimming_strokes: asStr,
+    payment_status: asStr,
+    paid_at: asDate,
+    cashier_name: asStr,
+    transport_amount: asNum,
+    uniform_amount: asNum,
+    photo: asStr,
+    filed_under: asStr,
+    claim_only: asBool,
+    claimed_at: asTimestamp,
+    submitted_from: asStr,
+    returning_account: asBool,
+    guardian_child: asBool,
+    guardian_card_issued: asDate,
+    guardian_national_id_expiry: asDate,
+    national_id_key: asStr,
+    duplicate_key: asStr,
+    duplicate_check: asBool,
+    owner_uid: asStr,
+    transferred_at: asTimestamp,
   },
   swimmers: {
     membership_no: asStr, registration_id: asStr,
@@ -168,7 +199,14 @@ const PROMOTE = {
     transport: asBool, uniform: asBool, payment_method: asStr,
     guardian_first_name: asStr, guardian_last_name: asStr, guardian_phone: asStr,
     medical_notes: asStr, from_application: asStr, active: asBool,
-    created_at: asTimestamp, updated_at: asTimestamp
+    created_at: asTimestamp, updated_at: asTimestamp,
+    name: asStr,
+    national_id: asStr,
+    whatsapp: asStr,
+    group_name: asStr,
+    status: asStr,
+    photo: asStr,
+    applicant_uid: asStr,
   },
   attendance: {
     swimmer_path: asStr, membership_no: asStr, session_date: asDate, present: asBool,
@@ -177,6 +215,7 @@ const PROMOTE = {
   payments: {
     swimmer_path: asStr, membership_no: asStr, amount: asNum, method: asStr,
     paid_at: asDate, payment_status: asStr, recorded_by: asStr, notes: asStr,
+    application_no: asStr, cashier_name: asStr,
     created_at: asTimestamp
   }
 };
@@ -321,10 +360,31 @@ async function main() {
       /* ON CONFLICT ... DO UPDATE, never a delete. Re-running updates rows to
          match the snapshot and cannot remove a row that is only in the database,
          which is what makes going back possible without a second thought. */
-      const sql = 'INSERT INTO sadara.' + table + ' (' + cols.join(', ') + ') VALUES ('
-        + values.join(', ') + ') ON CONFLICT (firestore_path) DO UPDATE SET '
+      /* One parenthesised group per row. Flattening these into a single list --
+         $1, $2, ... $7600 inside one pair of brackets -- is a valid-looking line
+         of code that asks for one row of seven thousand six hundred columns, and
+         the database answers "more expressions than target columns" without
+         saying that the arithmetic was never the problem. */
+      const tuples = slice.map((r, n) =>
+        '(' + cols.map((c, ci) => '$' + (n * cols.length + ci + 1)).join(', ') + ')');
+
+      const sql = 'INSERT INTO sadara.' + table + ' (' + cols.join(', ') + ') VALUES '
+        + tuples.join(', ') + ' ON CONFLICT (firestore_path) DO UPDATE SET '
         + updates.map(c => c + ' = EXCLUDED.' + c).join(', ');
-      await client.query(sql, params);
+      try {
+        await client.query(sql, params);
+      } catch (e) {
+        /* A refusal that does not say which table, which columns and which batch
+           is a refusal nobody can act on. Three lines to say all three, and it is
+           the difference between "the import failed" and a fix. */
+        throw new Error(
+          'writing sadara.' + table + ' failed on batch ' + (Math.floor(i / BATCH) + 1)
+          + ' of ' + Math.ceil(rows.length / BATCH) + ':\n'
+          + '    ' + e.message + '\n'
+          + '    columns (' + cols.length + '): ' + cols.join(', ') + '\n'
+          + '    values  (' + values.length + ') for ' + slice.length + ' rows\n'
+          + '    statement: ' + sql.slice(0, 260) + ' ...');
+      }
     }
     const got = await client.query('SELECT count(*)::int AS n FROM sadara.' + table);
     const status = got.rows[0].n >= rows.length ? '' : '   <-- fewer than imported; the table holds more';
