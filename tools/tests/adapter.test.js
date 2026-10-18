@@ -100,7 +100,16 @@ function makeFirestore() {
           calls.push(['create', name, id, value]);
           DATA[name][id] = value;
         },
-        get: async () => ({ exists: !!DATA[name][id], data: () => DATA[name][id], id, ref: refOf(id) }),
+        /* A single document read can fail, exactly as a query's can, and for the
+           same reasons. It could not: the hook was on the query path only, so the
+           one read in this adapter that decides whether a child is written into
+           the database -- the door -- could not be made to fail by any check. It
+           was the read that could not fail that everybody assumed could, and it
+           was the read that decided. */
+        get: async () => {
+          if (typeof makeFirestore.__readHook === 'function') makeFirestore.__readHook(name, id);
+          return { exists: !!DATA[name][id], data: () => DATA[name][id], id, ref: refOf(id) };
+        },
         delete: async () => { calls.push(['delete', name, id]); delete DATA[name][id]; }
       });
       const api = {
@@ -1566,20 +1575,175 @@ test('while the door is shut, a filled-in request is refused too', async () => {
   }
 });
 
-test('an unreadable switch leaves the door as it was found', async () => {
+/* The door, and the one thing that must never be decided by an error.
+
+   There was a check here that said the opposite. It read: "a switch nobody can
+   read shut the door -- an error while reading it must never decide whether the
+   club is taking registrations." And it was right about the thing it was looking
+   at, which was GET /api/registration -- the answer a visitor is given -- and
+   wrong about the thing next to it, which is POST /api/applications, where a
+   registration is actually filed. The write path was wrapped in a catch that
+   opened the door, so for as long as that sentence was in this file, an
+   unreadable door meant an open one where children get written down.
+
+   The two answers are not the same question and they do not have the same safe
+   direction:
+
+     what a visitor is told   fails OPEN. A family shown an empty form with a
+                              message can telephone the club. A family shown
+                              nothing at all decides the website is broken and
+                              writes their child out on paper instead.
+
+     whether a request is filed  fails CLOSED. A registration accepted by
+                              mistake is a child's record -- photograph, identity
+                              number, guardian -- and undoing it is a deletion, an
+                              audit entry, and a family told their child was not
+                              registered.
+
+   One of those mistakes is a phone call. The other is a deletion. */
+
+test('a visitor is told the door is open rather than shown nothing when it cannot be read', async () => {
   const saved = DATA.config;
   try {
     delete DATA.config;
     const w = boot(asUser('u1'));
     const r = await call(w, '/api/registration', 'GET');
-    if (!r.ok) errors.push('a visitor cannot be told whether the door is open: '
-      + r.status);
+    if (!r.ok) errors.push('a visitor cannot be told whether the door is open: ' + r.status);
     if (r.data && r.data.open === false) {
-      errors.push('a switch nobody can read shut the door. An error while reading it'
-        + ' must never decide whether the club is taking registrations.');
+      errors.push('a switch nobody can read shut the door a visitor is looking at. '
+        + 'That answer fails open on purpose: a form with a message is a form the '
+        + 'club can be telephoned about, and no form at all is a website they think '
+        + 'is broken.');
+    }
+    /* `readable: false` is the answer doing its job. Its absence is the fault:
+       then "open" is indistinguishable from a door the club opened, and every
+       page downstream has to treat a certainty as if it were a guess. */
+    if (!r.data || r.data.readable !== false) {
+      errors.push('the visitor is not told the answer could not be read, so "open" here '
+        + 'is indistinguishable from a door the club opened: ' + JSON.stringify(r.data));
     }
   } finally {
     DATA.config = saved;
+  }
+});
+
+/* The other direction, which is the one that matters. */
+
+const fileOne = async (opts) => {
+  const w = boot(asUser('u1'));
+  const r = await call(w, '/api/applications', 'POST', {
+    application_no: opts.no, category: 'adult', first_name_ar: 'a', last_name_ar: 'b',
+    birth_date: '1991-01-01', phone: '07', address: 'x',
+    national_id: 'ID-NUM', username: 'num.taker', subscription_code: 'quarter'
+  });
+  return r;
+};
+
+test('a shut door refuses the registration and writes nothing', async () => {
+  const savedConfig = DATA.config;
+  const savedApps = DATA.applications;
+  try {
+    DATA.applications = {};
+    DATA.config = Object.assign({}, savedConfig, {
+      registration: { open: false, note: 'أُغلقت التسجيلات للموسم الحالي.' }
+    });
+    const r = await fileOne({ no: 'APP-DOOR-SHUT' });
+    if (r.ok) errors.push('a shut door filed a registration');
+    if (!r.data || r.data.closed !== true) {
+      errors.push('the refusal does not say the door is shut, so the family is told '
+        + 'to try again tomorrow for a season that is full: ' + JSON.stringify(r.data));
+    }
+    if (!/\u0627\u0644\u0645\u0648\u0633\u0645/.test(String(r.data && r.data.error)) === false) {
+      errors.push('the refusal does not carry the note the club wrote with it');
+    }
+    if (Object.keys(DATA.applications).length) {
+      errors.push('a shut door left ' + Object.keys(DATA.applications).length
+        + ' request(s) on file anyway');
+    }
+  } finally {
+    DATA.applications = savedApps;
+    DATA.config = savedConfig;
+  }
+});
+
+test('a door nobody can read refuses the registration rather than assuming it is wanted', async () => {
+  const savedConfig = DATA.config;
+  const savedApps = DATA.applications;
+  const savedRead = makeFirestore.__readHook;
+  try {
+    DATA.applications = {};
+    DATA.config = Object.assign({}, savedConfig, { registration: { open: false, note: '' } });
+    /* The switch is there and says shut, and the *reading of it* fails anyway --
+       which is what a spent quota or a dropped connection looks like, and what
+       actually happened the day registrations kept arriving. */
+    makeFirestore.__readHook = (name) => {
+      if (name === 'config') throw new Error('PERMISSION_DENIED');
+    };
+    const r = await fileOne({ no: 'APP-DOOR-UNREADABLE' });
+    if (r.ok) {
+      errors.push('a registration was filed while the door could not be read. '
+        + 'This is how children get written into a database whose season is closed: '
+        + 'not by the club opening the door, but by nobody being able to see it.');
+    }
+    if (Object.keys(DATA.applications).length) {
+      errors.push('a request reached the file with the door unreadable');
+    }
+    if (!r.data || r.data.unreadable !== true) {
+      errors.push('the family is not told the club could not confirm anything, so they '
+        + 'are told to try again rather than to telephone: ' + JSON.stringify(r.data));
+    }
+
+    /* And the other way round, so the fix is not a door that never opens. The
+       door has to be opened as well as read: the switch still has to work, and a
+       fix that closes on every reading is a club that cannot register anybody. */
+    DATA.applications = {};
+    makeFirestore.__readHook = null;
+    DATA.config = Object.assign({}, savedConfig, { registration: { open: true, note: '' } });
+    const open = await fileOne({ no: 'APP-DOOR-OPEN' });
+    if (!open.ok) errors.push('a door that can be read and is open refused a registration: '
+      + open.status + ' ' + JSON.stringify(open.data));
+    if (!Object.keys(DATA.applications).length) {
+      errors.push('the open door filed nothing');
+    }
+  } finally {
+    makeFirestore.__readHook = savedRead;
+    DATA.applications = savedApps;
+    DATA.config = savedConfig;
+  }
+});
+
+/* The number is raised before the door is asked, so a refusal burns one. The
+   comment above the check claimed otherwise for a season, and a check that only
+   asks "was a record written" cannot see it. */
+
+test('a refused registration does not take a registration number', async () => {
+  const savedConfig = DATA.config;
+  const savedApps = DATA.applications;
+  const savedCounters = DATA.counters;
+  try {
+    DATA.applications = {};
+    DATA.config = Object.assign({}, savedConfig, { registration: { open: false, note: '' } });
+    /* What the counters held *before*, not what they hold absolutely: the
+       fixtures carry counters of their own, and a check that reads an absolute
+       value measures the fixture and passes or fails for reasons that have
+       nothing to do with the door. */
+    const before = JSON.stringify(DATA.counters || {});
+    const w = boot(asUser('u1'));
+    await call(w, '/api/applications', 'POST', {
+      application_no: 'APP-NO-NUMBER', category: 'adult', first_name_ar: 'a',
+      last_name_ar: 'b', birth_date: '1991-01-01', phone: '07', address: 'x',
+      national_id: 'ID-NUM', subscription_code: 'quarter'
+    });
+    if (JSON.stringify(DATA.counters || {}) !== before) {
+      errors.push('a registration was refused and the counters still moved: '
+        + before + ' -> ' + JSON.stringify(DATA.counters || {})
+        + ' -- every refusal leaves a gap in the sequence, and a gap in the sequence '
+        + 'is the fault that put 101 children on one number to begin with.');
+    }
+  } finally {
+    DATA.applications = savedApps;
+    DATA.config = savedConfig;
+    DATA.counters = savedCounters;
   }
 });
 

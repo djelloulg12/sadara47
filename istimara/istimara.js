@@ -1544,6 +1544,19 @@
           if (!r.ok) {
             var err = new Error(data.error || 'تعذّر إرسال الطلب. تحقّق من الاتصال وحاول مجدداً.');
             err.duplicate = !!data.duplicate;
+            /* Two refusals, and a family must not be told they are the same one.
+
+               A shut door is the club's decision, and the family has nothing to
+               do but wait for the season. A door the club could not read is the
+               club's own problem: the request has been refused rather than lost,
+               and the one useful thing to say is that nothing was written and a
+               telephone call will get it filed.
+
+               Saying "closed" to a family whose door is only unreadable sends them
+               home for nothing; saying "try again" to a family whose season is
+               full makes them type the whole of it again tomorrow. */
+            err.closed = !!data.closed;
+            err.unreadable = !!data.unreadable;
             /* The other way a person with an account ends up on a form for a new
                swimmer: the server refuses them as a duplicate. Same door, same
                address they have already typed. */
@@ -1577,8 +1590,12 @@
       /* The draft is deliberately kept: nothing the person typed is lost when
          a send fails, so they can try again on the same phone. */
       say(e.message || 'تعذّر إرسال الطلب.', 'error', e.door);
-      notify('تعذّر إرسال الطلب.', 'error',
-        'لم يُفقد ما كتبته. أعد المحاولة من نفس الهاتف.');
+      notify(e.unreadable ? 'لم نتمكن من تأكيد حالة التسجيلات.' : 'تعذّر إرسال الطلب.', 'error',
+        e.unreadable
+          ? 'لم يُكتب أي طلب، ولم يُفقد ما كتبته. اتصل بالنادي ليسجّل طلبك، أو أعد المحاولة بعد قليل.'
+          : e.closed
+            ? 'ما كتبته باقٍ. التسجيلات مغلقة لهذا الموسم، ونرجو انتظار إعلان فتحها.'
+            : 'لم يُفقد ما كتبته. أعد المحاولة بعد قليل أو اتصل بالنادي إن استمر.');
       button.disabled = false;
       button.textContent = 'إرسال الاستمارة';
       window.scrollTo({ top: 0, behavior: 'smooth' });

@@ -37,6 +37,35 @@
     return list.indexOf(user.email) !== -1;
   };
 
+  /* Whether a registration may be filed, and whether we were able to find out.
+
+     `read: false` is the half that matters, and it is not a detail.
+
+     A closed door that could not be read was being treated as an open one, on the
+     reasoning that a door which shuts itself when the network is down stops a
+     season. That reasoning is sound for the *form* -- a family must not be shown
+     a form because a request failed. It is exactly backwards for the *write*: a
+     registration accepted by mistake is a child in the club's database with a
+     photograph and an identity number on it, and undoing that is a deletion, an
+     audit entry, and a family told their child was not registered.
+
+     The two failures are not the same size, and only one of them is cheap. So the
+     write refuses when the door is shut and refuses when the door cannot be told,
+     and says which of the two it was, so the family knows whether to wait or to
+     telephone the club. */
+  const readDoor_ = async () => {
+    try {
+      const snap = await db.collection('config').doc('registration').get();
+      const data = snap.exists ? snap.data() : null;
+      if (!data) return { read: true, open: true, note: '' };
+      return { read: true, open: data.open !== false, note: data.note || '' };
+    } catch (error) {
+      console.warn('the registration door could not be read; a registration is refused '
+        + 'rather than assumed to be wanted', error);
+      return { read: false, open: false, note: '' };
+    }
+  };
+
   const userView = async user => {
     if (!user) return null;
     let profile = {};
@@ -819,18 +848,34 @@
       /* ---------------- is the form open? ----------------
          One document, readable by anybody, because a visitor has to be able to be
          told the truth without signing in first. Nothing about the club is in it
-         except whether the door is open and, when it is shut, why. */
+         except whether the door is open and, when it is shut, why.
+
+         This answer fails OPEN, and it is the only place that does. A visitor
+         standing at a shut door must not be shown a form because a request
+         failed: an empty form with a message is a form they can telephone about,
+         and a form that is not there is a website they think is broken. They
+         cannot fix either, but only one of them stops them writing their child
+         out in longhand first.
+
+         Where a registration is actually *filed* this is reversed, below. The two
+         are different questions and they do not have the same safe answer. */
       if (path === '/api/registration' && method === 'GET') {
-        let open = true;
-        let note = '';
-        try {
-          const snap = await db.collection('config').doc('registration').get();
-          if (snap.exists && snap.data() && snap.data().open === false) {
-            open = false;
-            note = snap.data().note || '';
-          }
-        } catch (_) { /* an unreadable switch leaves the door as it was found */ }
-        return jsonResponse({ open, note });
+        const door = await readDoor_();
+        /* Open on a reading that failed, and told to be so.
+           This is the one answer that fails open, and it is the right way round:
+           a family shown the form and then refused, with the reason and their
+           typing kept, telephones the club and gets filed. A family shown a closed
+           door we could not actually verify is told the season is full on the
+           strength of a network error, and goes home.
+
+           `readable` travels with it so nobody downstream has to guess: "open"
+           here means open, or could not be told, and the page passes that on
+           rather than turning it into a certainty it does not have. */
+        return jsonResponse({
+          open: door.read ? door.open : true,
+          note: door.note,
+          readable: door.read
+        });
       }
 
       /* ---------------- the switch itself ---------------- */
@@ -1608,6 +1653,31 @@
         return jsonResponse((await rows('applications')).filter(row => !row.claim_only));
       }
       if (path === '/api/applications' && method === 'POST') {
+        /* ---------------- the door, before anything else ----------------
+
+           First, and not because it is the most important thing -- because
+           everything after it writes. A registration that is refused after the
+           number has been taken still burns the number, and a check that only
+           looked at whether the record was written would call that a clean run.
+
+           It fails closed, which the answer a visitor is given does not. See
+           readDoor_ above: a form nobody can see is a website they think is
+           broken and telephone the club about; a registration wrongly accepted is
+           a child's record that then has to be taken back out again. */
+        const door = await readDoor_();
+        if (!door.read) {
+          return jsonResponse({
+            error: 'تعذّر تأكيد حالة التسجيلات الآن. لم يُرسل طلبك ولم يُكتب شيء،'
+              + ' نرجو الاتصال بالنادي لتسجيله، أو المحاولة بعد قليل.',
+            unreadable: true
+          }, 503);
+        }
+        if (!door.open) {
+          return jsonResponse({
+            error: 'التسجيل مغلق حاليًا.' + (door.note ? ' ' + door.note : ''),
+            closed: true
+          }, 403);
+        }
         /* Folded to the form the database holds before anything reads it, so the
            duplicate check below, the identity this is filed under and the record
            that is written all see the same number whichever digits it arrived in. */
@@ -1666,24 +1736,15 @@
            A blank request refused *after* the number was taken still leaves the gap,
            and the check would have been green while it happened.
 
-           The door is tested on the write rather than only on the form. A form can
-           be worked around by anybody determined to; a write that will not happen
-           cannot.
+           The door itself was tested here, above everything, and the comment
+           beneath used to claim that was so. It was not: the door stood between
+           the record and the write, and the number had already been raised above
+           it. It is tested before the first await now, where the comment says.
 
            The names are read from where the form puts them, per kind -- because a
            coach's request has no first name and no surname at all, and a rule
            written for swimmers refused three of the suite's own coach requests
            before it was read against the form it sits beside. */
-        try {
-          const shut = await db.collection('config').doc('registration').get();
-          if (shut.exists && shut.data() && shut.data().open === false) {
-            return jsonResponse({
-              error: 'التسجيل مغلق حاليًا.'
-                + (shut.data().note ? ' ' + shut.data().note : ''),
-              closed: true
-            }, 403);
-          }
-        } catch (_) { /* an unreadable switch leaves the door as it was found */ }
 
         const named = (x) => String(x === undefined || x === null ? '' : x).trim() !== '';
         const askingAboutACoach = applicationType === 'coach';
