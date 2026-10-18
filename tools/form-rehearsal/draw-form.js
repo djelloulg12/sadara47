@@ -116,6 +116,52 @@
     if (vals.medical_person !== '') {
       report.problems.push('the doctor line carries a value: ' + vals.medical_person);
     }
+
+    /* The second shape, and the commoner one.
+
+       Two hundred and twenty-two of the requests on file carry no birth date for
+       the child at all -- and every one of them has a guardian, and many have the
+       guardian's own day of birth. A form with an empty box on it is a form
+       somebody fills in by hand, and the line above it names the guardian. So this
+       is the shape in which a guardian's date ends up written into a box labelled
+       "the child, born on", and it is worth knowing what the page does with it. */
+    var noBirth = Object.assign({}, record, { birth_date: '' });
+    var vals2 = formValues(noBirth);
+    report.withoutABirthDate = {
+      declaration: String(vals2.child_birth_date || '(blank)'),
+      identity: String(vals2.birth_date || '(blank)'),
+      underBen: String(vals2.child_last_name || '(blank)')
+    };
+    if (String(vals2.child_birth_date || '').indexOf('1978') !== -1) {
+      report.problems.push('with no birth date on file the declaration falls back to the '
+        + "GUARDIAN's: " + vals2.child_birth_date);
+    }
+    if (vals2.child_birth_date === undefined) {
+      report.problems.push('the declaration has no value at all for a record with no birth date');
+    }
+
+    /* And the adult: the guardian block belongs to another person and is not printed
+       on their form at all. An adult has no guardian to declare for.
+
+       Only the guardian's own words are checked for absence. The swimmer's name
+       and day of birth belong on an adult's form -- that is the identity block and
+       it is correct there -- so a check that refused them would be refusing the
+       right thing, which is worse than having no check at all. */
+    var asAdult = formValues(Object.assign({}, record, { category: 'adult' }));
+    report.adult = { identity: String(asAdult.birth_date || '(blank)') };
+    var adultSheet = overlaySheet(Object.assign({}, record, { category: 'adult' }));
+    ['محمد مقدَّم', '197811020034', '1978', '1978-11-02'].forEach(function (s) {
+      if (adultSheet.indexOf(s) !== -1) {
+        report.problems.push("an adult's form carries the guardian's " + JSON.stringify(s));
+      }
+    });
+    /* And the person themselves is still on it. */
+    if (adultSheet.indexOf('مُهنَّد') === -1) {
+      report.problems.push("an adult's form has lost their own name");
+    }
+    if (adultSheet.indexOf('2013') === -1) {
+      report.problems.push("an adult's form has lost their own day of birth");
+    }
   } catch (e) {
     report.problems.push('the form could not be drawn: ' + ((e && e.message) || e));
   }

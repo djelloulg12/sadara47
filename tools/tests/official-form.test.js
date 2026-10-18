@@ -119,6 +119,16 @@ child.on('close', () => {
   console.log('      identity block prints     : ' + report.values.birth_date);
   console.log('      declaration prints        : ' + report.values.child_birth_date);
   console.log('      the line names            : ' + report.values.parent_name);
+  if (report.withoutABirthDate) {
+    console.log('');
+    console.log('      a record with NO birth date for the child (222 of the 574 on file):');
+    console.log('        declaration prints      : ' + report.withoutABirthDate.declaration);
+    console.log('        identity block prints  : ' + report.withoutABirthDate.identity);
+    console.log('        the ب: box prints       : ' + report.withoutABirthDate.underBen);
+  }
+  if (report.adult) {
+    console.log("      an adult's form, declaration: " + report.adult.declaration);
+  }
   console.log('');
   console.log('      what the page drew, by row:');
   for (const [row, text] of Object.entries(report.drawnByRow || {})) {

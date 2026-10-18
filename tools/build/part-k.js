@@ -114,8 +114,13 @@ function formValues(a){
        was printed in the `ب:` box on the declaration -- the box that says *son
        of*. It belongs with the date, where it reads as a place and cannot be
        mistaken for a family name. */
-    birth_date: [slashDate(a && a.birth_date), a && a.birth_place]
-      .filter(Boolean).join(' · '),
+    birth_date: slashDate(a && a.birth_date)
+      ? [slashDate(a && a.birth_date), a && a.birth_place].filter(Boolean).join(' · ')
+      /* With no day on file there is nothing for a place to belong to. The line
+         is labelled تاريخ الميلاد, and printing a town alone on it reads as a date -- a blank line
+         is honest and a wrong one is not. The birthplace still comes out on the
+         declaration, where the swimmer's own name is beside it. */
+      : '',
     address: v('address'),
     blood_group: clubDigits(v('blood_group')),
     phone: clubDigits(v('phone')),
