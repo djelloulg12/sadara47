@@ -1206,3 +1206,37 @@ select{height:auto!important;min-height:38px;line-height:1.6;padding:.45rem .8re
 .form-two label[data-wide]{grid-column:1/-1}
 .form-two input[type=date],.form-two input[type=tel],.form-two input[type=email]{min-height:38px}
 @media print{.swf-photo{display:none}}
+
+/* ---- the registration door: a switch, and what a closed form says ---------- */
+.door-panel{margin-top:18px}
+.door-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.door-state{font-weight:700;color:#0a6f78;font-size:.95rem}
+/* A switch a thumb can find: the track is wide, the knob is large, and the whole
+   thing is the label, so there is nothing small to aim at. */
+.door-switch{display:inline-flex;align-items:center;gap:12px;cursor:pointer;user-select:none}
+.door-switch input{position:absolute;opacity:0;width:0;height:0}
+.door-switch-track{
+  width:66px;height:36px;border-radius:18px;background:#cbd8da;
+  position:relative;transition:background .18s;flex-shrink:0;
+}
+.door-switch-knob{
+  position:absolute;top:3px;inset-inline-start:3px;
+  width:30px;height:30px;border-radius:50%;background:#fff;
+  box-shadow:0 2px 6px #0b3b4633;transition:transform .18s;
+}
+.door-switch input:checked + .door-switch-track{background:#16a474}
+.door-switch input:checked + .door-switch-track .door-switch-knob{transform:translateX(30px)}
+/* RTL: the knob travels the other way when the document does. */
+[dir="rtl"] .door-switch input:checked + .door-switch-track .door-switch-knob{transform:translateX(-30px)}
+.door-switch input:focus-visible + .door-switch-track{outline:3px solid #12a0a8;outline-offset:3px}
+.door-switch input:disabled + .door-switch-track{opacity:.6}
+.door-switch-label{font-weight:700;color:#0b3b46}
+.door-note{margin:.6rem 0 0;font-size:.82rem;color:#5b7f88;line-height:1.7}
+.door-closed{
+  margin:0 0 18px;padding:16px 18px;border-radius:12px;
+  background:#fff6f6;border:1px solid #e9a7ad;border-inline-start:5px solid #e35d6a;
+}
+.door-closed b{display:block;color:#a8232f;font-size:1.05rem;margin-bottom:.4rem}
+.door-closed p{margin:0 0 .4rem;color:#5c2a30;line-height:1.8}
+.door-closed-contact{font-size:.9rem;color:#7d5a5e}
+@media print{.door-panel,.door-closed{display:none}}
