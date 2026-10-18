@@ -780,6 +780,44 @@
     let body = {};
     try { body = init.body ? JSON.parse(init.body) : {}; } catch (_) {}
     try {
+      /* ---------------- is the form open? ----------------
+         One document, readable by anybody, because a visitor has to be able to be
+         told the truth without signing in first. Nothing about the club is in it
+         except whether the door is open and, when it is shut, why. */
+      if (path === '/api/registration' && method === 'GET') {
+        let open = true;
+        let note = '';
+        try {
+          const snap = await db.collection('config').doc('registration').get();
+          if (snap.exists && snap.data() && snap.data().open === false) {
+            open = false;
+            note = snap.data().note || '';
+          }
+        } catch (_) { /* an unreadable switch leaves the door as it was found */ }
+        return jsonResponse({ open, note });
+      }
+
+      /* ---------------- the switch itself ---------------- */
+      if (path === '/api/registration' && method === 'PUT') {
+        const gate = await managerView('تغيير فتح التسجيل م\\u0648\\u062c\\u0648\\u0628 الناد\\u064a.');
+        if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
+        if (typeof body.open !== 'boolean') {
+          return jsonResponse({ error: 'حدد قيمة صحيحة.' }, 400);
+        }
+        await db.collection('config').doc('registration').set({
+          open: body.open,
+          note: String(body.note || '').slice(0, 300),
+          by: gate.profile.id,
+          at: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        await db.collection('audit_logs').add({
+          at: firebase.firestore.FieldValue.serverTimestamp(),
+          action: body.open ? 'registration_opened' : 'registration_closed',
+          by: gate.profile.id
+        });
+        return jsonResponse({ ok: true, open: body.open });
+      }
+
       /* ---------------- session ---------------- */
       if (path === '/api/login' && method === 'POST') {
         const credential = await auth.signInWithEmailAndPassword(body.email, body.password);
@@ -1503,6 +1541,45 @@
           ...(identity ? { [identity.kind === 'minor_key' ? 'duplicate_key' : 'national_id_key']: identity.key } : {}),
           created_at: firebase.firestore.FieldValue.serverTimestamp()
         };
+
+        /* ---------------- the door, and a request with nobody in it ----------------
+           Both of these stand above the numbering, which is the thing they protect.
+           A blank request refused *after* the number was taken still leaves the gap,
+           and the check would have been green while it happened.
+
+           The door is tested on the write rather than only on the form. A form can
+           be worked around by anybody determined to; a write that will not happen
+           cannot.
+
+           The names are read from where the form puts them, per kind -- because a
+           coach's request has no first name and no surname at all, and a rule
+           written for swimmers refused three of the suite's own coach requests
+           before it was read against the form it sits beside. */
+        try {
+          const shut = await db.collection('config').doc('registration').get();
+          if (shut.exists && shut.data() && shut.data().open === false) {
+            return jsonResponse({
+              error: 'التسجيل مغلق حاليًا.'
+                + (shut.data().note ? ' ' + shut.data().note : ''),
+              closed: true
+            }, 403);
+          }
+        } catch (_) { /* an unreadable switch leaves the door as it was found */ }
+
+        const named = (x) => String(x === undefined || x === null ? '' : x).trim() !== '';
+        const askingAboutACoach = applicationType === 'coach';
+        const incomplete = askingAboutACoach
+          ? !(named(body.coach_name) && named(body.coach_phone))
+          : !(named(body.first_name_ar) && named(body.last_name_ar)
+               && named(body.phone) && named(body.birth_date));
+        if (incomplete) {
+          return jsonResponse({
+            error: askingAboutACoach
+              ? 'طلب المدرب ناقص: لا يمكن معرفة من هو. مطلوب الاسم ورقم الهاتف.'
+              : 'الطلب ناقص: لا يمكن معرفة من هو. مطلوب الاسم واللقب ورقم الهاتف وتاريخ الميلاد.',
+            blank: true
+          }, 400);
+        }
 
         /* The registration number is raised before the record is written, so the
            number and the record are written together. */

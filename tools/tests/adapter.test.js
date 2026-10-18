@@ -1275,6 +1275,112 @@ test('the number is the same one the counter would have given', async () => {
   }
 });
 
+/* ---- the door, and who is allowed through it ---- */
+
+test('a request with nobody in it is refused before anything is written', async () => {
+  const saved = DATA.applications;
+  const savedCounters = JSON.stringify(DATA.counters || {});
+  try {
+    DATA.applications = {};
+    const before = Object.keys(DATA.applications).length;
+    const w = boot(asUser('u1'));
+    const r = await call(w, '/api/applications', 'POST', {});
+    if (r.status !== 400) {
+      errors.push('a request with nothing in it was answered ' + r.status
+        + ' rather than 400: ' + JSON.stringify(r.data).slice(0, 140));
+    }
+    if (Object.keys(DATA.applications).length !== before) {
+      errors.push('a request with nobody in it created a document.');
+    }
+    if (JSON.stringify(DATA.counters || {}) !== savedCounters) {
+      errors.push('a request with nobody in it took a registration number from the'
+        + ' counter. That number is then a gap in the seasons numbering, and a gap'
+        + ' a season never closes.');
+    }
+  } finally {
+    DATA.applications = saved;
+    DATA.counters = JSON.parse(savedCounters);
+  }
+});
+
+test('a swimmer and a coach are each asked for what their own form asks for', async () => {
+  const saved = DATA.applications;
+  try {
+    DATA.applications = {};
+    const w = boot(asUser('u1'));
+
+    /* The coach shape: a name and a telephone, and no first name or surname at
+       all. It was refused three times by a rule written for swimmers. */
+    const coach = await call(w, '/api/applications', 'POST', {
+      application_type: 'coach', coach_name: 'X', coach_email: 'c@x.dz',
+      coach_phone: '06', birth_date: '1990-01-01', applicant_uid: 'u1'
+    });
+    if (coach.status !== 201) {
+      errors.push('a complete coach request was refused: ' + coach.status + ' '
+        + JSON.stringify(coach.data).slice(0, 140));
+    }
+
+    /* And the swimmer shape, which has no coach fields at all. */
+    const swimmer = await call(w, '/api/applications', 'POST', {
+      first_name_ar: 'a', last_name_ar: 'b', phone: '07', birth_date: '1991-01-01',
+      national_id: 'ID-SW', subscription_code: 'quarter'
+    });
+    if (swimmer.status !== 201) {
+      errors.push('a complete swimmer request was refused: ' + swimmer.status + ' '
+        + JSON.stringify(swimmer.data).slice(0, 140));
+    }
+  } finally {
+    DATA.applications = saved;
+  }
+});
+
+test('while the door is shut, a filled-in request is refused too', async () => {
+  const savedApps = DATA.applications;
+  const savedConfig = DATA.config;
+  try {
+    DATA.applications = {};
+    DATA.config = Object.assign({}, savedConfig, {
+      registration: { open: false, note: '\u0627\u0644\u0639\u062f\u062f \u0643\u0627\u0645\u0644' }
+    });
+    const w = boot(asUser('u1'));
+    const r = await call(w, '/api/applications', 'POST', {
+      first_name_ar: 'a', last_name_ar: 'b', phone: '07', birth_date: '1991-01-01',
+      national_id: 'ID-SHUT', subscription_code: 'quarter'
+    });
+    if (r.status !== 403) {
+      errors.push('a request was accepted while the club had closed registration: '
+        + r.status + ' ' + JSON.stringify(r.data).slice(0, 140));
+    }
+    if (Object.keys(DATA.applications).length) {
+      errors.push('a request was written while the door was shut.');
+    }
+    if (r.data && !r.data.closed) {
+      errors.push('the refusal does not say the door is shut, so the page would tell'
+        + ' a family they had sent something that did not arrive.');
+    }
+  } finally {
+    DATA.applications = savedApps;
+    DATA.config = savedConfig;
+  }
+});
+
+test('an unreadable switch leaves the door as it was found', async () => {
+  const saved = DATA.config;
+  try {
+    delete DATA.config;
+    const w = boot(asUser('u1'));
+    const r = await call(w, '/api/registration', 'GET');
+    if (!r.ok) errors.push('a visitor cannot be told whether the door is open: '
+      + r.status);
+    if (r.data && r.data.open === false) {
+      errors.push('a switch nobody can read shut the door. An error while reading it'
+        + ' must never decide whether the club is taking registrations.');
+    }
+  } finally {
+    DATA.config = saved;
+  }
+});
+
 /* ---- removing an account, and what it must never remove ---- */
 
 /* A manager is a `users` document whose role the adapter accepts -- `admin` or
