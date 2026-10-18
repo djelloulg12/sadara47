@@ -1275,6 +1275,135 @@ test('the number is the same one the counter would have given', async () => {
   }
 });
 
+/* ---- removing an account, and what it must never remove ---- */
+
+/* A manager is a `users` document whose role the adapter accepts -- `admin` or
+   `president`, and nothing else. The owner is an address listed in
+   `config/owners`, and only counts with a verified session. Both taken from the
+   adapter, because guessing them made every check below fail for the wrong reason
+   -- and a check that fails for the wrong reason invites somebody to loosen the
+   code until it passes, which is how a refusal on the owner becomes a delete. */
+function club() {
+  return {
+    users: {
+      u_mgr: { uid: 'u_mgr', email: 'mgr@example.invalid', role: 'admin',
+               phone: '0660000001' },
+      u_dad: { uid: 'u_dad', name: 'اب如实', email: 'dad@example.invalid', role: 'member', phone: '0660000000',
+               registration_id: 'S2026000001' }
+    },
+    applications: {
+      APP_1: { application_no: 'APP-1', applicant_uid: 'u_dad', status: 'approved',
+               first_name_ar: 'x', last_name_ar: 'y' }
+    },
+    swimmers: {
+      SW_1: { membership_no: 'S2026000001', registration_id: 'S2026000001', name: 'xy' }
+    },
+    u_boss: { uid: 'u_boss', email: 'boss@example.invalid', role: 'member',
+              phone: '0660000002' },
+    config: { owners: { emails: ['boss@example.invalid'] } },
+    audit_logs: {}
+  };
+}
+
+function withClub(fn) {
+  const saved = {};
+  const c = club();
+  for (const k of Object.keys(c)) { saved[k] = DATA[k]; DATA[k] = c[k]; }
+  return Promise.resolve()
+    .then(fn)
+    .then(r => { for (const k of Object.keys(c)) DATA[k] = saved[k]; return r; })
+    .catch(e => { for (const k of Object.keys(c)) DATA[k] = saved[k]; throw e; });
+}
+
+const boss = { uid: 'u_boss', email: 'boss@example.invalid', emailVerified: true };
+const plainUser = uid => ({ uid, email: uid + '@example.invalid', emailVerified: true });
+
+test('removing an account deletes the account and nothing else', async () => {
+  await withClub(async () => {
+    const w = boot(plainUser('u_mgr'));
+    const r = await call(w, '/api/users/u_dad', 'DELETE', { reason: 'حساب خامل' });
+
+    if (!r.ok) errors.push('a manager could not remove an account: '
+      + JSON.stringify(r.data).slice(0, 170));
+    if (DATA.users.u_dad) errors.push('the account was not removed');
+    if (!DATA.applications.APP_1) {
+      errors.push('the request was DELETED. An account is a way in; the request is the'
+        + " club's record of somebody who applied, and removing an account does not"
+        + ' unmake that.');
+    }
+    if (!DATA.swimmers.SW_1) {
+      errors.push('the child was DELETED. A membership number printed on a card and read'
+        + ' out at the pool does not cease to exist because a parent closed an account.');
+    }
+    const marked = DATA.applications.APP_1;
+    if (marked && !marked.account_removed_reason) {
+      errors.push('the request survived with nothing marking that the account behind it'
+        + ' is gone, so it will sit in the queue looking like a live one.');
+    }
+    if (r.data && typeof r.data.children_kept !== 'number') {
+      errors.push('the answer does not say how many children were kept, so "deleted" is a'
+        + ' claim the club has to take on trust: ' + JSON.stringify(r.data).slice(0, 150));
+    }
+    const trail = Object.values(DATA.audit_logs || {});
+    if (!trail.length) {
+      errors.push('nothing was written to the audit log. A removal that leaves no trace'
+        + ' is not a removal, it is a disappearance.');
+    } else if (!trail.some(x => x && x.action === 'account_removed' && x.target === 'u_dad'
+                 && String(x.reason || '').trim() !== '')) {
+      errors.push('the audit log has an entry, but not one naming who removed whom and'
+        + ' why: ' + JSON.stringify(trail).slice(0, 180));
+    }
+  });
+});
+
+test('nobody removes the account they are signed in with', async () => {
+  await withClub(async () => {
+    const w = boot(plainUser('u_mgr'));
+    await call(w, '/api/users/u_mgr', 'DELETE', { reason: 'تجربة' });
+    if (!DATA.users.u_mgr) {
+      errors.push('an account removed itself. The button that does this is held by the'
+        + ' person it removes, and it will be pressed once by accident.');
+    }
+  });
+});
+
+test("nobody removes the club's own owner", async () => {
+  await withClub(async () => {
+    const w = boot(plainUser('u_mgr'));
+    const r = await call(w, '/api/users/u_boss', 'DELETE', { reason: 'تجربة' });
+    if (r.ok) errors.push('removing the owner was answered with success. This is the one'
+      + ' account that cannot be recreated from here.');
+    if (DATA.users.u_boss === undefined && r.ok) {
+      errors.push('the owner was removed as well as being answered with success.');
+    }
+  });
+});
+
+test('an account is not removed without being told why', async () => {
+  await withClub(async () => {
+    const w = boot(plainUser('u_mgr'));
+    await call(w, '/api/users/u_dad', 'DELETE', { reason: '   ' });
+    if (!DATA.users.u_dad) {
+      errors.push('an account was removed with no reason given. The audit trail then'
+        + ' records that something happened and not why, which is a hole nobody can'
+        + ' later account for.');
+    }
+  });
+});
+
+test('an ordinary member cannot remove anybody', async () => {
+  await withClub(async () => {
+    const w = boot(plainUser('u_dad'));
+    const r = await call(w, '/api/users/u_mgr', 'DELETE', { reason: 'تجربة' });
+    if (r.ok) {
+      errors.push('an ordinary member was answered with success when removing an account.');
+    }
+    if (!DATA.users.u_mgr) {
+      errors.push('an ordinary member removed an account.');
+    }
+  });
+});
+
 /* ---- a name taken is not a name we could not hold ---- */
 
 test('a name that is taken is answered by choosing another', async () => {

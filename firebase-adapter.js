@@ -1229,6 +1229,148 @@
         return jsonResponse({ ok: true });
       }
 
+
+      /* ---------------- removing an account ---------------- */
+      /* An account is a way in. It is not a child.
+
+         Deleting one removes the club's record of that person and stamps the
+         requests that belong to them, so nothing about them becomes anonymous and
+         nothing about them becomes unreachable. It never touches `applications`
+         or `swimmers`: a membership number that is printed on a card and read
+         out at the pool does not cease to exist because a parent closed an
+         account.
+
+         And the refusals are the point of the endpoint. A button that can remove
+         whoever is holding it gets pressed once by accident; an endpoint that can
+         remove the owner ends the club's own management; one that deletes without
+         a reason leaves a hole with nobody able to say what filled it. */
+      if (path && method === 'DELETE' && /^\/api\/users\/[^/]+$/.test(path)) {
+        const gate = await managerView('حذف حساب م��وجب مدير النادي أو رئيسه.');
+        if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
+
+        const uid = decodeURIComponent(path.replace('/api/users/', ''));
+        if (!uid) return jsonResponse({ error: 'الحساب غير محدد.' }, 400);
+
+        const me = auth.currentUser;
+        if (me && uid === me.uid) {
+          return jsonResponse({
+            error: 'لا يمكنك حذف حسابك الذي تستخدمه الآن. احذفه من جهاز آخر أو من'
+              + ' حساب الرئيسي للنادي.',
+          }, 403);
+        }
+
+        let profile = {};
+        try {
+          const snap = await db.collection('users').doc(uid).get();
+          profile = snap.exists ? snap.data() : {};
+        } catch (error) {
+          return jsonResponse({ error: 'تعذّرت قراءة الحساب: ' + ((error && error.message) || error) }, 500);
+        }
+
+        /* The owner cannot be removed, and the check has to be made on the address
+           rather than on the account.
+
+           `isOwner` needs an `email` and a verified session, and this endpoint is
+           handed only a uid: the page cannot read the authentication record, which
+           is the same rule that stops a password being changed from here. So the
+           first version of this called `isOwner({ uid })`, and because that object
+           has no address it answered "no" every time -- a guard that was never
+           actually standing. A check caught it, which is the whole reason the check
+           was written before the button was.
+
+           The list itself is the same one `isOwner` reads, and the profile carries
+           the address the account was made with. */
+        const address = String(profile.email || '').trim().toLowerCase();
+        if (!address) {
+          /* Nothing in the club's own records says who this account is.
+
+             That is exactly the owner's situation -- management rights held without
+             a profile -- and it is also what an account made by mistake can look
+             like from the outside. The page cannot read the authentication record,
+             so it cannot tell those two apart.
+
+             So it refuses. "Not deletable" for an account nobody can identify is
+             the right answer twice over: it keeps the owner, and it makes a button
+             that deletes things refuse rather than guess. */
+          return jsonResponse({
+            error: 'لا يوجد سجلّ لهذا الحساب في بيانات النادي، فلا يمكن التأكد من هويته.'
+              + ' الحساب الذي لا يمكن تسمية صاحبه لا يُحذف من هنا.',
+          }, 403);
+        }
+
+        let ownsThis = false;
+        try {
+          const owners = await ownerAddresses();
+          ownsThis = (owners || []).map(x => String(x).trim().toLowerCase()).indexOf(address) !== -1;
+        } catch (_) { /* an unreadable owner list must not become a permission */ }
+        if (ownsThis) {
+          return jsonResponse({ error: 'هذا حساب رئيس النادي. لا يمكن حذفه من هنا.' }, 403);
+        }
+
+        const reason = String((body && body.reason) || '').trim();
+        if (!reason) {
+          return jsonResponse({
+            error: 'اكتب سبب الحذف. يُسجَّل في سجلّ النادي، ويساعد على معرفة'
+              + ' ما كان يحدث قبله إن سُئل عنه لاحقًا.',
+          }, 400);
+        }
+
+        /* The requests are stamped, not deleted. They are the club's record of a
+           person who applied; removing the account does not unmake that. */
+        let stamped = 0;
+        let childrenKept = 0;
+        try {
+          const mine = await db.collection('applications')
+            .where('applicant_uid', '==', uid).get();
+          for (const doc of mine.docs) {
+            await doc.ref.set({
+              account_removed_at: firebase.firestore.FieldValue.serverTimestamp(),
+              account_removed_by: gate.profile.id,
+              account_removed_reason: reason
+            }, { merge: true });
+            stamped++;
+          }
+        } catch (error) {
+          console.warn('the requests could not be stamped before the account was removed', error);
+        }
+
+        /* Whether a child of this account is on the books. Reported, not touched. */
+        try {
+          const reg = String(profile.registration_id || '').trim();
+          if (reg) {
+            const onBooks = await db.collection('swimmers')
+              .where('registration_id', '==', reg).get();
+            childrenKept = onBooks.size;
+          }
+        } catch (_) { /* the answer is worth having, not worth failing over */ }
+
+        await db.collection('users').doc(uid).delete();
+
+        try {
+          await db.collection('audit_logs').add({
+            at: firebase.firestore.FieldValue.serverTimestamp(),
+            action: 'account_removed',
+            by: gate.profile.id,
+            target: uid,
+            target_name: profile.name || '',
+            target_email: profile.email || '',
+            reason,
+            requests_stamped: stamped,
+            children_on_the_books: childrenKept
+          });
+        } catch (error) {
+          console.warn('the removal happened but could not be written to the audit log', error);
+        }
+
+        return jsonResponse({
+          ok: true,
+          removed: { uid, name: profile.name || '', email: profile.email || '' },
+          requests_stamped: stamped,
+          children_kept: childrenKept,
+          note: 'حُذف الحساب. الطلبات لم تُحذف، والأطفال المسجّلون لم يُمَسّوا.'
+        });
+      }
+
       /* ---------------- notices ---------------- */
       if (path === '/api/notices' && method === 'GET') return jsonResponse((await rows('notices')).map(x => ({ ...x, text: x.text || x.body || '', date: x.date || '' })));
       if (path === '/api/notices' && method === 'POST') {

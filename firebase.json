@@ -78,6 +78,20 @@
           }
         ]
       }
+    ],
+    "rewrites": [
+      {
+        "source": "/api/admin/password",
+        "function": "setMemberPassword"
+      },
+      {
+        "source": "/api/admin/account",
+        "function": "removeAccount"
+      },
+      {
+        "source": "/api/admin/health",
+        "function": "health"
+      }
     ]
   },
   "firestore": {
@@ -85,5 +99,14 @@
   },
   "storage": {
     "rules": "storage.rules"
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20",
+    "predeploy": [
+      "node --check functions/index.js",
+      "node --check functions/guards.js",
+      "node functions/test/guards.test.js"
+    ]
   }
 }
