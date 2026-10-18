@@ -1240,3 +1240,60 @@ select{height:auto!important;min-height:38px;line-height:1.6;padding:.45rem .8re
 .door-closed p{margin:0 0 .4rem;color:#5c2a30;line-height:1.8}
 .door-closed-contact{font-size:.9rem;color:#7d5a5e}
 @media print{.door-panel,.door-closed{display:none}}
+
+/* ---- the sidebar does not go anywhere -----------------------------------
+
+   It was a column in a row, so it scrolled away with the page and came back with
+   it: reading a long list of requests meant scrolling down past the menu and
+   scrolling back up to find the next page. The menu is how a person moves around
+   the platform, and a menu that leaves is a menu that has to be hunted for.
+
+   `sticky` rather than `fixed` on purpose. Fixed takes the column out of the row
+   and the page then has to reserve its width by hand -- and the reservation lives
+   in three different breakpoints, so it is right in one width and wrong in the
+   next. Sticky stays exactly where it was put and never moves. */
+.sidebar{
+  position:sticky;top:0;align-self:flex-start;
+  height:100vh;max-height:100vh;overflow-y:auto;overscroll-behavior:contain;
+}
+/* A sidebar that scrolls its own menu on a short screen, rather than one that
+   takes the page with it when there is more menu than there is window. */
+.sidebar::-webkit-scrollbar{width:8px}
+.sidebar::-webkit-scrollbar-track{background:transparent}
+.sidebar::-webkit-scrollbar-thumb{background:#ffffff33;border-radius:4px}
+.app-shell{align-items:flex-start}
+/* On a screen too narrow for a column beside a page, the menu becomes a bar at
+   the top; sticky there would pin a bar the page has already scrolled past. */
+@media (max-width:900px){
+  .sidebar{position:static;height:auto;max-height:none;overflow:visible}
+}
+@media print{.sidebar{display:none!important}}
+
+/* ---- the official form's page-wide buttons sit at the foot ---------------- */
+.official-forms-foot{margin-top:18px}
+.official-forms-foot .panel-head{flex-wrap:wrap;row-gap:.6rem}
+/* The button that prints one request's official form, in that request's row.
+   Wider than the other two in the row because its name is longer, and it is a
+   printing button rather than a decision -- it changes nothing on the record. */
+.check-btn.print{
+  background:#eef4ff;color:#12488f;border-color:#b9d0f2;
+  min-height:32px;padding:.35rem .7rem;white-space:nowrap;
+}
+.check-btn.print:hover{background:#dfeaff}
+@media (max-width:820px){.check-btn.print{white-space:normal}}
+
+/* ---- the closed door, on the public registration form -------------------
+   The message a family gets instead of the form. It is the first thing on the
+   page and the only thing they can act on, so it is written in the club's words
+   and carries the telephone -- a closed form with no reason reads as a broken
+   website, and a family who think that will try again another day, and the day
+   after that, until somebody tells them. */
+.door-closed-page{
+  margin:0 0 28px;padding:28px 26px;border-radius:16px;
+  background:#fff6f6;border:1px solid #e9a7ad;border-inline-start:6px solid #e35d6a;
+  box-shadow:0 10px 30px -18px #7a1f28;
+}
+.door-closed-page h2{margin:0 0 10px;color:#a8232f;font-size:1.35rem;line-height:1.6}
+.door-closed-page p{margin:0 0 .6rem;color:#5c2a30;line-height:2}
+.door-closed-page span{font-weight:700}
+#reg-form[hidden]{display:none!important}

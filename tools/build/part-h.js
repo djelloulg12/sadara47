@@ -217,12 +217,23 @@ const corePageView2=pageView;
 pageView=function(p){
   if(p==='applications'){
     const list=(state.applications||[]).filter(x=>x.application_type!=='coach');
-    const extra=list.length?'<section class="panel"><div class="panel-head"><div><h3>استمارة الإلحاق الرسمية</h3><p>تُطبع بتخطيط استمارة النادي — كل معلومة في مكانها</p></div>'
+    /* The official form for a request is printed from the request's own row, with
+       the buttons that decide it -- so the thing you print and the thing you
+       approve are in the same line of sight. It used to have a panel of its own
+       listing every request on the page: the same records, the same buttons, and a
+       second place to look for them.
+
+       The two page-wide buttons stay, at the foot of the page. They are not
+       decisions about one request, and putting them at the top put them beside a
+       search box, where they were the first thing pressed and the second thing
+       meant. */
+    const foot=list.length?'<section class="panel official-forms-foot"><div class="panel-head">'
+      +'<div><h3>استمارة الإلحاق الرسمية</h3>'
+      +'<p>لكل طلب — استمارة بإطلاق النادي</p></div>'
       +'<div class="toolbar-group"><button class="btn btn-primary" data-action="print-official-forms-all">🖨 كل الاستمارات</button>'
       +'<button class="btn btn-outline" data-action="print-official-blank">استمارة فارغة</button></div></div>'
-      +'<div class="official-forms-list">'+list.map(x=>'<button data-action="print-official-form" data-id="'+esc(x.id)+'"><b>'+esc(appName(x))+'</b><span>'+esc(clubDigits(x.application_no||''))+' · '+(x.status==='approved'?'مقبول':'قيد المراجعة')+'</span></button>').join('')+'</div>'
       +'</section>':'';
-    return '<div class="page-root" id="page-root">'+pageApplications()+extra+'</div>';
+    return '<div class="page-root" id="page-root">'+pageApplications()+foot+'</div>';
   }
   return corePageView2(p);
 };

@@ -2013,4 +2013,123 @@
   paintGatePools();
   loadPlans();
   loadFacilities();
+  var door_ = { open: null };
+
+/* ==========================================================================
+     باب التسجيلات — الاستمارة العامة
+     ==========================================================================
+     The club asked for this in plain terms: when registrations are closed, the
+     form does not appear, and what appears instead says so.
+
+     Three things have to be true together, and the difference between them is the
+     difference between a switch that works and a switch believed for an afternoon:
+
+       the form is not there  -- hidden, not greyed. A greyed form full of fields
+                                is a form somebody fills in and is then told
+                                about at the end, after a child has been described
+                                on paper.
+       the reason is there    -- in the club's words, with the telephone, because
+                                a closed form with no reason reads as a broken
+                                website, and a family who think that tries again
+                                the next day, and the day after.
+       the sending is refused -- the endpoint refuses it anyway, and this page
+                                refuses it before it gets there, so the two agree.
+
+     Asked once when the page opens and again at the moment of sending. The second
+     reading is the one that matters: the club can close registrations while this
+     page is open, and a form filled in over lunch must be found closed rather
+     than refused an hour later with everything typed in -- so what was typed is
+     left alone, and the message says why. */
+  function doorState() { return door_.open; }
+
+  function doorPhone() {
+    var el = document.querySelector('[data-club-phone], .club-contact, footer, .f-contact');
+    if (el) {
+      var m = /(\+?213[\s\d]{8,}|0\d{2}[\s\d]{8,})/.exec(el.textContent || '');
+      if (m) return m[1].trim();
+    }
+    return '';
+  }
+
+  function doorNotice() {
+    return '<div class="door-closed door-closed-page" role="status">'
+      + '<h2>التسجيلات مغلقة حاليًا</h2>'
+      + '<p>أوقفت النادي استقبال طلبات التسجيل في هذه الفترة، '
+      + 'ولن يُفتح مجددًا دون أن تُبلَّغوا به.</p>'
+      + '<p>للاستفسار: <span dir="ltr">' + doorPhone() + '</span></p>'
+      + '</div>';
+  }
+
+  function doorApply(open) {
+    var form = document.getElementById('reg-form');
+    if (!form) return;
+    door_.open = open;
+
+    var shown = document.querySelector('.door-closed-page');
+    if (open === false) {
+      form.hidden = true;
+      form.setAttribute('aria-hidden', 'true');
+      if (!shown && form.parentNode) {
+        var holder = document.createElement('div');
+        holder.innerHTML = doorNotice();
+        form.parentNode.insertBefore(holder.firstChild, form);
+      }
+    } else {
+      form.hidden = false;
+      form.removeAttribute('aria-hidden');
+      if (shown && shown.parentNode) shown.parentNode.removeChild(shown);
+    }
+  }
+
+  function doorAsk() {
+    /* A missing `fetch` throws before a promise exists, so nothing downstream can
+       catch it -- and this runs while the page is still starting, so it would stop
+       a page from finishing. Asking about the door is never worth that. */
+    if (typeof fetch !== 'function') {
+      doorApply(true);
+      return Promise.resolve(true);
+    }
+    try {
+      return fetch('/api/registration', { credentials: 'same-origin' })
+        .then(function (r) { if (!r.ok) throw new Error('unreachable'); return r.json(); })
+        .then(function (d) {
+          doorApply(d && typeof d.open === 'boolean' ? d.open : true);
+          return door_.open;
+        })
+        .catch(function () {
+          /* Unreachable is not closed. A form that closes itself because a request
+             failed is a form that stops a season, and nobody decided that. */
+          doorApply(true);
+          return true;
+        });
+    } catch (e) {
+      doorApply(true);
+      return Promise.resolve(true);
+    }
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', doorAsk);
+  else doorAsk();
+
+  /* And again at the moment of sending -- the only moment the answer can still be
+     acted on. */
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form || form.id !== 'reg-form' || door_.open === false) {
+      if (form && form.id === 'reg-form' && door_.open === false) {
+        e.preventDefault();
+        e.stopPropagation();
+        var m = document.getElementById('form-msg');
+        if (m) { m.hidden = false; m.textContent = 'التسجيلات مغلقة حاليًا — لم يُرسل الطلب.'; }
+      }
+      return;
+    }
+    doorAsk().then(function (open) {
+      if (open) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var msg = document.getElementById('form-msg');
+      if (msg) { msg.hidden = false; msg.textContent = 'التسجيلات أُغلقت للتو — لم يُرسل الطلب، وما كتبته باقٍ.'; }
+    });
+  }, true);
 })();

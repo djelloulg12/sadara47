@@ -929,7 +929,10 @@ function pageApplications(){
          the manager reads here are the same sentence. */
       +'<td><span class="status '+((a.status||'pending')==='approved'?'success':(a.status||'pending')==='rejected'?'rejected':'pending')+'">'+esc(stateLabel(a.status))+'</span>'+((a.rejection_reason||a.decision_reason)?'<br><small>'+esc(a.rejection_reason||a.decision_reason)+'</small>':'')+'</td>'
       +'<td>'+((a.status||'pending')==='pending'?'<button class="check-btn ok" data-action="approve-app" data-id="'+esc(a.id)+'">موافقة</button> <button class="check-btn no" data-action="reject-app" data-id="'+esc(a.id)+'">رفض</button>':'<small>تم القرار</small>')+'</td>'
-      +'<td><button class="row-more" data-action="edit-app" data-id="'+esc(a.id)+'">•••</button></td>'
+      +'<td class="row-actions">'
+      +'<button class="check-btn print" data-action="print-official-form" data-id="'+esc(a.id)+'">'
+      +'استمارة الإلحاق الرسمية</button> '
+      +'<button class="row-more" data-action="edit-app" data-id="'+esc(a.id)+'">•••</button></td>'
       +'</tr>').join(''):emptyRow(9,'لا توجد طلبات مطابقة. ستظهر هنا طلبات التسجيل القادمة.'))
     +'</tbody></table></div></section>';
   return head+body;
