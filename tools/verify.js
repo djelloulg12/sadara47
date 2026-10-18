@@ -27,6 +27,7 @@ const SUITES = [
   ['search-digits', 'search-digits.test.js', 'a number typed in either script finds the same record'],
   ['barcode', 'barcode.test.js', 'the card barcode is Code 128 and follows the rules'],
   ['card-layout', 'card-layout.test.js', 'the card is measured in a real browser: nothing cut, nothing off the edge'],
+  ['official-form', 'official-form.test.js', 'the printed form: the declaration names the child, not the guardian'],
   ['page-layout', 'page-layout.test.js', 'every page, every role, measured in a real browser at a real window'],
   ['smoke', 'smoke.js', 'every page, every control, every role'],
   ['adapter', 'adapter.test.js', 'Firestore adapter authorisation and limits']

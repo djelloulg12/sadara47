@@ -49,7 +49,7 @@
     /* The `ب:` on the declaration line. That line reads
        `المولود (٥) بتاريخ: ___ ب: ___` -- the child, on this date, at this place --
        so this box is where the swimmer was born. */
-    { id: 'birth_place',        y: 208.78, x0: 4.2,   colon: 33.1 },
+    { id: 'child_last_name',    y: 208.78, x0: 4.2,   colon: 33.1 },
     { id: 'parent_id',          y: 217.70, x0: 106.0, colon: 149.4 },
     { id: 'card_issued_at',     y: 217.70, x0: 40.0,  colon: 73.3 },
     { id: 'card_place',         y: 217.70, x0: 4.2,   colon: 31.5 },
@@ -62,7 +62,7 @@
      for nobody, so the whole line stays empty. Those two are named here rather
      than caught by a prefix: they carry the swimmer's own date and place, and a
      prefix cannot tell them from the adult's date in the block above. */
- GUARDIAN_SPOT = /^(parent_|card_|child_birth_date$|birth_place$|authorised_for$)/;
+ GUARDIAN_SPOT = /^(parent_|card_|child_birth_date$|child_last_name$|authorised_for$)/;
 
   var CLUB = {
     name: 'النادي الرياضي الصدارة',
@@ -172,7 +172,10 @@
       /* `المولود (٥) بتاريخ:` -- the swimmer, not the guardian. */
       child_birth_date: slashDate(v('birth_date')),
       /* `ب: ___` -- where the swimmer was born. */
-      birth_place: v('birth_place'),
+      /* `ب:` on the declaration is *son of*, and answers the child's surname.
+         The birthplace belongs with the day of birth, where it reads as a
+         place and cannot be read as a family name. */
+      child_last_name: v('last_name_ar'),
       parent_id: ar(v('guardian_national_id')),
       /* The day the card was issued, which the guardian is asked for and which
          the club's own form has a box for: `الصادرة بتاريخ`. The place of issue

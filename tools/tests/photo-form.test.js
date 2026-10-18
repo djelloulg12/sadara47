@@ -242,14 +242,50 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
     errors.push('[form] a surname of its own is still being written into a box that is not a name box');
   }
   if ('parent_nationality' in vals) errors.push('[form] the declaration still carries a nationality field');
-  /* The third box on the declaration line is left for the club to fill by hand.
-     Nothing is written into it, which is the point: the surname used to land
-     there, and it is not a name box. */
-  const stray = w.__t.FORM_SPOTS.filter(s => s.y === 208.78 && s.id !== 'parent_name' && s.id !== 'child_birth_date');
-  for (const s of stray) {
-    if (vals[s.id] !== undefined && String(vals[s.id]).trim()) {
-      errors.push('[form] something is still written into the third box of the declaration: ' + s.id);
+  /* The third box on the declaration line is the one the form prints as `ب:` --
+     *son, or daughter, of*. It is a name box, and it answers the child's surname.
+
+     It used to be read as "at this place" and left empty, and this check said so:
+     it required the box to stay blank, because a surname had once landed in it by
+     accident. That was the accident being written into the specification.
+
+     With a birthplace standing in the `ب:` box, the line read as a date and a town
+     with nobody's name on either -- which is a line that can be taken to be about
+     the guardian, and has been. The surname goes there, because that is what the
+     word means, and the birthplace goes up to the line that already carries the
+     day of birth. */
+  const declaration = w.__t.FORM_SPOTS.filter(s => s.y === 208.78);
+  const underBen = declaration.find(s => s.id !== 'parent_name' && s.id !== 'child_birth_date');
+  if (!underBen) {
+    errors.push('[form] the declaration line has no third box at all');
+  } else {
+    const child = w.__t.formValues(Object.assign({}, adult, {
+      category: 'minor',
+      first_name_ar: 'علي', last_name_ar: 'بلحاج',
+      birth_date: '2013-04-07', birth_place: 'غرداية',
+      guardian_first_name: 'محمد', guardian_last_name: 'مقدّم',
+      guardian_birth_date: '1978-11-02'
+    }));
+    const put = String(child[underBen.id] || '').trim();
+    if (put.indexOf('بلحاج') === -1) {
+      errors.push('[form] the ب: box does not carry the child\'s surname: ' + JSON.stringify(put));
     }
+    if (put.indexOf('مقدّم') !== -1) {
+      errors.push('[form] the ب: box carries the GUARDIAN\'s surname: ' + JSON.stringify(put));
+    }
+    if (put.indexOf('غرداية') !== -1) {
+      errors.push('[form] the ب: box carries a birthplace where a surname belongs: ' + JSON.stringify(put));
+    }
+  }
+
+  /* And the day of birth and the place are together on the line that carries the
+     day, so neither can be read as belonging to anybody else. */
+  const withPlace = w.__t.formValues(Object.assign({}, adult, {
+    category: 'minor', birth_date: '2013-04-07', birth_place: 'غرداية'
+  }));
+  if (String(withPlace.birth_date).indexOf('غرداية') === -1) {
+    errors.push('[form] the birthplace is not on the line with the day of birth: '
+      + JSON.stringify(withPlace.birth_date));
   }
   cleanup(w);
 }

@@ -1289,11 +1289,94 @@
         if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
         if (!body.id) return jsonResponse({ error: 'معرّف السباح مطلوب' }, 400);
         body = normaliseIncoming(body);
-        await db.collection('swimmers').doc(String(body.id)).set({
-          name: body.name || '', group_name: body.group_name || 'المبتدئون', phone: body.phone || '',
-          status: body.status === 'نشط' ? 'active' : (body.status || 'active')
-        }, { merge: true });
-        return jsonResponse({ ok: true });
+
+        /* What a manager may change about a member, and nothing else.
+
+           Four fields used to be accepted and the rest dropped without a word, so
+           an edit form could be filled in completely and three quarters of it
+           would vanish on saving -- which reads as the platform losing the data
+           rather than as the platform refusing it.
+
+           Only the keys actually sent are written. A form that leaves the blood
+           group alone must leave it alone on the record: `merge` keeps fields it
+           is not given, and the old code wrote `name: body.name || ''`, so simply
+           not sending a name -- because the person was changing a telephone
+           number -- erased the name. */
+        const EDITABLE = {
+          name: 'name', first_name_ar: 'first_name_ar', last_name_ar: 'last_name_ar',
+          birth_date: 'birth_date', gender: 'gender', blood_group: 'blood_group',
+          level: 'level', facility: 'facility', group_name: 'group_name',
+          phone: 'phone', whatsapp: 'whatsapp', national_id: 'national_id',
+          address: 'address', email: 'email', photo: 'photo'
+        };
+        const write = {};
+        for (const [key, field] of Object.entries(EDITABLE)) {
+          if (!(key in body)) continue;
+          if (key === 'status') continue;
+          write[field] = String(body[key] === null || body[key] === undefined ? '' : body[key]).trim();
+        }
+        if ('status' in body) {
+          write.status = body.status === 'موقوف' || body.status === 'suspended'
+            ? 'suspended'
+            : (body.status === 'active' || body.status === 'نشط' ? 'active' : String(body.status || 'active'));
+        }
+        /* A photograph is a quarter of a megabyte of text. One that is larger is
+           refused by name rather than silently dropped, because a photograph that
+           quietly does not save is the photograph a parent was told was saved. */
+        if ('photo' in write) {
+          if (write.photo && write.photo !== '' && !/^(data:image\/(jpeg|png|webp);base64,|https?:)/.test(write.photo)) {
+            return jsonResponse({ error: 'الصورة يجب أن تكون صورة فعلًا (JPG أو PNG أو WebP).' }, 400);
+          }
+          if (write.photo && write.photo.length > 5 * 1024 * 1024) {
+            return jsonResponse({ error: 'الصورة كبيرة جدًا. الحد الأقصى 3 ميغابايت.' }, 400);
+          }
+        }
+        if (!Object.keys(write).length) return jsonResponse({ error: 'لا يوجد ما يُحفظ.' }, 400);
+
+        const existing = (await db.collection('swimmers').doc(String(body.id)).get()).data() || {};
+        await db.collection('swimmers').doc(String(body.id)).set(write, { merge: true });
+
+        /* The guardian is not on the member. They came in on the request, and they
+           live there, with the relationship and the telephone they were reached
+           on. So an edit to the guardian is written back to the request it came
+           from -- the same place it was read from, and not a second copy of a
+           person that would then disagree with the first. */
+        const GUARDIAN = {
+          guardian_first_name: 'guardian_first_name',
+          guardian_last_name: 'guardian_last_name',
+          guardian_relation: 'guardian_relation',
+          guardian_phone: 'guardian_phone',
+          guardian_national_id: 'guardian_national_id',
+          guardian_birth_date: 'guardian_birth_date',
+          guardian_card_issued: 'guardian_card_issued'
+        };
+        const from = existing.from_application || '';
+        let guardianWritten = 0;
+        if (from) {
+          const gWrite = {};
+          for (const [key, field] of Object.entries(GUARDIAN)) {
+            if (key in body) {
+              gWrite[field] = String(body[key] === null || body[key] === undefined ? '' : body[key]).trim();
+            }
+          }
+          if (Object.keys(gWrite).length) {
+            gWrite.edited_at = firebase.firestore.FieldValue.serverTimestamp();
+            gWrite.edited_by = 'the club';
+            await db.collection('applications').doc(String(from)).set(gWrite, { merge: true });
+            guardianWritten = Object.keys(gWrite).length - 2;
+          }
+        } else {
+          for (const key of Object.keys(GUARDIAN)) {
+            if (key in body) {
+              return jsonResponse({
+                error: 'هذا السباح لم يُسجَّل من طلب، فلا مكان لبيانات الولي فيه. '
+                  + 'عدّله من الطلب نفسه.'
+              }, 400);
+            }
+          }
+        }
+
+        return jsonResponse({ ok: true, fields: Object.keys(write).length, guardian_fields: guardianWritten });
       }
       if (path === '/api/swimmers' && method === 'DELETE') {
         const gate = await managerView('هذه العملية لرئيس النادي فقط');

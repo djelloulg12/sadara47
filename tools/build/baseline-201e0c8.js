@@ -1439,18 +1439,11 @@ async function api(path,method,body){
   if(!res.ok)throw new Error(data.error||'تعذر تنفيذ العملية');
   return data;
 }
-function swimmerModal(s){
-  const isEdit=!!s;
-  return formModal(isEdit?'تعديل بيانات السباح':'إضافة سباح جديد',
-    '<div class="form-two">'
-    +'<label>الاسم واللقب *<input id="sw-name" value="'+esc(s?.name||'')+'"></label>'
-    +'<label>رقم الانخراط<input id="sw-no" dir="ltr" value="'+esc(s?.id||'')+'"'+(isEdit?' disabled':'')+' placeholder="يُولَّد تلقائيًا"></label>'
-    +'<label>الفوج<select id="sw-group">'+groupOptions(s?.group)+'</select></label>'
-    +'<label>الهاتف<input id="sw-phone" dir="ltr" value="'+esc(clubDigits(s?.phone||''))+'"></label>'
-    +'<label>الحالة<select id="sw-status"><option value="نشط"'+(s?.status==='نشط'?' selected':'')+'>نشط</option><option value="موقوف"'+(s?.status==='موقوف'?' selected':'')+'>موقوف</option><option value="بانتظار"'+(s?.status==='بانتظار'?' selected':'')+'>بانتظار</option></select></label>'
-    +'</div>',
-    'save-swimmer',s?' data-id="'+esc(s.id)+'"':'');
-}
+/* The manager's form for one member -- the whole record and the
+   photograph -- is in part-swimmer-edit.js, which is concatenated before this
+   layer. It used to be four fields wide here, and saving wrote `value || ''` for
+   everything the form did not send, so changing a telephone number blanked the
+   name. */
 function sessionModal(s){
   const isEdit=!!s;
   const opts=(list,val)=>list.map(v=>'<option'+(v===val?' selected':'')+'>'+esc(v)+'</option>').join('');
@@ -1601,12 +1594,50 @@ function applicationsSheet(){
     return;
   }
   if(a==='save-swimmer'){
-    const name=$('#sw-name')?.value.trim();
-    if(!name){showToast('أدخل اسم السباح.','error');return}
-    const payload={name,group_name:$('#sw-group').value,phone:latinDigits($('#sw-phone').value.trim()),status:$('#sw-status').value};
+    /* Every field the form carries, and only those.
+
+       It used to send four values, and the server wrote `value || ''` for
+       everything it had not been given -- so correcting a telephone number
+       blanked the name beside it, and correcting a group erased the blood
+       group, the day of birth and the photograph without a word. A form is
+       allowed to change what it shows and nothing else; that is now true on
+       both sides, because this sends what is on the form and the server writes
+       what it was sent.
+
+       The photograph is read at the save, not when the form opens: a file
+       input cannot be read after the fact, and it is the save that has to carry
+       it. It is shrunk first -- a photograph off a phone is three megabytes of
+       text, and the member's record is read on every card the club prints. */
+    const nodes=[...document.querySelectorAll('[data-swimmer-field]')];
+    if(!nodes.length){
+      const nm=$('#sw-name')?.value.trim();
+      if(!nm){showToast('أدخل اسم السباح.','error');return}
+      const payload={name:nm,group_name:$('#sw-group').value,
+        phone:latinDigits($('#sw-phone').value.trim()),status:$('#sw-status').value};
+      try{
+        payload.membership_no=$('#sw-no')?.value.trim();
+        await api('/api/swimmers','POST',payload);
+        showToast('تمت إضافة السباح.');
+        document.querySelector('.modal-backdrop')?.remove();await syncApi();render();
+      }catch(e){showToast(e.message,'error')}
+      return;
+    }
+
+    const payload={id:el.dataset.id};
+    nodes.forEach(n=>{const k=n.dataset.swimmerField;let v=n.value;
+      if(n.type==='tel')v=latinDigits(String(v||'').trim());
+      payload[k]=(v==null?'':String(v)).trim();});
+    if(!payload.name){showToast('أدخل اسم السباح.','error');return}
+
+    const file=$('#swf-photo')?.files?.[0];
+    const cleared=typeof swimmerPhotoCleared!=='undefined'&&swimmerPhotoCleared;
     try{
-      if(el.dataset.id){payload.id=el.dataset.id;await api('/api/swimmers','PUT',payload);showToast('تم تحديث بيانات السباح.')}
-      else{payload.membership_no=$('#sw-no')?.value.trim();await api('/api/swimmers','POST',payload);showToast('تمت إضافة السباح.')}
+      if(file){payload.photo=await readSwimmerPhoto(file);}
+      else if(cleared){payload.photo='';}
+      const res=await api('/api/swimmers','PUT',payload);
+      if(typeof swimmerPhotoCleared!=='undefined')swimmerPhotoCleared=false;
+      const extra=res&&res.guardian_fields?(' و'+res.guardian_fields+' من بيانات الولي'):'';
+      showToast('تم تحديث بيانات السباح.'+extra);
       document.querySelector('.modal-backdrop')?.remove();await syncApi();render();
     }catch(e){showToast(e.message,'error')}
     return;

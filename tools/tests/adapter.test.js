@@ -1368,6 +1368,115 @@ test('a roster that cannot be read leaves the number blank rather than numbering
   }
 });
 
+/* A manager editing a member: the whole record, and nothing else.
+
+   Two faults lived here and both were quiet. The endpoint accepted four fields
+   and dropped the rest without a word, so an edit form could be filled in
+   completely and three quarters of it would vanish on saving. And it wrote
+   `name: value || ''` for every field it had not been sent, so changing a
+   telephone number blanked the name beside it -- and the blood group, the day of
+   birth and the photograph with it.
+
+   Both are checked here, because "the form was filled in and the data was still
+   there afterwards" is the only claim worth making. */
+test('editing a member changes what was sent and nothing else', async () => {
+  const savedSw = DATA.swimmers, savedApp = DATA.applications, savedUs = DATA.users;
+  /* Somebody who is allowed to edit a member at all. The gate is the point of
+     the endpoint, so a check that ran without one would be checking nothing. */
+  DATA.users = Object.assign({}, DATA.users, {
+    boss: { uid: 'boss', email: 'boss@x.dz', role: 'admin' }
+  });
+  const real = DATA.swimmers;
+  DATA.swimmers = {
+    'APP-ONE': {
+      id: 'APP-ONE', name: 'مُهنَّد بن طَرَفَة', group_name: 'المبتدئون',
+      phone: '0661000001', status: 'active', birth_date: '2013-04-07',
+      blood_group: 'O+', level: 'المستوى الثاني', photo: 'data:image/png;base64,AAA',
+      national_id: '201304070012', from_application: 'APP-ONE'
+    }
+  };
+  DATA.applications = {
+    'APP-ONE': {
+      application_no: 'APP-ONE', status: 'approved', first_name_ar: 'مُهنَّد',
+      guardian_first_name: 'محمد', guardian_last_name: 'مقدَّم',
+      guardian_birth_date: '1978-11-02', guardian_phone: '0662000002'
+    }
+  };
+
+  try {
+    const w = boot(asUser('boss'));
+
+    /* One field changed, as a person changing a telephone number would send it. */
+    const r = await call(w, '/api/swimmers', 'PUT', { id: 'APP-ONE', phone: '0661999999' });
+    if (r.status !== 200) errors.push('editing one field failed: ' + r.status + ' ' + JSON.stringify(r.data).slice(0, 160));
+
+    const after = DATA.swimmers['APP-ONE'];
+    if (String(after.phone || '').indexOf('0661999999') === -1) {
+      errors.push('the telephone number was not changed');
+    }
+    /* Everything the form did not carry must still be on the record. This is the
+       fault: each of these was silently emptied by a save that never mentioned it. */
+    for (const [field, was] of Object.entries({
+      name: 'مُهنَّد بن طَرَفَة', birth_date: '2013-04-07', blood_group: 'O+',
+      level: 'المستوى الثاني', national_id: '201304070012', group_name: 'المبتدئون'
+    })) {
+      if (String(after[field] || '') !== was) {
+        errors.push('saving one field emptied ' + field + ': it is now '
+          + JSON.stringify(after[field]) + ' and was ' + JSON.stringify(was));
+      }
+    }
+    if (String(after.photo || '').indexOf('data:image/png') === -1) {
+      errors.push('saving one field removed the photograph');
+    }
+
+    /* The whole record at once, which is what the form actually sends. */
+    const full = await call(w, '/api/swimmers', 'PUT', {
+      id: 'APP-ONE', name: 'مُهنَّد ب طَرَفَة', first_name_ar: 'مُهنَّد',
+      last_name_ar: 'ب طَرَفَة', birth_date: '2013-04-07', gender: 'ذكر',
+      blood_group: 'A+', level: 'المستوى الرابع', facility: 'المسبح الأولمبي',
+      group_name: 'المتوسطون', phone: '0661000001', whatsapp: '0661000001',
+      national_id: '201304070012', address: 'حي الثنية',
+      status: 'موقوف',
+      guardian_first_name: 'محمد', guardian_last_name: 'مقدَّم',
+      guardian_phone: '0662000003'
+    });
+    if (full.status !== 200) {
+      errors.push('saving the whole record failed: ' + full.status + ' ' + JSON.stringify(full.data).slice(0, 160));
+    }
+    const whole = DATA.swimmers['APP-ONE'];
+    if (whole.blood_group !== 'A+') errors.push('the blood group was not saved');
+    if (whole.level !== 'المستوى الرابع') errors.push('the level was not saved');
+    if (whole.address !== 'حي الثنية') errors.push('the address was not saved');
+    if (whole.status !== 'suspended') errors.push('the state was not saved: ' + whole.status);
+
+    /* The guardian is not on the member. They came in on the request and are read
+       from there, so an edit to them goes back there -- a second copy on the member
+       would be a second version of the same person to disagree with the first. */
+    const request = DATA.applications['APP-ONE'];
+    if (String(request.guardian_phone || '').indexOf('0662000003') === -1) {
+      errors.push('the guardian\'s number was not written back to the request it came from');
+    }
+    if (String(request.guardian_birth_date || '') !== '1978-11-02') {
+      errors.push('editing the guardian emptied a field the form did not carry');
+    }
+    if (JSON.stringify(whole).indexOf('guardian_phone') !== -1) {
+      errors.push('the guardian was copied onto the member, where they do not belong');
+    }
+
+    /* A photograph that is not a photograph is refused by name, not dropped: a
+       photograph that quietly does not save is one a parent was told had. */
+    const junk = await call(w, '/api/swimmers', 'PUT', { id: 'APP-ONE', photo: 'javascript:alert(1)' });
+    if (junk.status !== 400) {
+      errors.push('a "photograph" that is not an image was accepted: ' + junk.status);
+    }
+  } finally {
+    DATA.swimmers = savedSw;
+    DATA.applications = savedApp;
+    DATA.users = savedUs;
+    void real;
+  }
+});
+
 /* ---- the door, and who is allowed through it ---- */
 
 test('a request with nobody in it is refused before anything is written', async () => {
