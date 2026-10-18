@@ -36,7 +36,11 @@ const seed = (user, page) => ({ user, page, swimmers: SW, applications: APPS, sc
 
 /* ---------- 1. every interactive element on every page has a handler ---------- */
 {
-  const handlers = new Set([...APP.matchAll(/a===?['"]([a-z0-9-]+)['"]/g)].map(m => m[1]));
+  /* Whitespace around the comparison is not a different thing: `a === 'x'` and
+     `a==='x'` are the same handler, and a check that only sees one of them
+     reports a live button as dead. The registration door was written with
+     spaces and this file called it dead for a season. */
+  const handlers = new Set([...APP.matchAll(/a\s*={2,3}\s*['"]([a-z0-9-]+)['"]/g)].map(m => m[1]));
   const roles = [['admin', 'admin'], ['president', 'president'], ['coach', 'coach'],
     ['swimmer_adult', 'swimmer_adult'], ['parent', 'parent'], ['member', 'member']];
   const seen = new Map();

@@ -251,6 +251,32 @@
     if (cut.length) line.findings.push(cut.length + ' piece(s) of text do not fit their box');
     if (tiny.length) line.findings.push(tiny.length + ' control(s) too small to press reliably');
 
+    /* ---- the things this walk exists to be asked about ----
+
+       A page that renders is not a page that is finished. The club asked for the
+       settings page to carry the box that opens and closes registrations, and for
+       this a season ago it carried nothing at all -- the layer that drew it was
+       wrapped around a page that does not exist, so the guard was false, nothing
+       was written, nothing complained, and the switch was simply not there for
+       anybody. Every other finding in this file would still have read CLEAN.
+
+       So it is asked of the drawn page, by name, for the roles that are meant to
+       see it. A switch that has been written and cannot be seen is the same fault
+       as one that was never written, and only looking finds it. */
+    if (page === 'settings') {
+      var box = document.getElementById('door-toggle');
+      var who = ['admin', 'president', 'manager'].indexOf(role) !== -1;
+      if (who && !box) {
+        line.findings.push('the registration door is not on this page for a '
+          + role + ': the switch the club opens and closes registrations with is not here');
+      }
+      if (!who && box) {
+        line.findings.push('the registration door is on this page for a ' + role
+          + ', who has no business closing registrations');
+      }
+      line.door = who ? (box ? 'present' : 'MISSING') : 'not for this role';
+    }
+
     out.pages.push(line);
     out.problems.push.apply(out.problems, line.findings.map(function (f) {
       return page + ' (' + role + '): ' + f;

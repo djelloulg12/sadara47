@@ -49,7 +49,7 @@
     /* The `ب:` on the declaration line. That line reads
        `المولود (٥) بتاريخ: ___ ب: ___` -- the child, on this date, at this place --
        so this box is where the swimmer was born. */
-    { id: 'child_last_name',    y: 208.78, x0: 4.2,   colon: 33.1 },
+    { id: 'birth_place',        y: 208.78, x0: 4.2,   colon: 33.1 },
     { id: 'parent_id',          y: 217.70, x0: 106.0, colon: 149.4 },
     { id: 'card_issued_at',     y: 217.70, x0: 40.0,  colon: 73.3 },
     { id: 'card_place',         y: 217.70, x0: 4.2,   colon: 31.5 },
@@ -62,7 +62,7 @@
      for nobody, so the whole line stays empty. Those two are named here rather
      than caught by a prefix: they carry the swimmer's own date and place, and a
      prefix cannot tell them from the adult's date in the block above. */
- GUARDIAN_SPOT = /^(parent_|card_|child_birth_date$|child_last_name$|authorised_for$)/;
+ GUARDIAN_SPOT = /^(parent_|card_|child_birth_date$|birth_place$|authorised_for$)/;
 
   var CLUB = {
     name: 'النادي الرياضي الصدارة',
@@ -169,21 +169,37 @@
          person expects to read a date. */
       parent_name: [v('guardian_first_name'), v('guardian_last_name')]
         .filter(Boolean).join(' '),
-      /* `المولود (٥) بتاريخ:` -- the swimmer, not the guardian. */
-      child_birth_date: slashDate(v('birth_date')),
-      /* `ب: ___` -- where the swimmer was born. */
-      /* `ب:` on the declaration is *son of*, and answers the child's surname.
-         The birthplace belongs with the day of birth, where it reads as a
-         place and cannot be read as a family name. */
-      child_last_name: v('last_name_ar'),
+      /* `المولود (٥) بتاريخ:` -- the guardian's day, not the child's.
+
+         It carried `birth_date`, which is already printed on `يولد بتاريخ:` in the
+         identity block, so the child's date appeared twice on one sheet and the
+         club struck the second copy out by hand on every form. The day the person
+         signing puts down is theirs, and it is on file as `guardian_birth_date`. */
+      child_birth_date: slashDate(v('guardian_birth_date')),
+      /* `ب:` -- where the child was born. A surname lived here on the reading that
+         the word is *son of*. The club's own forms say otherwise, and the surname
+         is already printed in `اللقب` in the block above, so nothing is lost by
+         leaving this box for the place. */
+      birth_place: v('birth_place'),
       parent_id: ar(v('guardian_national_id')),
       /* The day the card was issued, which the guardian is asked for and which
          the club's own form has a box for: `الصادرة بتاريخ`. The place of issue
-         is still nobody's to write but the club's, so it stays on the blank line
-         the scan already carries. */
+         is nobody's field today -- no record carries it -- so it prints blank and
+         the scan's own line stays for the club to write on. It is still read by
+         name, so the day the club starts recording it the sheet fills itself
+         rather than needing a change here and there.
+
+         Read by the same name on both copies of this mapping: two copies of a form
+         that disagree about which field feeds a box produce one sheet here and a
+         different one on the platform, and tools/tests/istimara.test.js compares
+         the two field by field for exactly that. */
       card_issued_at: slashDate(v('guardian_card_issued')),
-      card_place: '',
-      authorised_for: rec.guardian_child || ((v('first_name_ar') + ' ' + v('last_name_ar')).trim())
+      card_place: v('card_issue_place'),
+      /* `المصرّح له` -- the child this declaration is about. It falls back to the
+         child's own name, which is on the record in two fields, rather than
+         leaving a box that says *authorised for* saying nothing. */
+      authorised_for: v('guardian_child')
+        || [v('first_name_ar'), v('last_name_ar')].filter(Boolean).join(' ')
     };
   }
 

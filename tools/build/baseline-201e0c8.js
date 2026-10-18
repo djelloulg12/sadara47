@@ -1811,7 +1811,8 @@ bind=function(){
   /* A way of looking, not a setting about the club: kept in the page state and not
      saved, so nobody's decisions change because somebody turned it on. */
   live('#app-show-decided',e=>{state.appShowDecided=!!e.target.checked;renderPageOnly()});
-  live('#user-search',e=>{state.userQuery=e.target.value;renderPageOnly()});
+  live('#user-search',e=>{state.userQuery=e.target.value;renderPageOnly()});
+  live('#accounts-search',e=>{state.accountsQuery=e.target.value;renderPageOnly()});
   live('#group-filter',e=>{state.groupFilter=e.target.value;renderPageOnly()});
   live('#attendance-group',e=>{state.attendanceGroup=e.target.value;renderPageOnly()});
   /* Which session is being recorded. Saved, so a coach who is interrupted comes

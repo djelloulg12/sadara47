@@ -251,10 +251,77 @@ scenario('registration modals open with official documents', () => {
   }
 });
 
+/* The account list is the one place the manager goes looking for a person by name,
+   and it is the one list with two hundred and twenty-six rows and no way to cut
+   them down. The search is asked of the drawn page and by typing into it, because a
+   box that is on the page and does nothing is the same as no box -- and that is
+   exactly how the registration switch spent a season. */
+scenario('the account list can be searched, and the search is wired to the page', () => {
+  const state = seededState({
+    accounts: [
+      { id: 'u1', name: 'جلول قندوز', email: 'kabrag12@gmail.com', role: 'admin', member_no: 'E202620001' },
+      { id: 'u2', name: 'فاطمة الزهراء', email: 'djelloulg12@gmail.com', role: 'member', phone: '0699809998' },
+      { id: 'u3', name: 'كريم بوعلام', email: 'karim@example.dz', role: 'coach', registration_id: 'E2026100042' }
+    ]
+  });
+  const w = boot(state);
+  setUser(w, state.user);
+  setPage(w, 'settings');
+  w.render();
+
+  const box = w.document.getElementById('accounts-search');
+  if (!box) { errors.push('the accounts page has no search box'); return; }
+
+  const listed = () => w.document.querySelectorAll('#accounts-list .account-row').length;
+  const all = listed();
+  if (all !== 3) { errors.push('the accounts list shows ' + all + ' rows, not the 3 on file'); return; }
+
+  box.value = 'قندوز';
+  box.dispatchEvent(new w.Event('input', { bubbles: true }));
+  if (listed() !== 1) {
+    errors.push('typing a name leaves ' + listed() + ' of 3 rows showing: the box is on the page and does nothing');
+  }
+  /* By the address the account signs in with, which is how anybody identifies a
+     record they did not create. */
+  box.value = 'karim@example.dz';
+  box.dispatchEvent(new w.Event('input', { bubbles: true }));
+  if (listed() !== 1) {
+    errors.push('searching by email leaves ' + listed() + ' rows showing, not 1');
+  }
+  /* And by the number printed on the card. */
+  box.value = 'E2026100042';
+  box.dispatchEvent(new w.Event('input', { bubbles: true }));
+  if (listed() !== 1) {
+    errors.push('searching by membership number leaves ' + listed() + ' rows showing, not 1');
+  }
+  /* Nothing found is said, rather than showing an empty panel that reads as
+     "there are no accounts". */
+  box.value = 'لا يوجد اسم كهذا';
+  box.dispatchEvent(new w.Event('input', { bubbles: true }));
+  if (listed() !== 0) errors.push('a search that finds nothing still shows rows');
+  if (!/لا حساب/.test(w.document.getElementById('accounts-list').textContent)) {
+    errors.push('a search that finds nothing does not say so');
+  }
+  /* And the whole list comes back, because a search that cannot be undone is a
+     filter with no off. */
+  box.value = '';
+  box.dispatchEvent(new w.Event('input', { bubbles: true }));
+  if (listed() !== 3) errors.push('clearing the search does not bring the list back: ' + listed() + ' rows');
+  /* The wording is kept across a redraw, or the word is gone the moment the page
+     is rebuilt and the search has to be typed again. */
+  box.value = 'قندوز';
+  box.dispatchEvent(new w.Event('input', { bubbles: true }));
+  w.render();
+  const again = w.document.getElementById('accounts-search');
+  if (!again || again.value !== 'قندوز') {
+    errors.push('the search is forgotten when the page is redrawn');
+  }
+});
+
 scenario('every data-action used anywhere has a handler', () => {
   const w = boot(seededState());
   setUser(w, seededState().user);
-  const handlers = new Set([...APP.matchAll(/a===?['"]([a-z0-9-]+)['"]/g)].map(m => m[1]));
+  const handlers = new Set([...APP.matchAll(/a\s*={2,3}\s*['"]([a-z0-9-]+)['"]/g)].map(m => m[1]));
   const used = new Set();
   const collect = () => w.document.querySelectorAll('[data-action]').forEach(e => used.add(e.dataset.action));
   for (const p of ADMIN_PAGES) { setPage(w, p); w.render(); collect(); }

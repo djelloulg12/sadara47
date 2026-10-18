@@ -83,10 +83,28 @@ function doorClosedNotice_(short) {
 
 /* ---- the box, on the settings page ---- */
 
-const coreSettingsPage = typeof settingsPage === 'function' ? settingsPage : null;
-if (coreSettingsPage) {
-  settingsPage = function () {
-    const html = coreSettingsPage.apply(this, arguments);
+/* Which function is the settings page.
+
+   It was written as `settingsPage`. No such function exists anywhere in this
+   file: the page is `pageSettings`, and `typeof settingsPage === 'function'` on a
+   name that was never declared throws a ReferenceError the moment the guard runs
+   -- except that `typeof` on an undeclared name is safe and yields "undefined", so
+   the guard was false, the panel was never added, and nothing was written and
+   nothing complained.
+
+   So the switch did not appear for anybody, not because of a role, and not
+   because of the manager: because it was wrapped around a page that is not there.
+   The three other layers that extend the settings page (`coreSettings`,
+   `coreAccountsSettings`, `coreSettingsFees`) all take `pageSettings`, which is
+   what the router reads. This takes it too, and `tools/tests/door-switch.test.js`
+   asks the built page for the switch rather than trusting this comment.
+
+   Naming this layer differently from the four around it would make the build
+   order readable. It does not change behaviour, and behaviour is what breaks. */
+const coreDoorSettings = typeof pageSettings === 'function' ? pageSettings : null;
+if (coreDoorSettings) {
+  pageSettings = function () {
+    const html = coreDoorSettings.apply(this, arguments);
     const role = String((state.user && state.user.role) || '');
     if (!/^(admin|president|manager|owner)$/.test(role)) return html;
 

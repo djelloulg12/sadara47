@@ -107,11 +107,25 @@
       }
     });
 
-    if (String(vals.child_birth_date).indexOf('1978') !== -1) {
-      report.problems.push('the declaration prints the GUARDIAN date: ' + vals.child_birth_date);
+    /* The club corrected this with a photograph of a printed sheet: the date on
+       `المولود(ة) بتاريخ:` was the child's, already printed on `يولد بتاريخ:`
+       above it, so one date appeared twice and the second copy was read as the
+       guardian's and struck out by hand. The day that belongs there is the
+       guardian's, and it is on file under its own name. */
+    if (String(vals.child_birth_date).indexOf('1978') === -1) {
+      report.problems.push('the declaration does not print the GUARDIAN date: ' + vals.child_birth_date);
     }
-    if (String(vals.child_birth_date).indexOf('2013') === -1) {
-      report.problems.push('the declaration does not print the SWIMMER date: ' + vals.child_birth_date);
+    if (String(vals.child_birth_date).indexOf('2013') !== -1) {
+      report.problems.push('the declaration prints the SWIMMER date a second time: ' + vals.child_birth_date);
+    }
+    /* `ب:` is where the child was born. A surname was read into it, and the club's
+       own forms say otherwise. */
+    if (!vals.birth_place) {
+      report.problems.push('the ب: box is empty although a birthplace is on file');
+    }
+    /* And the child's own day still reaches the sheet, once. */
+    if (String(vals.birth_date).indexOf('2013') === -1) {
+      report.problems.push('the identity block does not print the child date: ' + vals.birth_date);
     }
     if (vals.medical_person !== '') {
       report.problems.push('the doctor line carries a value: ' + vals.medical_person);
@@ -120,24 +134,28 @@
     /* The second shape, and the commoner one.
 
        Two hundred and twenty-two of the requests on file carry no birth date for
-       the child at all -- and every one of them has a guardian, and many have the
-       guardian's own day of birth. A form with an empty box on it is a form
-       somebody fills in by hand, and the line above it names the guardian. So this
-       is the shape in which a guardian's date ends up written into a box labelled
-       "the child, born on", and it is worth knowing what the page does with it. */
+       the child at all -- and every one of them has a guardian, and most have the
+       guardian's own day of birth. That used to be the shape in which a
+       guardian's date landed in a box labelled "the child, born on". It no longer
+       is, and it is worth knowing that on the commonest record the club holds. */
     var noBirth = Object.assign({}, record, { birth_date: '' });
     var vals2 = formValues(noBirth);
     report.withoutABirthDate = {
       declaration: String(vals2.child_birth_date || '(blank)'),
       identity: String(vals2.birth_date || '(blank)'),
-      underBen: String(vals2.child_last_name || '(blank)')
+      underBen: String(vals2.birth_place || '(blank)')
     };
-    if (String(vals2.child_birth_date || '').indexOf('1978') !== -1) {
-      report.problems.push('with no birth date on file the declaration falls back to the '
+    if (String(vals2.child_birth_date || '').indexOf('1978') === -1) {
+      report.problems.push('with no birth date on file the declaration does not fall back to the '
         + "GUARDIAN's: " + vals2.child_birth_date);
     }
     if (vals2.child_birth_date === undefined) {
       report.problems.push('the declaration has no value at all for a record with no birth date');
+    }
+    /* And the child's own line stays empty rather than being filled with the
+       guardian's day: a blank line is read, a wrong one is filed. */
+    if (vals2.birth_date !== '') {
+      report.problems.push('with no birth date on file the identity line shows: ' + vals2.birth_date);
     }
 
     /* And the adult: the guardian block belongs to another person and is not printed

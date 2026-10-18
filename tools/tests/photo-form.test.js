@@ -259,32 +259,57 @@ const seedFor = user => ({ user, page: 'card', swimmers: SWIMMERS, applications:
   if (!underBen) {
     errors.push('[form] the declaration line has no third box at all');
   } else {
+    /* The club answered this twice, in opposite directions, and both readings stay
+       in this file so that a third one has to argue with them.
+
+       First: `ب:` on the declaration is *son of*, so a surname belongs there. Then a
+       photograph of a printed sheet showed the child's date on the declaration as
+       well as on the line above it -- one date twice on one page -- with the second
+       copy read as the guardian's and struck out by hand. And the club's own forms
+       put a town in that box.
+
+       So the box takes the birthplace, the day on the declaration line is the
+       guardian's, and the surname stays in `اللقب` where it was printed already.
+       The surname is checked here still: it must be absent from `ب:`, so a future
+       reader who puts it back finds out here rather than on paper. */
     const child = w.__t.formValues(Object.assign({}, adult, {
       category: 'minor',
-      first_name_ar: 'علي', last_name_ar: 'بلحاج',
+      first_name_ar: 'عدنان', last_name_ar: 'قندوز',
       birth_date: '2013-04-07', birth_place: 'غرداية',
-      guardian_first_name: 'محمد', guardian_last_name: 'مقدّم',
+      guardian_first_name: 'جلول', guardian_last_name: 'قندوز',
       guardian_birth_date: '1978-11-02'
     }));
     const put = String(child[underBen.id] || '').trim();
-    if (put.indexOf('بلحاج') === -1) {
-      errors.push('[form] the ب: box does not carry the child\'s surname: ' + JSON.stringify(put));
+    if (put.indexOf('غرداية') === -1) {
+      errors.push('[form] the ب: box does not carry the birthplace: ' + JSON.stringify(put));
     }
-    if (put.indexOf('مقدّم') !== -1) {
-      errors.push('[form] the ب: box carries the GUARDIAN\'s surname: ' + JSON.stringify(put));
+    if (put.indexOf('قندوز') !== -1) {
+      errors.push('[form] the ب: box carries a surname where the club puts a town: ' + JSON.stringify(put));
     }
-    if (put.indexOf('غرداية') !== -1) {
-      errors.push('[form] the ب: box carries a birthplace where a surname belongs: ' + JSON.stringify(put));
+    /* And the day on that line is the guardian's -- the one the club struck out by
+       hand, because it was the child's a second time. */
+    if (String(child.child_birth_date).indexOf('1978') === -1) {
+      errors.push('[form] the declaration does not print the guardian\'s day: '
+        + JSON.stringify(child.child_birth_date));
+    }
+    if (String(child.child_birth_date).indexOf('2013') !== -1) {
+      errors.push('[form] the declaration prints the child\'s day a second time: '
+        + JSON.stringify(child.child_birth_date));
+    }
+    /* The child's own day still reaches the sheet, once, on the line meant for it. */
+    if (String(child.birth_date).indexOf('2013') === -1) {
+      errors.push('[form] the identity line does not print the child\'s day: '
+        + JSON.stringify(child.birth_date));
     }
   }
 
-  /* And the day of birth and the place are together on the line that carries the
-     day, so neither can be read as belonging to anybody else. */
+  /* And the identity line carries the day alone. A place printed beside it is what
+     put the child's date on two lines to begin with. */
   const withPlace = w.__t.formValues(Object.assign({}, adult, {
     category: 'minor', birth_date: '2013-04-07', birth_place: 'غرداية'
   }));
-  if (String(withPlace.birth_date).indexOf('غرداية') === -1) {
-    errors.push('[form] the birthplace is not on the line with the day of birth: '
+  if (String(withPlace.birth_date).indexOf('غرداية') !== -1) {
+    errors.push('[form] the birthplace is printed on the day-of-birth line as well: '
       + JSON.stringify(withPlace.birth_date));
   }
   cleanup(w);

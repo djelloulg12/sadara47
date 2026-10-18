@@ -3588,6 +3588,7 @@ bind=function(){
   live('#app-show-decided',e=>{state.appShowDecided=!!e.target.checked;renderPageOnly()});
 
   live('#user-search',e=>{state.userQuery=e.target.value;renderPageOnly()});
+  live('#accounts-search',e=>{state.accountsQuery=e.target.value;renderPageOnly()});
 
   live('#group-filter',e=>{state.groupFilter=e.target.value;renderPageOnly()});
 
@@ -4507,20 +4508,29 @@ const FORM_SPOTS = [
   { id: 'blood_group',        y: 114.45, x0: 62.1,  colon: 178.3 },
   { id: 'phone',              y: 124.25, x0: 62.3,  colon: 178.3 },
   { id: 'parent_name',        y: 208.78, x0: 102.4, colon: 152.9 },
+    /* `المولود(ة) بتاريخ:` on the declaration line.
+
+       It carried the swimmer's own day -- which is what `يولد بتاريخ:` in the
+       identity block above already says. The child's date was therefore printed
+       twice on one sheet, and the club read the second copy as the guardian's and
+       had to correct it by hand on every form.
+
+       The line belongs to the person signing, and the day on it is the guardian's
+       day: `guardian_birth_date`. The child's day has a line of its own, and it
+       is filled in. */
   { id: 'child_birth_date',  y: 208.78, x0: 32.9,  colon: 71.9 },
-    /* The `ب:` on the declaration line.
+    /* `ب:` on the declaration line -- where the child was born.
 
-       It was read as "at this place", and a birthplace was printed there. But the
-       word before that box is `ب` -- son, or daughter, of -- and the line is about
-       a child, so what belongs in it is the child's surname. A town where a family
-       name should be left the line reading
-       `المولد(ة) بتاريخ: 07/04/2013 ب: غرداية`: a date and a place with no name attached to either,
-       on a document about somebody's child. That is a line which can be read as
-       being about the guardian -- and read that way, it has been.
+       It was read as *son of* and a family name was printed there, and before
+       that a town was, and neither reading survived contact with the club:
+       `ب` on this form is `بـ...` as in *at*, the birthplace, and the club writes
+       `غرداية` in it.
 
-       So the surname goes where `ب` is, and the birthplace moves up to the line that
-       already carries the day of birth, where it cannot be read as a name. */
-  { id: 'child_last_name',    y: 208.78, x0: 4.2,   colon: 33.1 },
+       The surname does not go missing: it is already printed in the identity block
+       above, in `اللقب`, which is where a person looks for it. Putting it here as
+       well only made the declaration disagree with the block about who the child
+       is. */
+  { id: 'birth_place',        y: 208.78, x0: 4.2,   colon: 33.1 },
   { id: 'parent_id',          y: 217.70, x0: 106.0, colon: 149.4 },
   { id: 'card_issued_at',     y: 217.70, x0: 40.0,  colon: 73.3 },
   { id: 'card_place',         y: 217.70, x0: 4.2,   colon: 31.5 },
@@ -4532,9 +4542,10 @@ const SPOT_CLEAR = 0.4;  // mm of clear paper between the value and the rule
 const /* The declaration is a guardian's line: `أنا المصغي` names the person signing
      for a child, and `المولود (٥) بتاريخ:` and `ب:` are that child. An adult signs
      for nobody, so the whole line stays empty. Those two are named here rather
-     than caught by a prefix: they carry the swimmer's own date and place, and a
-     prefix cannot tell them from the adult's date in the block above. */
- GUARDIAN_SPOT = /^(parent_|card_|child_birth_date$|child_last_name$|authorised_for$)/;
+     than caught by a prefix: they carry the guardian's day and the child's
+     birthplace, and a prefix cannot tell them from the adult's day in the block
+     above. */
+ GUARDIAN_SPOT = /^(parent_|card_|child_birth_date$|birth_place$|authorised_for$)/;
 
 /* An adult is not a minor: the guardian block belongs to another person and has
    to stay empty on their form. */
@@ -4571,19 +4582,19 @@ function formValues(a){
     registration: clubDigits(v('membership_no') || v('application_no')),
     first_name: v('first_name_ar'),
     last_name: v('last_name_ar'),
-    /* The day and the place, together on the line the form calls تاريخ الميلاد.
+    /* The day, on the line the form calls تاريخ الميلاد, and nothing else.
 
-       There is no line of its own on this form for where a child was born, so it
-       was printed in the `ب:` box on the declaration -- the box that says *son
-       of*. It belongs with the date, where it reads as a place and cannot be
-       mistaken for a family name. */
-    birth_date: slashDate(a && a.birth_date)
-      ? [slashDate(a && a.birth_date), a && a.birth_place].filter(Boolean).join(' · ')
-      /* With no day on file there is nothing for a place to belong to. The line
-         is labelled تاريخ الميلاد, and printing a town alone on it reads as a date -- a blank line
-         is honest and a wrong one is not. The birthplace still comes out on the
-         declaration, where the swimmer's own name is beside it. */
-      : '',
+       A place used to be appended to it, having first been printed in the `ب:` box
+       on the declaration on the reading that `ب` meant *son of*. It does not:
+       `ب:` on that line is where the child was born, and the club writes غرداية
+       in it. A line labelled تاريخ الميلاد reading `21/07/2013 · غرداية` prints two
+       different facts as one value, and one of them twice on the sheet.
+
+       No day on file means a blank line. The line is labelled تاريخ الميلاد, and a
+       town printed alone on it reads as a date -- a blank line is honest and a
+       wrong one is not. The birthplace is printed on its own box below, where the
+       club reads it. */
+    birth_date: slashDate(a && a.birth_date),
     address: v('address'),
     blood_group: clubDigits(v('blood_group')),
     phone: clubDigits(v('phone')),
@@ -4603,19 +4614,31 @@ function formValues(a){
        name where the person expects to read a date. */
     parent_name: [v('guardian_first_name'), v('guardian_last_name')]
       .filter(Boolean).join(' '),
-    /* `المولود (٥) بتاريخ:` -- the swimmer, not the guardian. */
-    child_birth_date: slashDate(v('birth_date')),
-    /* `ب:` -- the child, by surname. The word on the form is *son of*, and this is
-       the surname that answers it. */
-    child_last_name: v('last_name_ar'),
-    /* `ب: ___` -- where the swimmer was born. */
+    /* `المولود (٥) بتاريخ:` -- the guardian's day, not the child's.
+
+       It carried `birth_date`, which is already printed on `يولد بتاريخ:` in the
+       identity block, so the child's date appeared twice on one sheet. The club
+       read the second copy as the guardian's and struck it out by hand on every
+       form. The day the person signing puts down is theirs, and it is on file as
+       `guardian_birth_date`. */
+    child_birth_date: slashDate(v('guardian_birth_date')),
+    /* `ب:` -- where the child was born. A surname lived here for a while, on the
+       reading that the word is *son of*. The club's own forms say otherwise, and
+       the surname is already printed in `اللقب` in the block above, so nothing is
+       lost by leaving this box for the place. */
     birth_place: v('birth_place'),
     parent_id: clubDigits(v('guardian_national_id')),
     /* The declaration is the guardian's, so the card on it is
        the guardian's, and the day it was issued is the day they gave. */
     card_issued_at: slashDate(v('guardian_card_issued') || v('card_issue_date')),
     card_place: v('card_issue_place'),
+    /* `المصرّح له` -- the child this declaration is about. It used to be left blank
+       whenever the request did not carry the name, which is most of them: the box
+       is on the sheet, it says *authorised for*, and it said nothing. The child's
+       own name is on the record in two fields and is the same on both copies of
+       this code, so it is put there rather than left for a reader to guess. */
     authorised_for: v('guardian_child')
+      || [v('first_name_ar'), v('last_name_ar')].filter(Boolean).join(' ')
   };
 }
 function formPhotoData(p){
@@ -5266,10 +5289,28 @@ function doorClosedNotice_(short) {
 
 /* ---- the box, on the settings page ---- */
 
-const coreSettingsPage = typeof settingsPage === 'function' ? settingsPage : null;
-if (coreSettingsPage) {
-  settingsPage = function () {
-    const html = coreSettingsPage.apply(this, arguments);
+/* Which function is the settings page.
+
+   It was written as `settingsPage`. No such function exists anywhere in this
+   file: the page is `pageSettings`, and `typeof settingsPage === 'function'` on a
+   name that was never declared throws a ReferenceError the moment the guard runs
+   -- except that `typeof` on an undeclared name is safe and yields "undefined", so
+   the guard was false, the panel was never added, and nothing was written and
+   nothing complained.
+
+   So the switch did not appear for anybody, not because of a role, and not
+   because of the manager: because it was wrapped around a page that is not there.
+   The three other layers that extend the settings page (`coreSettings`,
+   `coreAccountsSettings`, `coreSettingsFees`) all take `pageSettings`, which is
+   what the router reads. This takes it too, and `tools/tests/door-switch.test.js`
+   asks the built page for the switch rather than trusting this comment.
+
+   Naming this layer differently from the four around it would make the build
+   order readable. It does not change behaviour, and behaviour is what breaks. */
+const coreDoorSettings = typeof pageSettings === 'function' ? pageSettings : null;
+if (coreDoorSettings) {
+  pageSettings = function () {
+    const html = coreDoorSettings.apply(this, arguments);
     const role = String((state.user && state.user.role) || '');
     if (!/^(admin|president|manager|owner)$/.test(role)) return html;
 
@@ -7020,15 +7061,19 @@ boot = async function () {
   };
   const dupReason = key => DUP_REASON[key] || key;
 
+  /* What an account carries with it, in one line: how many requests filed under it
+     and how many cards. It is searched along with the name because a manager
+     looking for "the one with three requests on it" is looking by this. */
+  const held = a => {
+    const bits = [];
+    if (a.requests) bits.push(clubDigits(a.requests) + ' طلب');
+    if (a.swimmers) bits.push(clubDigits(a.swimmers) + ' بطاقة سباح');
+    return bits.length ? bits.join(' · ') : 'لا شيء';
+  };
+
   const findings = (data) => {
     const groups = (data && data.groups) || [];
     const gone = (data && data.merged) || [];
-    const held = a => {
-      const bits = [];
-      if (a.requests) bits.push(clubDigits(a.requests) + ' طلب');
-      if (a.swimmers) bits.push(clubDigits(a.swimmers) + ' بطاقة سباح');
-      return bits.length ? bits.join(' · ') : 'لا شيء';
-    };
     const kept = g => (g.accounts || []).find(x => String(x.id) === String(g.keep)) || {};
     const rows = groups.map((g, n) => {
       const items = (g.accounts || []).map(a => {
@@ -7059,9 +7104,28 @@ boot = async function () {
       + 'ينتقل ما كان للحساب الآخر معه، ولا يُحذف شيء.</p>' + rows;
   };
 
+  /* What a person looks an account up by.
+
+     Everything the panel shows about an account, in one string: the name, the
+     address it signs in with, the username the paper forms quote, the telephone
+     a family would give at the desk, the role as it is written, and the
+     membership or registration number. Those are the six things somebody
+     actually has in their hand when they come looking for a row -- a name from a
+     paper, an address from an email, a number off a card.
+
+     The role is searched in its own Arabic wording and not only in the English
+     key it is stored under, because nobody holding a page full of Arabic labels is
+     going to type `president` into a box that says `رئيس النادي`. Both are
+     searched, so either works. */
+  const accountHaystack = a => [a.name, a.email, a.username, a.phone,
+    a.member_no, a.registration_id, a.role, label(a.role), held(a)]
+    .filter(Boolean).join(' ');
+
   const panel = (list, me) => {
     if (!Array.isArray(list)) return '';
-    const rows = list.map(a => {
+    const q = String(state.accountsQuery || '').trim();
+    const shown = q ? list.filter(a => matchesText(accountHaystack(a), q)) : list;
+    const rows = shown.map(a => {
       const mine = String(a.id) === String(me);
       const who = a.owner
         ? '<small class="owner-mark" title="صاحب كل الصلاحيات">★ المالك</small>' : '';
@@ -7079,6 +7143,16 @@ boot = async function () {
         + esc(a.id) + '">حفظ</button>'
         + '</div>';
     }).join('');
+    /* The count is said out loud, and says what was asked for as well as what was
+       found. A list that shows two rows out of two hundred and twenty-six, with
+       no count beside it, reads as two accounts. */
+    const tally = q
+      ? '<span class="hint" role="status">يُعرض ' + clubDigits(shown.length)
+        + ' من ' + clubDigits(list.length) + ' حسابًا — «' + esc(q) + '»</span>'
+      : '';
+    const empty = q
+      ? '<p class="hint">لا حساب بهذا الاسم أو البريد أو الرقم. ابحث بجزء من الاسم، أو بالاسم كما هو في الاستمارة.</p>'
+      : '<p class="hint">لا توجد حسابات.</p>';
     return '<section class="panel settings" id="accounts-panel">'
       + '<div class="panel-head"><div>'
       + '<h3>صلاحيات الحسابات</h3>'
@@ -7087,7 +7161,11 @@ boot = async function () {
       + '</div><div class="toolbar-group">'
       + '<button class="btn btn-outline" data-action="check-duplicate-accounts">فحص الحسابات المكررة</button>'
       + '<button class="btn btn-outline" data-action="reload-accounts">تحديث</button></div></div>'
-      + '<div id="accounts-list">' + (rows || '<p class="hint">لا توجد حسابات.</p>') + '</div>'
+      + '<div class="search">🔎<input id="accounts-search" '
+      + 'placeholder="ابحث بالاسم أو البريد أو رقم الهاتف أو رقم الانخراط…" '
+      + 'aria-label="بحث في الحسابات" value="' + esc(q) + '" autocomplete="off"></div>'
+      + tally
+      + '<div id="accounts-list">' + (rows || empty) + '</div>'
       + '<div id="duplicate-accounts" hidden></div>'
       + '</section>';
   };

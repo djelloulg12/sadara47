@@ -211,6 +211,45 @@ const A_WILAYA = WILAYA_LIST.find(x => (COMMUNES_BY_WILAYA[x.code] || []).length
       }
     }
   }
+  /* The geometry is not the only thing that has to agree.
+
+     The two copies also decide what goes in each box, and they decide it in two
+     separate `formValues`. The club corrected this mapping in both directions
+     over two seasons, and the two copies were corrected separately -- one of them
+     first, the other after somebody printed a sheet and read it. Comparing the
+     numbers alone would have called that pair identical.
+
+     So the key is compared as well: for every spot, the field it reads. A spot
+     that prints `birth_date` on one side and `guardian_birth_date` on the other is
+     the same sheet saying two things, and this is where it is caught. */
+  const reads = src => {
+    const fn = (src.match(/function\s+formValues\s*\([^)]*\)\s*\{([\s\S]*?)\n\}/) || [])[1] || '';
+    const out = {};
+    /* Up to a comma, a line break or a fallback -- the value of one key may run
+       over three lines, and only its first field is what decides what the box
+       reads. */
+    for (const m of fn.matchAll(/(\w+)\s*:\s*([^,\n]+?)(?=,|\n|$)/g)) {
+      const v = m[2].trim();
+      const field = v.match(/v\('(\w+)'\)/) || v.match(/a\s*&&\s*a\.(\w+)/) || v.match(/rec\.(\w+)/);
+      if (field) out[m[1]] = field[1];
+    }
+    return out;
+  };
+  const whoReads = reads(PRINT), whoReadsThere = reads(APP);
+  if (!Object.keys(whoReads).length || !Object.keys(whoReadsThere).length) {
+    errors.push('[drift] could not read what each copy puts in the boxes');
+  }
+  for (const spot of mine.map(s => s.id)) {
+    if (!(spot in whoReads) || !(spot in whoReadsThere)) {
+      errors.push('[drift] ' + spot + ' is filled from a field in one copy only');
+      continue;
+    }
+    if (whoReads[spot] !== whoReadsThere[spot]) {
+      errors.push('[drift] ' + spot + ' is filled from ' + whoReadsThere[spot]
+        + ' on the platform and from ' + whoReads[spot] + ' on the public form');
+    }
+  }
+
   const box = src => {
     const m = src.match(/PHOTO_BOX\s*=\s*\{\s*x:\s*([\d.]+),\s*y:\s*([\d.]+),\s*w:\s*([\d.]+),\s*h:\s*([\d.]+)\s*\}/);
     return m ? m.slice(1, 5).map(Number) : null;
@@ -1406,13 +1445,18 @@ tasks.push(() => {
   const rec = { birth_date: '2013-05-09', phone: '0661234567', blood_group: 'O+',
                 guardian_birth_date: '1985-02-03', guardian_national_id: '198502031122334455',
                 category: 'minor', first_name_ar: 'x', last_name_ar: 'y',
+                birth_place: 'غرداية',
                 address: 'a', application_no: 'APP-20261011-33A7', expected_amount: 6400 };
   const vals = F.formValues(rec);
   for (const [what, got, want] of [
     ['the birth date', vals.birth_date, '2013/05/09'],
-    /* The box after `المولود (٥) بتاريخ:` is the swimmer's date, not the
-       guardian's -- the record carries both, and the guardian's is 1985. */
-    ["the swimmer's date on the declaration", vals.child_birth_date, '2013/05/09'],
+    /* The box after `المولود (٥) بتاريخ:` is the guardian's day, not the
+       child's. The record carries both -- the child 2013, the guardian 1985 -- and
+       the child was already printed on the line above, so the club was striking
+       the second copy out by hand on every form. */
+    ["the guardian's day on the declaration", vals.child_birth_date, '1985/02/03'],
+    /* And `ب:` is where the child was born. */
+    ['the birthplace', vals.birth_place, 'غرداية'],
     ['the telephone number', vals.phone, '0661234567'],
     ["the guardian's identity number", vals.parent_id, '198502031122334455']
   ]) {

@@ -44,20 +44,29 @@ const FORM_SPOTS = [
   { id: 'blood_group',        y: 114.45, x0: 62.1,  colon: 178.3 },
   { id: 'phone',              y: 124.25, x0: 62.3,  colon: 178.3 },
   { id: 'parent_name',        y: 208.78, x0: 102.4, colon: 152.9 },
+    /* `المولود(ة) بتاريخ:` on the declaration line.
+
+       It carried the swimmer's own day -- which is what `يولد بتاريخ:` in the
+       identity block above already says. The child's date was therefore printed
+       twice on one sheet, and the club read the second copy as the guardian's and
+       had to correct it by hand on every form.
+
+       The line belongs to the person signing, and the day on it is the guardian's
+       day: `guardian_birth_date`. The child's day has a line of its own, and it
+       is filled in. */
   { id: 'child_birth_date',  y: 208.78, x0: 32.9,  colon: 71.9 },
-    /* The `ب:` on the declaration line.
+    /* `ب:` on the declaration line -- where the child was born.
 
-       It was read as "at this place", and a birthplace was printed there. But the
-       word before that box is `ب` -- son, or daughter, of -- and the line is about
-       a child, so what belongs in it is the child's surname. A town where a family
-       name should be left the line reading
-       `المولد(ة) بتاريخ: 07/04/2013 ب: غرداية`: a date and a place with no name attached to either,
-       on a document about somebody's child. That is a line which can be read as
-       being about the guardian -- and read that way, it has been.
+       It was read as *son of* and a family name was printed there, and before
+       that a town was, and neither reading survived contact with the club:
+       `ب` on this form is `بـ...` as in *at*, the birthplace, and the club writes
+       `غرداية` in it.
 
-       So the surname goes where `ب` is, and the birthplace moves up to the line that
-       already carries the day of birth, where it cannot be read as a name. */
-  { id: 'child_last_name',    y: 208.78, x0: 4.2,   colon: 33.1 },
+       The surname does not go missing: it is already printed in the identity block
+       above, in `اللقب`, which is where a person looks for it. Putting it here as
+       well only made the declaration disagree with the block about who the child
+       is. */
+  { id: 'birth_place',        y: 208.78, x0: 4.2,   colon: 33.1 },
   { id: 'parent_id',          y: 217.70, x0: 106.0, colon: 149.4 },
   { id: 'card_issued_at',     y: 217.70, x0: 40.0,  colon: 73.3 },
   { id: 'card_place',         y: 217.70, x0: 4.2,   colon: 31.5 },
@@ -69,9 +78,10 @@ const SPOT_CLEAR = 0.4;  // mm of clear paper between the value and the rule
 const /* The declaration is a guardian's line: `أنا المصغي` names the person signing
      for a child, and `المولود (٥) بتاريخ:` and `ب:` are that child. An adult signs
      for nobody, so the whole line stays empty. Those two are named here rather
-     than caught by a prefix: they carry the swimmer's own date and place, and a
-     prefix cannot tell them from the adult's date in the block above. */
- GUARDIAN_SPOT = /^(parent_|card_|child_birth_date$|child_last_name$|authorised_for$)/;
+     than caught by a prefix: they carry the guardian's day and the child's
+     birthplace, and a prefix cannot tell them from the adult's day in the block
+     above. */
+ GUARDIAN_SPOT = /^(parent_|card_|child_birth_date$|birth_place$|authorised_for$)/;
 
 /* An adult is not a minor: the guardian block belongs to another person and has
    to stay empty on their form. */
@@ -108,19 +118,19 @@ function formValues(a){
     registration: clubDigits(v('membership_no') || v('application_no')),
     first_name: v('first_name_ar'),
     last_name: v('last_name_ar'),
-    /* The day and the place, together on the line the form calls تاريخ الميلاد.
+    /* The day, on the line the form calls تاريخ الميلاد, and nothing else.
 
-       There is no line of its own on this form for where a child was born, so it
-       was printed in the `ب:` box on the declaration -- the box that says *son
-       of*. It belongs with the date, where it reads as a place and cannot be
-       mistaken for a family name. */
-    birth_date: slashDate(a && a.birth_date)
-      ? [slashDate(a && a.birth_date), a && a.birth_place].filter(Boolean).join(' · ')
-      /* With no day on file there is nothing for a place to belong to. The line
-         is labelled تاريخ الميلاد, and printing a town alone on it reads as a date -- a blank line
-         is honest and a wrong one is not. The birthplace still comes out on the
-         declaration, where the swimmer's own name is beside it. */
-      : '',
+       A place used to be appended to it, having first been printed in the `ب:` box
+       on the declaration on the reading that `ب` meant *son of*. It does not:
+       `ب:` on that line is where the child was born, and the club writes غرداية
+       in it. A line labelled تاريخ الميلاد reading `21/07/2013 · غرداية` prints two
+       different facts as one value, and one of them twice on the sheet.
+
+       No day on file means a blank line. The line is labelled تاريخ الميلاد, and a
+       town printed alone on it reads as a date -- a blank line is honest and a
+       wrong one is not. The birthplace is printed on its own box below, where the
+       club reads it. */
+    birth_date: slashDate(a && a.birth_date),
     address: v('address'),
     blood_group: clubDigits(v('blood_group')),
     phone: clubDigits(v('phone')),
@@ -140,19 +150,31 @@ function formValues(a){
        name where the person expects to read a date. */
     parent_name: [v('guardian_first_name'), v('guardian_last_name')]
       .filter(Boolean).join(' '),
-    /* `المولود (٥) بتاريخ:` -- the swimmer, not the guardian. */
-    child_birth_date: slashDate(v('birth_date')),
-    /* `ب:` -- the child, by surname. The word on the form is *son of*, and this is
-       the surname that answers it. */
-    child_last_name: v('last_name_ar'),
-    /* `ب: ___` -- where the swimmer was born. */
+    /* `المولود (٥) بتاريخ:` -- the guardian's day, not the child's.
+
+       It carried `birth_date`, which is already printed on `يولد بتاريخ:` in the
+       identity block, so the child's date appeared twice on one sheet. The club
+       read the second copy as the guardian's and struck it out by hand on every
+       form. The day the person signing puts down is theirs, and it is on file as
+       `guardian_birth_date`. */
+    child_birth_date: slashDate(v('guardian_birth_date')),
+    /* `ب:` -- where the child was born. A surname lived here for a while, on the
+       reading that the word is *son of*. The club's own forms say otherwise, and
+       the surname is already printed in `اللقب` in the block above, so nothing is
+       lost by leaving this box for the place. */
     birth_place: v('birth_place'),
     parent_id: clubDigits(v('guardian_national_id')),
     /* The declaration is the guardian's, so the card on it is
        the guardian's, and the day it was issued is the day they gave. */
     card_issued_at: slashDate(v('guardian_card_issued') || v('card_issue_date')),
     card_place: v('card_issue_place'),
+    /* `المصرّح له` -- the child this declaration is about. It used to be left blank
+       whenever the request did not carry the name, which is most of them: the box
+       is on the sheet, it says *authorised for*, and it said nothing. The child's
+       own name is on the record in two fields and is the same on both copies of
+       this code, so it is put there rather than left for a reader to guess. */
     authorised_for: v('guardian_child')
+      || [v('first_name_ar'), v('last_name_ar')].filter(Boolean).join(' ')
   };
 }
 function formPhotoData(p){

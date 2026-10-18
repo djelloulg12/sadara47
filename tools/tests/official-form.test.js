@@ -9,6 +9,14 @@
    So the form is drawn with two dates that cannot be mistaken for each other, and
    the page is read back: what the mapping produced, and what was printed on it.
 
+   The club then sent a photograph of a printed sheet and corrected it the other
+   way: the child's date was on the declaration as well as on `يولد بتاريخ:` -- one
+   date twice on one page -- and the second copy was read as the guardian's and
+   struck out by hand. So the check below asks for the guardian's day there, and
+   for the birthplace in `ب:`. Both readings stay in this file on purpose: the
+   first is why the second was never wrong for long, and whoever thinks of
+   changing it back has to read both.
+
    The scan itself is a picture laid over the page. Which printed line a box sits
    on is therefore a question about the picture and not about the code, and it is
    answered here by looking, once, rather than by reading coordinates and hoping.
@@ -119,6 +127,7 @@ child.on('close', () => {
   console.log('      identity block prints     : ' + report.values.birth_date);
   console.log('      declaration prints        : ' + report.values.child_birth_date);
   console.log('      the line names            : ' + report.values.parent_name);
+  console.log('      the ب: box prints        : ' + report.values.birth_place);
   if (report.withoutABirthDate) {
     console.log('');
     console.log('      a record with NO birth date for the child (222 of the 574 on file):');
@@ -140,6 +149,7 @@ child.on('close', () => {
     report.problems.forEach(p => console.log('  - ' + p));
     process.exit(1);
   }
-  console.log("The declaration prints the swimmer's date.");
+  console.log("The declaration prints the guardian's date, the ب: box the birthplace, "
+    + 'and the child\'s own day appears once.');
   process.exit(0);
 });

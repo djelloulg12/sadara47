@@ -49,15 +49,19 @@
   };
   const dupReason = key => DUP_REASON[key] || key;
 
+  /* What an account carries with it, in one line: how many requests filed under it
+     and how many cards. It is searched along with the name because a manager
+     looking for "the one with three requests on it" is looking by this. */
+  const held = a => {
+    const bits = [];
+    if (a.requests) bits.push(clubDigits(a.requests) + ' طلب');
+    if (a.swimmers) bits.push(clubDigits(a.swimmers) + ' بطاقة سباح');
+    return bits.length ? bits.join(' · ') : 'لا شيء';
+  };
+
   const findings = (data) => {
     const groups = (data && data.groups) || [];
     const gone = (data && data.merged) || [];
-    const held = a => {
-      const bits = [];
-      if (a.requests) bits.push(clubDigits(a.requests) + ' طلب');
-      if (a.swimmers) bits.push(clubDigits(a.swimmers) + ' بطاقة سباح');
-      return bits.length ? bits.join(' · ') : 'لا شيء';
-    };
     const kept = g => (g.accounts || []).find(x => String(x.id) === String(g.keep)) || {};
     const rows = groups.map((g, n) => {
       const items = (g.accounts || []).map(a => {
@@ -88,9 +92,28 @@
       + 'ينتقل ما كان للحساب الآخر معه، ولا يُحذف شيء.</p>' + rows;
   };
 
+  /* What a person looks an account up by.
+
+     Everything the panel shows about an account, in one string: the name, the
+     address it signs in with, the username the paper forms quote, the telephone
+     a family would give at the desk, the role as it is written, and the
+     membership or registration number. Those are the six things somebody
+     actually has in their hand when they come looking for a row -- a name from a
+     paper, an address from an email, a number off a card.
+
+     The role is searched in its own Arabic wording and not only in the English
+     key it is stored under, because nobody holding a page full of Arabic labels is
+     going to type `president` into a box that says `رئيس النادي`. Both are
+     searched, so either works. */
+  const accountHaystack = a => [a.name, a.email, a.username, a.phone,
+    a.member_no, a.registration_id, a.role, label(a.role), held(a)]
+    .filter(Boolean).join(' ');
+
   const panel = (list, me) => {
     if (!Array.isArray(list)) return '';
-    const rows = list.map(a => {
+    const q = String(state.accountsQuery || '').trim();
+    const shown = q ? list.filter(a => matchesText(accountHaystack(a), q)) : list;
+    const rows = shown.map(a => {
       const mine = String(a.id) === String(me);
       const who = a.owner
         ? '<small class="owner-mark" title="صاحب كل الصلاحيات">★ المالك</small>' : '';
@@ -108,6 +131,16 @@
         + esc(a.id) + '">حفظ</button>'
         + '</div>';
     }).join('');
+    /* The count is said out loud, and says what was asked for as well as what was
+       found. A list that shows two rows out of two hundred and twenty-six, with
+       no count beside it, reads as two accounts. */
+    const tally = q
+      ? '<span class="hint" role="status">يُعرض ' + clubDigits(shown.length)
+        + ' من ' + clubDigits(list.length) + ' حسابًا — «' + esc(q) + '»</span>'
+      : '';
+    const empty = q
+      ? '<p class="hint">لا حساب بهذا الاسم أو البريد أو الرقم. ابحث بجزء من الاسم، أو بالاسم كما هو في الاستمارة.</p>'
+      : '<p class="hint">لا توجد حسابات.</p>';
     return '<section class="panel settings" id="accounts-panel">'
       + '<div class="panel-head"><div>'
       + '<h3>صلاحيات الحسابات</h3>'
@@ -116,7 +149,11 @@
       + '</div><div class="toolbar-group">'
       + '<button class="btn btn-outline" data-action="check-duplicate-accounts">فحص الحسابات المكررة</button>'
       + '<button class="btn btn-outline" data-action="reload-accounts">تحديث</button></div></div>'
-      + '<div id="accounts-list">' + (rows || '<p class="hint">لا توجد حسابات.</p>') + '</div>'
+      + '<div class="search">🔎<input id="accounts-search" '
+      + 'placeholder="ابحث بالاسم أو البريد أو رقم الهاتف أو رقم الانخراط…" '
+      + 'aria-label="بحث في الحسابات" value="' + esc(q) + '" autocomplete="off"></div>'
+      + tally
+      + '<div id="accounts-list">' + (rows || empty) + '</div>'
       + '<div id="duplicate-accounts" hidden></div>'
       + '</section>';
   };
