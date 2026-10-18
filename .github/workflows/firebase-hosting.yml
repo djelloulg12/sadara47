@@ -84,6 +84,31 @@ jobs:
             exit 1
           fi
 
+      # The rules are the only thing standing between the internet and a list of
+      # children's photographs. Nothing anywhere used to compile them: the file was
+      # written, reviewed, committed -- and a single missing brace would have sat
+      # here until somebody deployed it and the database refused to start.
+      #
+      # The Firestore emulator compiles the rules when it boots, so starting it and
+      # stopping it again is the whole test. It is skipped, not failed, where there
+      # is no Java, so a fork on a bare runner stays green rather than red for a
+      # reason that has nothing to do with the club.
+      - name: The Firestore rules compile
+        run: |
+          set -e
+          if ! command -v java >/dev/null 2>&1; then
+            echo "::warning::no Java on this runner: the rules were not compiled"
+            exit 0
+          fi
+          # emulators:exec boots the emulator -- which is what compiles the rules --
+          # runs the command, and shuts it down. The command is a no-op on purpose:
+          # the failure being caught is the emulator refusing to start, not the
+          # command returning something.
+          npx --yes firebase-tools@latest emulators:exec \
+            --only firestore --project demo-sadara "true" \
+            || { echo "::error file=firestore.rules::the rules do not compile"; exit 1; }
+          echo "the rules compiled"
+
       # The one place a secret may be read, and the two answers the rest of the
       # file decides on. Never printed, and never used as a value in a shell line.
       - name: Decide what may be deployed
