@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "sadara-platform-774c8",
     "public": "firebase-public",
     "ignore": [
       "firebase.json",

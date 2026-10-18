@@ -158,24 +158,21 @@ const seed = (user, page) => ({ user, page, swimmers: SW, applications: APPS, sc
      Nothing above could have caught it. Those tests set the photograph straight on
      the member, which is a thing the page does not do. So it is checked here,
      starting from the response the server actually sends. */
-  const doc = {
-    id: 'APP-M-205489959_7c2124',           /* exactly what the server sends */
-    membership_no: 'E202620001', name: 'مهيّم', group_name: 'المتوسطون',
-    phone: '0661000001', status: 'active', blood_group: 'O+', joined: '2026-10-01'
-  };
+  /* Checked against the file that actually ships, not against a copy of the
+     mapping written out here.
 
-  /* The mapping syncApi runs over every document it is handed. */
-  const carried = Object.assign({}, doc, {
-    id: doc.membership_no || doc.id, doc_id: doc.id, name: doc.name || '',
-    group: doc.group_name || doc.group || '', phone: doc.phone || '',
-    status: doc.status === 'active' ? 'نشط' : (doc.status || 'نشط') });
-
-  /* `id` is what the page edits a member by, so it becomes the membership number --
-     and the document id has to be kept somewhere, because for a member that document
-     is the request they were accepted from, and that is the only route to the face. */
-  if (carried.doc_id !== doc.id) problems.push('the member lost the link to the request they came from');
-  if (carried.blood_group !== 'O+' || carried.joined !== '2026-10-01') {
-    problems.push('the roster mapping still drops fields the server sent');
+     The first version of this test re-implemented the mapping and asserted on its
+     own copy -- which passed happily while the site kept the five-field rebuild,
+     because the mapping that mattered lives in a file this test never read. A
+     test that holds its own copy of the thing it is testing is a test of nothing. */
+  if (/state\.swimmers\s*=\s*sw\.map\(x=>\(\{/.test(APP)) {
+    problems.push('the roster is still rebuilt from five fields, so a photograph never arrives');
+  }
+  if (!/state\.swimmers\s*=\s*sw\.map\(x=>Object\.assign/.test(APP)) {
+    problems.push('the roster does not carry the whole document through');
+  }
+  if (!/s\.from_application\|\|s\.application_no\|\|s\.application_id\|\|s\.doc_id/.test(APP)) {
+    problems.push('a member has no route back to the request they were accepted from');
   }
 
   /* And the second step: a request carrying the photograph, reached through that

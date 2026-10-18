@@ -3639,7 +3639,37 @@ async function syncApi(){
 
   if(Array.isArray(sw)&&sw.length)
 
-    state.swimmers=sw.map(x=>({id:x.membership_no||x.id,name:x.name||'',group:x.group_name||x.group||'',phone:x.phone||'',status:x.status==='active'?'نشط':(x.status||'نشط')}));
+  /* The whole document is carried through, and the five fields the rest of the
+
+     page expects are written on top of it rather than substituted for it.
+
+
+
+     It used to rebuild each member out of five fields, so the photograph, the
+
+     day of birth, the blood group, the joining date and the link back to the
+
+     request a member was accepted from were all discarded here -- after the
+
+     server had already sent them. The card looked for a face, found none,
+
+     and printed the club logo where a child should be: on a card kept for
+
+     years and on the sheet of ten handed out at the pool.
+
+
+
+     `doc_id` is kept separately because `id` becomes the membership number
+
+     the page edits by, while the document id is the request the member came
+
+     from, and that is the only route back to the photograph. */
+
+    state.swimmers=sw.map(x=>Object.assign({},x,{id:x.membership_no||x.id,doc_id:x.id,
+
+      name:x.name||'',group:x.group_name||x.group||'',phone:x.phone||'',
+
+      status:x.status==='active'?'نشط':(x.status||'نشط')}));
 
   if(Array.isArray(nt))
 
