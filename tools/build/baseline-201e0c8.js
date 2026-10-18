@@ -554,7 +554,15 @@ function memberPhoto(s, profile){
 function memberField(s, field){
   const here=s&&s[field];
   if(here)return here;
-  const from=s&&(s.from_application||s.application_no||s.application_id);
+  /* `doc_id` is the document's own id, and for a member that document *is*
+     the request they were accepted from -- the register is keyed by it. It
+     was missing from the list above, so a member carrying no
+     `from_application` field -- which is most of the roster -- had no route
+     back to the request, and so no photograph, whatever the server had
+     already sent. A card is asked to print a face; this is where it went.
+     Read, never written: repairing the data would change records the club
+     owns to fix a printing fault. */
+  const from=s&&(s.from_application||s.application_no||s.application_id||s.doc_id);
   if(!from)return '';
   const req=((state.applications||[]).find(a=>String(a.id)===String(from)
     ||String(a.application_no||'')===String(from))||{});

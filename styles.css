@@ -141,7 +141,7 @@ body.printing .modal-backdrop,body.printing .toast-message{display:none!importan
 .lux-row{display:flex;align-items:baseline;gap:1.2mm;border-bottom:.5px dotted #b9d9de;padding-bottom:.4mm}
 .lux-row i{font-style:normal;font-size:5.5pt;color:#5b7f88;white-space:nowrap}
 .lux-row b{font-size:7pt;color:#16414d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lux-qr{text-align:center;flex-shrink:0}
+.lux-qr,.lux-code{text-align:center;flex-shrink:0}
 .lux-qr .qr-code{width:13mm;height:13mm;background:#fff;border:.5px solid #cfe2e6;border-radius:1mm}
 .lux-qr small{display:block;font-size:4.8pt;color:#7d9aa2;margin-top:.5mm}
 .lux-foot{display:flex;justify-content:space-between;gap:2mm;border-top:.5px solid #9fc4cb;padding-top:1mm;font-size:5.5pt;color:#5b7f88}
@@ -209,7 +209,7 @@ body.printing .print-sheet10{display:block!important}
 .lux-row{display:flex;align-items:baseline;gap:1mm;border-bottom:.15mm dotted #b9d9de;padding-bottom:.3mm;min-width:0}
 .lux-row i{font-style:normal;font-size:4.6pt;color:#5b7f88;white-space:nowrap}
 .lux-row b{font-size:5.8pt;color:#16414d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lux-qr{text-align:center;flex-shrink:0}
+.lux-qr,.lux-code{text-align:center;flex-shrink:0}
 .lux-qr .qr-code{width:12mm;height:12mm;background:#fff;border:.2mm solid #cfe2e6;border-radius:.8mm}
 .lux-qr small{display:block;font-size:4.2pt;color:#7d9aa2;margin-top:.3mm}
 .lux-foot{display:flex;justify-content:space-between;gap:1.5mm;border-top:.2mm solid #9fc4cb;padding-top:.6mm;font-size:4.4pt;color:#5b7f88}
@@ -862,4 +862,29 @@ body.printing .print-sheet10{display:block!important}
   .mine-bar i { background: #7fb3bd !important; }
   .mine-timetable { break-inside: auto; }
   .mine-timetable tr { break-inside: avoid; }
+}
+
+/* ---- the printed code, where the scan code used to be --------------------
+
+   The club asked for the number in plain digits instead of a QR, and the two are
+   not interchangeable. A QR needs a second device held over the card; the person at
+   the gate is holding a clipboard and a pen, and the parent in the queue is holding
+   a child. So the number is set at a size a hand can copy -- 6.6 mm tall on an 85 mm
+   card -- with its label above it and the club's telephone under it, which is the
+   pair somebody reads out when a code is mislaid. */
+.lux-code{text-align:center;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:.5mm}
+.lux-code small{display:block;font-size:4.2pt;color:#8aa7b0;margin:0}
+.lux-code .lux-reg{
+  display:block;font-size:11pt;line-height:1.05;font-weight:800;color:#071a35;
+  letter-spacing:.4pt;background:#fff;border:.2mm solid #cfe2e6;border-radius:.8mm;
+  padding:.6mm 1.4mm;min-width:17mm;white-space:nowrap;
+}
+.lux-code .lux-phone{display:block;font-size:5.4pt;color:#16414d;font-weight:800;margin-top:.5mm;white-space:nowrap}
+/* Printed, the frame and the ink are the only things carrying the number, so they
+   are asked for rather than assumed: browsers strip backgrounds from print unless
+   told not to, and a card whose number sits in a box that does not print is a
+   number nobody can copy. */
+@media print{
+  .lux-code .lux-reg{-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#000}
+  .lux-card .lux-photo-img{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }

@@ -1098,7 +1098,23 @@ function memberField(s, field){
 
   if(here)return here;
 
-  const from=s&&(s.from_application||s.application_no||s.application_id);
+  /* `doc_id` is the document's own id, and for a member that document *is*
+
+     the request they were accepted from -- the register is keyed by it. It
+
+     was missing from the list above, so a member carrying no
+
+     `from_application` field -- which is most of the roster -- had no route
+
+     back to the request, and so no photograph, whatever the server had
+
+     already sent. A card is asked to print a face; this is where it went.
+
+     Read, never written: repairing the data would change records the club
+
+     owns to fix a printing fault. */
+
+  const from=s&&(s.from_application||s.application_no||s.application_id||s.doc_id);
 
   if(!from)return '';
 
@@ -4248,7 +4264,7 @@ function pageCards(){
   const list=(state.swimmers||[]).filter(s=>s.status==='نشط'||!s.status);
   const models=list.map(swimmerCardModel);
   const coachModels=coaches().map(coachCardModel);
-  return '<section class="card-intro"><div><span class="eyebrow">بطاقة انخراط النادي</span><h2>بطاقات أنيقة<br>بـ QR للحضور.</h2>'
+  return '<section class="card-intro"><div><span class="eyebrow">بطاقة انخراط النادي</span><h2>بطاقات أنيقة<br>برقم التسجيل.</h2>'
     +'<p>التصميم المعتمد للنادي — 85 × 52 مم — عشر بطاقات في ورقة A4 واحدة.</p>'
     +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-cards">🖨 طباعة كل البطاقات</button>'
     +'<button class="btn btn-outline" data-action="print-registration">🖨 استمارة الانخراط</button></div></div>'
@@ -4309,7 +4325,7 @@ roleCards=function(){
   const me=mySwimmer();
   if(!me)return '<section class="panel"><p class="empty-cell">حسابك غير مربوط ببطاقة انخراط. تواصل مع إدارة النادي لربط رقم العضوية.</p></section>';
   return '<section class="card-intro"><div><span class="eyebrow">بطاقتك الرسمية</span><h2>بطاقة انخراط<br>في جيبك.</h2>'
-    +'<p>اعرضها عند المدرب أو المشرف، أو امسح رمز QR لتسجيل حضورك.</p>'
+    +'<p>اعرضها عند المدرب أو المشرف، ليسجل حضورك.</p>'
     +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-role-card">🖨 طباعة بطاقة</button>'
     +'<button class="btn btn-outline" data-action="print-all-cards">🖨 كل البطاقات</button>'
     +'<button class="btn btn-outline" data-role-page="profile">✎ تعديل ملفي</button></div></div>'
@@ -4682,6 +4698,13 @@ function luxuryCard(p, kind){
   const name = p.coach_name || p.name || '';
   const fr = p.first_name_fr ? (p.first_name_fr + ' ' + (p.last_name_fr || '')).trim() : '';
   const no = clubDigits(p.membership_no || p.id || '');
+  /* The plain registration code, which is not the same thing as the number on the
+     card. The number is what identifies the member inside the club; the code is
+     what the family was given and quotes at the desk, and it lives on the request
+     rather than on the member -- so it is read from there and never invented when
+     it is missing. A blank is honest; a made-up number sends a parent to the wrong
+     child. */
+  const reg = clubDigits(memberField(p, 'registration_id') || p.registration_id || p.membership_no || p.id || '');
   const photo = (p.photo && /^(data:|https?:)/.test(p.photo)) ? p.photo : '';
   const phone = p.phone || CLUB.phone;
   const rows = coach
@@ -4720,10 +4743,15 @@ function luxuryCard(p, kind){
           ORNAMENT +
           '<div class="lux-rows">' + rows.map(r => '<div class="lux-row"><i>' + esc(r[0]) + '</i><b>' + esc(r[1]) + '</b></div>').join('') + '</div>' +
         '</div>' +
-        '<div class="lux-qr">' +
-          '<div class="qr-code" data-qr="' + esc(no) + '"></div>' +
+        '<div class="lux-code">' +
+          '<small>' + (coach ? 'رقم المدرب' : 'رقم التسجيل') + '</small>' +
+          /* The code is read out at the pool, so it is printed as digits rather than
+             scanned. A parent photographing a card in poor light, and a coach
+             writing the number onto a list, both need to be able to read it -- and a
+             QR that only a second phone can read fails both. */
+          '<b class="lux-reg" dir="ltr">' + esc(clubDigits(reg)) + '</b>' +
           '<b class="lux-phone" dir="ltr">' + esc(clubDigits(phone)) + '</b>' +
-          '<small>امسح لتسجيل الحضور</small>' +
+          '<small>اعرضها عند المدرب أو المشرف</small>' +
         '</div>' +
       '</div>' +
       '<div class="lux-foot"><span>' + esc(clubDigits(CLUB.season)) + '</span><span>' + esc(CLUB.address) + '</span></div>' +
@@ -4786,7 +4814,7 @@ function landingPage(){
     '<section class="feature-grid" id="activities">' +
       '<article><span class="feature-icon blue">◷</span><h3>برنامج واضح</h3><p>الحصص والتوقيت والمدرب لكل فوج، متاحة للإدارة والمدربين والسباحين.</p></article>' +
       '<article><span class="feature-icon gold">✓</span><h3>متابعة دقيقة</h3><p>تسجيل الحضور بثلاث حالات — حاضر، متأخر، غائب — مع كشف قابل للطباعة.</p></article>' +
-      '<article><span class="feature-icon mint">▣</span><h3>بطاقة انخراط</h3><p>بطاقة أنيقة برمز QR: يمسحها المدرب فيُسجَّل الحضور فورًا.</p></article>' +
+      '<article><span class="feature-icon mint">▣</span><h3>بطاقة انخراط</h3><p>بطاقة أنيقة برقم التسجيل: يقرؤه المدرب فيُسجَّل الحضور فورًا.</p></article>' +
       '<article><span class="feature-icon red">✎</span><h3>ملف لكل عضو</h3><p>كل منخرط يحدّث بياناته وصورته بنفسه: الطول، الوزن، فصيلة الدم، الطوارئ.</p></article>' +
     '</section>' +
 

@@ -113,6 +113,13 @@ function luxuryCard(p, kind){
   const name = p.coach_name || p.name || '';
   const fr = p.first_name_fr ? (p.first_name_fr + ' ' + (p.last_name_fr || '')).trim() : '';
   const no = clubDigits(p.membership_no || p.id || '');
+  /* The plain registration code, which is not the same thing as the number on the
+     card. The number is what identifies the member inside the club; the code is
+     what the family was given and quotes at the desk, and it lives on the request
+     rather than on the member -- so it is read from there and never invented when
+     it is missing. A blank is honest; a made-up number sends a parent to the wrong
+     child. */
+  const reg = clubDigits(memberField(p, 'registration_id') || p.registration_id || p.membership_no || p.id || '');
   const photo = (p.photo && /^(data:|https?:)/.test(p.photo)) ? p.photo : '';
   const phone = p.phone || CLUB.phone;
   const rows = coach
@@ -151,10 +158,15 @@ function luxuryCard(p, kind){
           ORNAMENT +
           '<div class="lux-rows">' + rows.map(r => '<div class="lux-row"><i>' + esc(r[0]) + '</i><b>' + esc(r[1]) + '</b></div>').join('') + '</div>' +
         '</div>' +
-        '<div class="lux-qr">' +
-          '<div class="qr-code" data-qr="' + esc(no) + '"></div>' +
+        '<div class="lux-code">' +
+          '<small>' + (coach ? 'رقم المدرب' : 'رقم التسجيل') + '</small>' +
+          /* The code is read out at the pool, so it is printed as digits rather than
+             scanned. A parent photographing a card in poor light, and a coach
+             writing the number onto a list, both need to be able to read it -- and a
+             QR that only a second phone can read fails both. */
+          '<b class="lux-reg" dir="ltr">' + esc(clubDigits(reg)) + '</b>' +
           '<b class="lux-phone" dir="ltr">' + esc(clubDigits(phone)) + '</b>' +
-          '<small>امسح لتسجيل الحضور</small>' +
+          '<small>اعرضها عند المدرب أو المشرف</small>' +
         '</div>' +
       '</div>' +
       '<div class="lux-foot"><span>' + esc(clubDigits(CLUB.season)) + '</span><span>' + esc(CLUB.address) + '</span></div>' +

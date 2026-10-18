@@ -91,7 +91,7 @@ function pageCards(){
   const list=(state.swimmers||[]).filter(s=>s.status==='نشط'||!s.status);
   const models=list.map(swimmerCardModel);
   const coachModels=coaches().map(coachCardModel);
-  return '<section class="card-intro"><div><span class="eyebrow">بطاقة انخراط النادي</span><h2>بطاقات أنيقة<br>بـ QR للحضور.</h2>'
+  return '<section class="card-intro"><div><span class="eyebrow">بطاقة انخراط النادي</span><h2>بطاقات أنيقة<br>برقم التسجيل.</h2>'
     +'<p>التصميم المعتمد للنادي — 85 × 52 مم — عشر بطاقات في ورقة A4 واحدة.</p>'
     +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-cards">🖨 طباعة كل البطاقات</button>'
     +'<button class="btn btn-outline" data-action="print-registration">🖨 استمارة الانخراط</button></div></div>'
@@ -152,7 +152,7 @@ roleCards=function(){
   const me=mySwimmer();
   if(!me)return '<section class="panel"><p class="empty-cell">حسابك غير مربوط ببطاقة انخراط. تواصل مع إدارة النادي لربط رقم العضوية.</p></section>';
   return '<section class="card-intro"><div><span class="eyebrow">بطاقتك الرسمية</span><h2>بطاقة انخراط<br>في جيبك.</h2>'
-    +'<p>اعرضها عند المدرب أو المشرف، أو امسح رمز QR لتسجيل حضورك.</p>'
+    +'<p>اعرضها عند المدرب أو المشرف، ليسجل حضورك.</p>'
     +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-role-card">🖨 طباعة بطاقة</button>'
     +'<button class="btn btn-outline" data-action="print-all-cards">🖨 كل البطاقات</button>'
     +'<button class="btn btn-outline" data-role-page="profile">✎ تعديل ملفي</button></div></div>'

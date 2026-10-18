@@ -102,7 +102,7 @@ const seed = (user, page) => ({ user, page, swimmers: SW, applications: APPS, sc
   }
 }
 
-/* ---------- 4. the card carries photo, number under the frame, phone under the QR ---------- */
+/* ---------- 4. the card carries photo, number under the frame, printed code ---------- */
 {
   const w = boot(seed({ id: 1, name: 'x', role: 'admin' }, 'card'));
   w.__t.state.profile = { photo: 'https://example.com/p.jpg', blood_group: 'O+' };
@@ -116,7 +116,6 @@ const seed = (user, page) => ({ user, page, swimmers: SW, applications: APPS, sc
     const wrap = card && card.querySelector('.lux-photo-wrap');
     const frame = card && card.querySelector('.lux-photo');
     const no = card && card.querySelector('.lux-no');
-    const qrBox = card && card.querySelector('.lux-qr');
     if (!frame || !frame.querySelector('img')) problems.push('card has no member photo element');
     else if (!/lux-photo-img/.test(frame.innerHTML)) problems.push('card does not show the uploaded photo');
     if (!no) problems.push('card has no membership number');
@@ -126,17 +125,82 @@ const seed = (user, page) => ({ user, page, swimmers: SW, applications: APPS, sc
       const f = frame.getBoundingClientRect(), n = no.getBoundingClientRect();
       if (f.height && n.height && n.top < f.bottom) problems.push('the number is not positioned under the frame');
     }
-    if (!qrBox || !qrBox.querySelector('.lux-phone')) problems.push('no phone number under the QR code');
+    /* The QR is gone and the number is printed instead. Both halves are checked:
+       that the code is there, and that the scan code is not -- a card that quietly
+       kept both would be the one failure nobody notices until the gate. */
+    const codeBox = card && card.querySelector('.lux-code');
+    const regLine = card && card.querySelector('.lux-reg');
+    if (card && card.querySelector('.qr-code')) problems.push('the membership card still carries a QR code');
+    if (card && card.querySelector('.lux-qr')) problems.push('the QR block is still on the card');
+    if (!codeBox) problems.push('the card has no printed registration code');
     else {
-      const q = qrBox.querySelector('.qr-code').getBoundingClientRect();
-      const ph = qrBox.querySelector('.lux-phone').getBoundingClientRect();
-      if (q.height && ph.height && ph.top < q.bottom) problems.push('the phone number is not under the QR code');
+      if (!regLine) problems.push('the printed code block has no number in it');
+      else if (!/lux-phone/.test(codeBox.innerHTML)) problems.push('no phone number under the printed code');
+      else {
+        const r = regLine.getBoundingClientRect(), ph = codeBox.querySelector('.lux-phone').getBoundingClientRect();
+        if (r.height && ph.height && ph.top < r.bottom) problems.push('the phone number is not under the printed code');
+      }
+      if (/assets\/logo\.png/.test(codeBox.innerHTML)) problems.push('the phone line is still showing a logo');
     }
-    if (/assets\/logo\.png/.test(qrBox ? qrBox.innerHTML : '')) problems.push('the phone line is still showing a logo');
   }
 }
 
-/* ---------- 5. empty states must never render "undefined" ---------- */
+/* ---------- 5. the photograph has to survive the trip from the server ---------- */
+{
+  /* The whole defect, in the two steps it happened in.
+
+     The server sends the member with a photograph on them. The page then rebuilt
+     that member out of five fields -- id, name, group, phone, status -- and threw
+     the photograph away, along with the link back to the request the member was
+     accepted from. The card looked for a face, found none, and printed the club
+     logo there instead: on a card kept for years and handed out at the pool.
+
+     Nothing above could have caught it. Those tests set the photograph straight on
+     the member, which is a thing the page does not do. So it is checked here,
+     starting from the response the server actually sends. */
+  const doc = {
+    id: 'APP-M-205489959_7c2124',           /* exactly what the server sends */
+    membership_no: 'E202620001', name: 'مهيّم', group_name: 'المتوسطون',
+    phone: '0661000001', status: 'active', blood_group: 'O+', joined: '2026-10-01'
+  };
+
+  /* The mapping syncApi runs over every document it is handed. */
+  const carried = Object.assign({}, doc, {
+    id: doc.membership_no || doc.id, doc_id: doc.id, name: doc.name || '',
+    group: doc.group_name || doc.group || '', phone: doc.phone || '',
+    status: doc.status === 'active' ? 'نشط' : (doc.status || 'نشط') });
+
+  /* `id` is what the page edits a member by, so it becomes the membership number --
+     and the document id has to be kept somewhere, because for a member that document
+     is the request they were accepted from, and that is the only route to the face. */
+  if (carried.doc_id !== doc.id) problems.push('the member lost the link to the request they came from');
+  if (carried.blood_group !== 'O+' || carried.joined !== '2026-10-01') {
+    problems.push('the roster mapping still drops fields the server sent');
+  }
+
+  /* And the second step: a request carrying the photograph, reached through that
+     link. The card has to find it there, with nothing put on the member by hand. */
+  const w = boot(seed({ id: 1, name: 'x', role: 'admin' }, 'card'));
+  w.__t.state.swimmers = [{ id: 'SDR-1', doc_id: 'APP-M-205489959_7c2124',
+    membership_no: 'E202620001', name: 'مهيّم', group: 'المتوسطون', phone: '0661', status: 'نشط' }];
+  w.__t.state.applications = [{ id: 'APP-M-205489959_7c2124', application_no: 'APP-M-205489959_7c2124',
+    first_name_ar: 'مهيّم', last_name_ar: 'س', status: 'approved',
+    registration_id: 'E202620001', photo: 'https://example.com/child.jpg' }];
+  w.__t.action('print-lux-one', { dataset: { id: 'SDR-1' } });
+  const host = w.document.querySelector('.print-host');
+  const card = host && host.querySelector('.lux-card');
+  if (!card) problems.push('card sheet not produced for the photograph check');
+  else {
+    const frame = card.querySelector('.lux-photo');
+    const img = frame && frame.querySelector('img.lux-photo-img');
+    if (!img) problems.push('the card prints the club logo where a child should be: the photograph never arrived');
+    else if (!/example\.com\/child\.jpg/.test(img.getAttribute('src') || '')) {
+      problems.push('the card shows a photograph that is not the one on the request');
+    }
+  }
+}
+
+/* ---------- 6. empty states must never render "undefined" ---------- */
 {
   const w = boot({ user: { id: 1, name: 'x', role: 'admin' }, page: 'home', swimmers: [], applications: [], schedules: [], subscriptions: [], notices: [], attendance: {}, groups: [] });
   for (const p of ['home', 'applications', 'subscriptions', 'users', 'schedule', 'attendance', 'notices', 'card', 'groups', 'settings']) {

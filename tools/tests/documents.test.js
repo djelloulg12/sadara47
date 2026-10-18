@@ -237,7 +237,7 @@ try {
     const c = host.querySelector('.lux-card');
     if (!c) errors.push('lux card markup missing');
     else {
-      for (const n of ['lux-side', 'lux-logo', 'lux-qr', 'lux-rows', 'lux-role', 'assets/logo.png']) {
+      for (const n of ['lux-side', 'lux-logo', 'lux-code', 'lux-rows', 'lux-role', 'assets/logo.png']) {
         if (!host.innerHTML.includes(n)) errors.push('lux card missing ' + n);
       }
     }
@@ -260,7 +260,7 @@ try {
   const card = w.document.querySelector('.lux-card');
   if (!card) errors.push('membership card not rendered');
   else {
-    for (const n of ['lux-side', 'lux-photo', 'lux-no', 'lux-qr']) {
+    for (const n of ['lux-side', 'lux-photo', 'lux-no', 'lux-code']) {
       if (!card.outerHTML.includes(n)) errors.push('membership card missing ' + n);
     }
   }
@@ -277,7 +277,7 @@ try {
 
 // 6. CSS coverage for the new classes
 const css = fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8');
-for (const cls of ['lux-card', 'lux-side', 'lux-main', 'lux-qr', 'lux-rows', 'lux-role', 'lux-stars',
+for (const cls of ['lux-card', 'lux-side', 'lux-main', 'lux-code', 'lux-rows', 'lux-role', 'lux-stars',
   'lux-logo', 'lux-vert', 'lux-season', 'lux-foot', 'lux-fr', 'lux-info', 'lux-photo', 'lux-body',
   'lux-top', 'lux-club', 'lux-grid', 'lux-preview', 'official-forms-list', 'card-band',
   'print-card-rail', 'print-card-inner', 'print-card-content', 'lux-row']) {
