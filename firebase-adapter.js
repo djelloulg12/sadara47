@@ -577,16 +577,46 @@
      number yet" and "I was not allowed to look" are different answers, and only
      the first of them may be answered with 0001. */
   const countedFromRecords = async (kind, year, pool) => {
+    /* Two ways of not knowing, and for a long time both of them looked exactly
+       like an answer.
+
+       A read that fails, and a read that comes back short. Either way the list
+       looks smaller than the truth, the highest number in it looks like the
+       highest number there is, and the next swimmer is handed a number somebody
+       already has. Returning 1 for "I could not look" did not fail one
+       registration -- it stamped the same identity number on every registration
+       that arrived while the quota was out. The project spent that quota more than
+       once, and this is what it produced: 139 requests carrying E202620001, and
+       30 carrying E202630001, all of them children.
+
+       So a count that was not a full count is not a count. Zero here is not
+       "this pool has no swimmers"; it is "nobody can say", and the caller already
+       knows that zero means the club assigns the number by hand, which is a
+       visible gap somebody can fill rather than a number two children share. */
+    let sawEverything = true;
     let list;
+    let members = [];
     try { list = await rows('applications'); }
-    catch (error) { console.warn('cannot read the requests to count registrations', error); list = []; }
+    catch (error) { console.warn('cannot read the requests to count registrations', error); list = []; sawEverything = false; }
     /* And from the members, because a request that has been accepted is a member
        now and its number is on the member's card. Counting from the requests
        alone means the number walks backwards the moment a record is lost, and the
        club hands the same number to two people. */
-    let members = [];
     try { members = await rows('swimmers'); }
-    catch (error) { console.warn('cannot read the members to count registrations', error); }
+    catch (error) { console.warn('cannot read the members to count registrations', error); sawEverything = false; }
+
+    /* A read that stopped at the row limit is a read that did not finish. It comes
+       back as a short list and says nothing about being short, so it is checked
+       here rather than trusted: past a thousand requests the counter would
+       otherwise walk backwards in plain sight and hand out live numbers. */
+    if (list.length >= ROW_LIMIT || members.length >= ROW_LIMIT) {
+      console.warn('the roster is at the read limit; the number is left to the club'
+        + ' rather than counted from a list that stopped short');
+      return 0;
+    }
+
+    if (!sawEverything) return 0;
+
     let highest = 0;
     for (const r of list.concat(members)) {
       const seq = readRegistrationId(r.registration_id || r.membership_no, kind, year, pool);
@@ -636,7 +666,13 @@
     const fromRecords = async () => {
       try {
         const seq = await countedFromRecords(kind, year, pool);
-        return seq ? letter + year + String(pool) + String(seq).padStart(4, '0') : '';
+        if (seq) return letter + year + String(pool) + String(seq).padStart(4, '0');
+        /* Said out loud, because a blank number is a thing somebody has to notice
+           and fill in, and a blank that arrives without a word is a blank that
+           reaches a card. */
+        console.warn('the number was left blank rather than guessed: the records could'
+          + ' not be read whole, and a number two children share is worse than a gap');
+        return '';
       } catch (error) {
         console.warn('the registration number could not be counted from the records;'
           + ' it will be assigned by the club', String((error && error.code) || error));

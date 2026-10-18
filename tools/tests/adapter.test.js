@@ -120,6 +120,7 @@ function makeFirestore() {
           return { id };
         },
         get: async () => {
+          if (typeof makeFirestore.__readHook === 'function') makeFirestore.__readHook(name);
           /* A document carries the reference it can be written through, as
              Firestore's does. The merge re-points a request's applicant with
              exactly that -- it holds the query and not the id -- so a mock without
@@ -222,6 +223,14 @@ makeFirestore.__createHook = null;
 /* Set by a check to make the counter path fail in a chosen way, and left unset by
    every other check. Read inside the mock, so a test does not reach into it. */
 makeFirestore.__transactionHook = null;
+
+/* Set by a check to make reading a collection fail the given way, and left unset by
+   every other check. Read inside the mock, so a test does not have to reach into it.
+
+   This one exists because the worst fault in the numbering was not in the counter
+   and so could not be reached from the counter hooks: it was in what happens when
+   the *roster* cannot be read. There was no way to write a check about that. */
+makeFirestore.__readHook = null;
 
 /* Registers somebody, with the counter forced to fail the given way, and returns
    the answer. Used by the three checks below so each says the same thing about
@@ -1271,6 +1280,90 @@ test('the number is the same one the counter would have given', async () => {
     }
   } finally {
     makeFirestore.__transactionHook = realHook;
+    DATA.applications = savedApps;
+  }
+});
+
+/* A roster that cannot be read must not become the number 0001.
+
+   The whole of this fault is one line: the read that failed was caught and the
+   list it would have returned was replaced with an empty one. An empty list has a
+   highest number of nothing, so the next swimmer was given 0001 -- and the next,
+   and the next, for as long as the quota stayed out. It did not look like a
+   failure anywhere. It looked like a pool that had nobody in it.
+
+   A blank is the honest answer, and it is a visible one: the request goes to
+   management with no number, and somebody puts the number on. Two children cannot
+   be found at the counter by one number, and a gap can be seen. */
+test('a roster that cannot be read leaves the number blank rather than numbering everybody 0001', async () => {
+  const savedApps = DATA.applications;
+  const savedTx = makeFirestore.__transactionHook;
+  const savedRead = makeFirestore.__readHook;
+
+  try {
+    /* Somebody is already numbered 0007 in this pool. The point of the fixture is
+       that a number exists, so that a fallback which cannot see it is visibly
+       walking backwards rather than merely being empty. */
+    DATA.applications = {
+      APP_PRIOR: {
+        application_no: 'APP-PRIOR', status: 'pending', first_name_ar: 'x',
+        last_name_ar: 'y', birth_date: '1990-01-01', phone: '07',
+        application_type: 'swimmer', registration_id: 'S20260000007'
+      }
+    };
+
+    const fileWith = async (brokenCounter, brokenRead, no) => {
+      /* Each filing starts from the same one-prior-member roster. Left as one
+         growing pile, the second request is refused as a duplicate of the first
+         and the check measures the duplicate rule instead of the numbering. */
+      DATA.applications = {
+        APP_PRIOR: {
+          application_no: 'APP-PRIOR', status: 'pending', first_name_ar: 'x',
+          last_name_ar: 'y', birth_date: '1990-01-01', phone: '07',
+          application_type: 'swimmer', registration_id: 'S20260000007'
+        }
+      };
+      makeFirestore.__transactionHook = brokenCounter || null;
+      makeFirestore.__readHook = brokenRead || null;
+      const w = boot(asUser('u1'));
+      const r = await call(w, '/api/applications', 'POST', {
+        application_no: no, category: 'adult', first_name_ar: 'a', last_name_ar: 'b',
+        birth_date: '1991-01-01', phone: '07', address: 'x',
+        national_id: 'ID-NUM', username: 'num.taker', subscription_code: 'quarter'
+      });
+      const filed = Object.values(DATA.applications).find(a => a.application_no === no);
+      return { status: r.status, data: r.data, id: filed ? filed.registration_id : undefined };
+    };
+
+    /* The healthy answer, to compare against: the counter. */
+    const healthy = await fileWith(null, null, 'APP-HEALTHY');
+    if (!healthy.id) {
+      errors.push('the healthy registration carried no number, so there is nothing to '
+        + 'compare a broken one against');
+    }
+
+    /* The fault: the counter is unreachable AND the roster cannot be read. */
+    const blind = await fileWith(quotaFailure, name => {
+      if (name === 'applications' || name === 'swimmers') { const e = new Error('permission denied'); e.code = 'permission-denied'; throw e; }
+    }, 'APP-BLIND');
+
+    if (blind.status !== 201) {
+      errors.push('a registration with an unreadable roster did not succeed: '
+        + blind.status + ' ' + JSON.stringify(blind.data).slice(0, 160));
+    } else if (blind.id) {
+      errors.push('with the roster unreadable the registration was still given a number, '
+        + JSON.stringify(blind.id) + '. A number produced without reading who has which '
+        + 'is a number two children can be given.');
+    }
+
+    /* The middle case -- counter unreachable, roster readable -- is deliberately
+       not asserted here. It has its own check above, and asserting it here would
+       compare a counter that has been counting all afternoon against a roster of
+       leftovers from earlier checks, and report a disagreement that is in the
+       fixture rather than in the numbering. */
+  } finally {
+    makeFirestore.__transactionHook = savedTx;
+    makeFirestore.__readHook = savedRead;
     DATA.applications = savedApps;
   }
 });
