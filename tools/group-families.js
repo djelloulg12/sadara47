@@ -54,7 +54,22 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const KEY = process.env.SADARA_SERVICE_ACCOUNT
   || path.join(os.homedir(), '.local', 'share', 'sadara-backup', 'service-account.json');
 const WRITE = process.argv.includes('--write');
-const PROJECT = 'sadara-platform-774c8';
+/* The emulator keeps one database per project id, so a tool pointed at the club
+   and a rehearsal pointed at `demo-` write to two different places and never see
+   each other. That is worth having -- it is what stops a rehearsal becoming an
+   accident -- but only if the tool cannot be run against the wrong one silently.
+   So the project comes from the environment, and pointing the tool at an emulator
+   while still naming the club's project is refused outright. */
+const PROJECT = process.env.SADARA_PROJECT || 'sadara-platform-774c8';
+
+if (process.env.FIRESTORE_EMULATOR_HOST && PROJECT === 'sadara-platform-774c8') {
+  console.log('');
+  console.log('  Refused: this is an emulator, and it is being asked for the club\'s project.');
+  console.log('  Set SADARA_PROJECT=demo-sadara to rehearse there. The club\'s own project');
+  console.log('  name is not something a rehearsal should carry.');
+  console.log('');
+  process.exit(2);
+}
 
 /* Compared the way a person writes a name, not the way a keyboard typed it. */
 function fold(value) {

@@ -195,7 +195,23 @@ body.printing .print-sheet10{display:block!important}
 .lux-club small{display:block;font-size:5pt;color:#5b7f88}
 .lux-role{background:linear-gradient(135deg,#12a0a8,#0a6f78);color:#fff;border-radius:1.4mm;padding:.5mm 1.8mm;font-size:5.8pt;font-weight:800;white-space:nowrap}
 .lux-card.is-coach .lux-role{background:linear-gradient(135deg,#e6a92a,#a4701a)}
-.lux-body{display:flex;gap:1.8mm;align-items:center;flex:1;min-height:0;padding:1.2mm 0}
+/* A grid, not a row of boxes.
+
+   Three columns of stated widths inside a card of a stated width can be made to
+   add up on paper, and on this card they did not: measured, the columns came to
+   four millimetres more than the card is wide, and because the row was a flex row,
+   everything to the right of the name was quietly pushed off the edge and printed
+   on the paper beside the card. Adjusting a width and measuring again is how that
+   gets found, and it is how it went wrong here twice.
+
+   A grid with one flexible track cannot do that. The name takes whatever is left,
+   and whatever the photograph and the code are given, the three still fit -- on a
+   card the club changes the size of, on a browser that computes a millimetre
+   differently, and in a print engine that rounds. */
+.lux-body{display:grid!important;grid-template-columns:15mm minmax(0,1fr) 23mm;
+  gap:1.2mm;align-items:center;flex:1;min-height:0;padding:1.2mm 0;box-sizing:border-box}
+.lux-body > *{min-width:0}
+.lux-photo{width:100%!important}
 .lux-photo{width:15mm;border-radius:1.4mm;border:.2mm dashed #9fc4cb;background:#fff;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:.4mm;flex-shrink:0;overflow:hidden;padding-top:.8mm}
 .lux-photo img{width:8mm;height:auto;opacity:.92}
 .lux-photo-label{font-size:4.2pt;color:#8aa7b0}
@@ -887,4 +903,87 @@ body.printing .print-sheet10{display:block!important}
 @media print{
   .lux-code .lux-reg{-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#000}
   .lux-card .lux-photo-img{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+
+/* ============ the corrected card layout ==================================
+
+   Everything below is a measured repair. The card was 85 mm wide and 52 mm tall,
+   its own contents were taller than that, and it had `overflow:hidden` -- so the
+   footer was silently cut off on every card printed. That is not visible on a
+   screen and is on paper every single time.
+
+   Four things were wrong, and each was found by measuring the rendered boxes
+   rather than by reading the stylesheet:
+
+     the name   66 mm of column, one line, `nowrap` and `overflow:hidden`, so a
+                family name ended in an ellipsis. A card whose child's name is cut
+                off is worse than no card, because it looks like a card.
+     the season a 13 x 41 px sliver, the string wrapping one character per line.
+     the run    every number above 0001 was shared, fixed at the source.
+     the room   the number column was wider than the name column. The instrument
+                had more space than the person it identifies.
+
+   The proportions are now: the name the most room, the photograph a fixed frame,
+   and the code exactly what a scanner needs and no more. */
+
+/* The card sizes itself. A fixed height on a card whose content is measured after
+   the fact is how ten millimetres of footer went missing on every print. */
+.lux-card{height:auto!important;min-height:52mm}
+.lux-slot{height:auto;min-height:52mm}
+.lux-page{grid-auto-rows:auto!important}
+
+/* The name: two lines, then it is ellipsised -- so a short name does not leave a
+   hole and a long one loses its tail only after it has had a fair chance. */
+.lux-info{flex:1 1 auto;min-width:0}
+.lux-photo-wrap{flex:0 0 15mm;width:15mm;min-width:0;box-sizing:border-box}
+/* `white-space` is reset here and not left to the rule above. That rule says
+   `nowrap`, which is what truncated the name in the first place, and a line clamp
+   cannot clamp a line that has been told never to wrap -- so the name stayed on one
+   line and was cut off at the end of the column, exactly as before, while the rule
+   below appeared to be doing something. Two rules, the second one about wrapping,
+   the first one forbidding it, and only the first one running. */
+.lux-info h3{
+  margin:0;font-size:8.6pt;color:#0b3b46;line-height:1.24;
+  white-space:normal;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;overflow-wrap:anywhere;word-break:normal;
+}
+/* The rows go to one column when the name is long, so the four fields stay
+   readable instead of being squeezed into half-width cells. */
+.lux-rows{grid-template-columns:1fr;gap:.4mm}
+.lux-row b{white-space:normal;overflow-wrap:anywhere}
+
+/* The season sits under the photograph and is given the width to sit in. It was
+   being laid out inside a content-sized flex child, which handed it whatever was
+   left over -- thirteen pixels, on a card eighty-five millimetres wide. */
+.lux-photo-wrap{width:15mm}
+.lux-season{width:100%;text-align:center;white-space:nowrap;margin-top:.4mm}
+.lux-no{width:100%;text-align:center}
+
+/* The code column: the barcode, the number, the telephone. Nothing else. */
+/* The three columns have to add up to the card. Measured, the code column was
+   coming out wider than the space left after the photograph and the name, and the
+   whole thing was pushed off the right-hand edge of the card: 41 mm of a barcode
+   printed on nothing. The width is stated, and the canvas inside it is a percentage
+   of it, so the two can never disagree about how wide the card is. */
+.lux-code{width:23mm;max-width:23mm;flex:0 0 23mm;
+  display:flex;flex-direction:column;align-items:center;gap:.4mm;min-width:0}
+.lux-barcode{width:100%;height:7.2mm;display:block;background:#fff}
+/* Eleven points was set so the number could be read across a room. It also made
+   the number wider than the column holding it: the frame is twenty-three
+   millimetres, the number is eleven characters, and at that size it did not fit
+   inside its own frame -- so the frame and the number disagreed and the widest
+   part hung over the edge of the card.
+
+   Nine and a half points is still four times the size of the telephone number
+   beside it, which is what it has to beat to be worth printing twice. */
+.lux-code .lux-reg{font-size:9.5pt;letter-spacing:0;padding:.5mm 1mm;min-width:0;
+  max-width:100%;background:#fff;white-space:nowrap}
+.lux-code .lux-phone{text-align:center}
+
+/* Printed, the bars are the whole point of the card at that end: a background the
+   printer drops turns a barcode into a white rectangle. */
+@media print{
+  .lux-barcode{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .lux-card{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }

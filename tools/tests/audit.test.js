@@ -125,22 +125,38 @@ const seed = (user, page) => ({ user, page, swimmers: SW, applications: APPS, sc
       const f = frame.getBoundingClientRect(), n = no.getBoundingClientRect();
       if (f.height && n.height && n.top < f.bottom) problems.push('the number is not positioned under the frame');
     }
-    /* The QR is gone and the number is printed instead. Both halves are checked:
-       that the code is there, and that the scan code is not -- a card that quietly
-       kept both would be the one failure nobody notices until the gate. */
+    /* The QR is gone, the barcode is asked for, and the number is printed once.
+
+       The barcode is checked here as markup rather than as bars, because the
+       harness this runs in has no canvas and cannot draw one -- and it says so
+       rather than leaving a white frame, which is the behaviour worth keeping.
+       Whether the bars actually reach the paper is proved elsewhere, in a real
+       browser, by reading the pixels off the canvas.
+
+       Where the number sits was decided by looking at the card, not at this file:
+       under the photograph, where the club has always read it from. Repeating it
+       beside the barcode taught the eye that the one number on the card was not
+       worth reading twice. So it is counted on the card as a whole. */
     const codeBox = card && card.querySelector('.lux-code');
-    const regLine = card && card.querySelector('.lux-reg');
+    const number = card && card.querySelector('.lux-no');
     if (card && card.querySelector('.qr-code')) problems.push('the membership card still carries a QR code');
     if (card && card.querySelector('.lux-qr')) problems.push('the QR block is still on the card');
-    if (!codeBox) problems.push('the card has no printed registration code');
+    if (!codeBox) problems.push('the card has no barcode block');
+    else if (!codeBox.querySelector('.lux-phone')) problems.push('no telephone number beside the barcode');
+
+    /* Asked for, with the number attached to it -- the two come from one value in
+       the source, so the bars can never be of a different number to the one
+       printed beside them. */
+    if (!/class="lux-barcode" data-barcode="'\s*\+\s*esc\(/.test(APP)) {
+      problems.push('the card does not ask for a barcode of the registration number');
+    }
+    if (!number) problems.push('the card carries no membership number');
     else {
-      if (!regLine) problems.push('the printed code block has no number in it');
-      else if (!/lux-phone/.test(codeBox.innerHTML)) problems.push('no phone number under the printed code');
-      else {
-        const r = regLine.getBoundingClientRect(), ph = codeBox.querySelector('.lux-phone').getBoundingClientRect();
-        if (r.height && ph.height && ph.top < r.bottom) problems.push('the phone number is not under the printed code');
+      const printed = (card.textContent.match(new RegExp(number.textContent.trim()
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+      if (printed !== 1) {
+        problems.push('the membership number is printed ' + printed + ' times on one card; it should be once');
       }
-      if (/assets\/logo\.png/.test(codeBox.innerHTML)) problems.push('the phone line is still showing a logo');
     }
   }
 }

@@ -1,0 +1,174 @@
+<!doctype html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<title>قياس البطاقة</title>
+<link rel="stylesheet" href="../../firebase-public/styles.css">
+<style>
+  /* The rehearsal runs on a machine with no screen. The card is built by the same
+     function the club's card is built by -- not pasted in -- because a card copied
+     into a page is a card that was correct when it was copied.
+
+     Everything measured is written into #report as JSON, so the check can be run
+     from a command line by something that has no idea what a browser is. */
+  body{background:#8fa3ad;margin:0;padding:20px;font-family:system-ui,sans-serif}
+  .stage{width:85mm;margin:0 auto 20px}
+  pre{background:#0b1b2b;color:#d7f0f2;padding:12px;font-size:12px;overflow:auto;max-height:60vh}
+</style>
+</head>
+<body>
+<div class="stage" id="stage"></div>
+<pre id="report">measuring...</pre>
+<script src="../../firebase-public/firebase-config.js"></script>
+<script src="../../firebase-public/firebase-adapter.js"></script>
+<script src="../../firebase-public/app.js"></script>
+<script>
+/* A member with a photograph and a name long enough to break a card: four names,
+   with the hamza and the shadda, which is how they are written on a form filled in
+   by hand and is the shape that does not fit. */
+var PHOTO = 'data:image/svg+xml;base64,' + btoa(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="300">' +
+  '<rect width="240" height="300" fill="#cfe3e2"/>' +
+  '<circle cx="120" cy="96" r="52" fill="#8aa6a1"/>' +
+  '<rect x="56" y="168" width="128" height="132" rx="26" fill="#6f918c"/></svg>');
+
+var NO = 'E2026100021';
+
+/* Everything is inside a try, and a failure is written into the report rather than
+   thrown away. A measurement that fails quietly is the one thing worse than no
+   measurement: it reads as a card that was checked and found fine. */
+try {
+  state.swimmers = [{ id: NO, doc_id: 'APP-DEMO', membership_no: NO, registration_id: NO,
+    name: 'مُهَيَّم مُقدَّم بن طَرَفَة بن عَليّ', group: 'المتوسطون', phone: '0661000001',
+    status: 'نشط', blood_group: 'O+', joined: '2026-10-01', photo: PHOTO,
+    facility: 'المسبح النصف اولمبي' }];
+  state.applications = [{ id: 'APP-DEMO', application_no: 'APP-DEMO', first_name_ar: 'مُهَيَّم',
+    last_name_ar: 'مُقدَّم بن طَرَفَة بن عَليّ', status: 'approved', registration_id: NO, photo: PHOTO }];
+
+  document.getElementById('stage').innerHTML = luxuryCard(
+    swimmerCardModel(state.swimmers[0]), 'swimmer');
+} catch (e) {
+  done({ verdict: 'NOT BUILT', problems: ['the card could not be built: ' + ((e && e.message) || e)] });
+}
+
+/* The bars are drawn by the same hook the page uses; called here because the card
+   was put into the page directly rather than by a render. */
+try { if (typeof buildQRCodes === 'function') buildQRCodes(); } catch (_) {}
+
+(function measure() {
+  var card = document.querySelector('.lux-card');
+  var out = { at: new Date().toISOString(), problems: [] };
+  if (!card) { out.problems.push('the card was not built at all'); done(out); return; }
+
+  var cb = card.getBoundingClientRect();
+  out.card = { w: Math.round(cb.width), h: Math.round(cb.height) };
+  out.boxes = {};
+  ['.lux-info', '.lux-info h3', '.lux-fr', '.lux-rows', '.lux-code', 'canvas.lux-barcode',
+   '.lux-photo', '.lux-season', '.lux-no', '.lux-foot'].forEach(function (s) {
+    var el = card.querySelector(s);
+    if (!el) { out.boxes[s] = 'MISSING'; return; }
+    var b = el.getBoundingClientRect();
+    out.boxes[s] = { w: Math.round(b.width), h: Math.round(b.height) };
+  });
+
+  /* the name is the card */
+  var h3 = card.querySelector('.lux-info h3');
+  out.name = h3 ? {
+    text: h3.textContent.trim(),
+    scrollW: h3.scrollWidth, clientW: h3.clientWidth,
+    scrollH: h3.scrollHeight, clientH: h3.clientHeight
+  } : null;
+  if (h3 && (h3.scrollWidth > h3.clientWidth + 1 || h3.scrollHeight > h3.clientHeight + 1)) {
+    out.problems.push('the name is cut off: it needs ' + h3.scrollWidth + ' x ' + h3.scrollHeight
+      + ' and has ' + h3.clientWidth + ' x ' + h3.clientHeight);
+  }
+
+  /* the barcode must be drawn, with quiet space at both ends */
+  var cv = card.querySelector('canvas.lux-barcode');
+  if (!cv) {
+    out.problems.push('the card carries no barcode');
+  } else {
+    var px = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    var cols = [];
+    for (var x = 0; x < cv.width; x++) {
+      var dark = false;
+      for (var y = 0; y < cv.height; y += 2) if (px[(y * cv.width + x) * 4] < 128) dark = true;
+      cols.push(dark);
+    }
+    var darkN = 0, transitions = 0, prev = false;
+    for (var i = 0; i < cols.length; i++) { if (cols[i]) darkN++; if (cols[i] !== prev) transitions++; prev = cols[i]; }
+    out.barcode = { w: cv.width, h: cv.height, darkColumns: darkN, transitions: transitions,
+                    quietLeft: cols.indexOf(true), quietRight: cols.length - 1 - cols.lastIndexOf(true) };
+    if (!darkN) out.problems.push('the barcode canvas is blank: a white rectangle is not a barcode');
+    if (cols.indexOf(true) < 2) out.problems.push('the barcode has no quiet space on its left');
+    if (cols.length - 1 - cols.lastIndexOf(true) < 2) out.problems.push('the barcode has no quiet space on its right');
+    if (transitions < 20) out.problems.push('the barcode has too few edges to be Code 128: ' + transitions);
+  }
+
+  /* nothing drawn outside the card, nothing scrolled out of its own box */
+  out.spills = []; out.clipped = [];
+  Array.prototype.forEach.call(card.querySelectorAll('*'), function (el) {
+    var b = el.getBoundingClientRect();
+    if (!b.width || !b.height) return;
+    var over = Math.max(b.right - cb.right, cb.left - b.left, b.bottom - cb.bottom, cb.top - b.top);
+    if (over > 1) out.spills.push({ el: String(el.className || el.tagName), over: Math.round(over) });
+    if (el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1) {
+      out.clipped.push({ el: String(el.className || el.tagName), by: el.scrollWidth - el.clientWidth });
+    }
+  });
+  if (out.spills.length) {
+    out.problems.push(out.spills.length + ' thing(s) drawn outside the card: '
+      + out.spills.slice(0, 4).map(function (s) { return s.el + ' by ' + s.over; }).join('; '));
+  }
+  if (out.clipped.length) {
+    out.problems.push(out.clipped.length + ' thing(s) scrolled out of their own box: '
+      + out.clipped.slice(0, 4).map(function (s) { return s.el + ' by ' + s.by; }).join('; '));
+  }
+
+  /* The card writes its numbers in the club's own digits, and the text of the card
+     comes back in those digits -- so counting "2026 / 2027" against a card that
+     says "٢٠٢٦ / ٢٠٢٧" finds nothing and reports zero. A count of zero that means
+     "written in another script" is worse than no count at all, because it passes
+     and it is wrong. Both sides are put into the same digits first. */
+  var asciiDigits = function (s) {
+    return String(s || '')
+      .replace(/[\u0660-\u0669]/g, function (d) { return String(d.charCodeAt(0) - 0x0660); })
+      .replace(/[\u06f0-\u06f9]/g, function (d) { return String(d.charCodeAt(0) - 0x06f0); })
+      .replace(/[\u0966-\u096f]/g, function (d) { return String(d.charCodeAt(0) - 0x0966); });
+  };
+  out.texts = {};
+  var whole = asciiDigits(card.textContent || '').replace(/\s+/g, '');
+  var countOf = function (needle) {
+    var n0 = asciiDigits(needle).replace(/\s+/g, '');
+    if (!n0) return 0;
+    var n = 0, i = 0;
+    while ((i = whole.indexOf(n0, i)) !== -1) { n++; i += n0.length; }
+    return n;
+  };
+  out.texts.season = countOf(CLUB.season);
+  out.texts['the registration number'] = countOf(NO);
+  out.texts['the telephone on the card'] = countOf(phoneOfCard());
+  out.texts['the club address'] = countOf(CLUB.address);
+
+  /* A count of zero here means the count failed, not that the card is spare. The
+     test turns that into a failure rather than a pass. */
+  if (!out.texts.season) out.problems.push('the season could not be counted, so repetition cannot be ruled out');
+  if (!out.texts['the registration number']) out.problems.push('the registration number could not be counted, so repetition cannot be ruled out');
+
+  out.verdict = out.problems.length ? 'NOT CLEAN' : 'CLEAN';
+  done(out);
+})();
+
+function phoneOfCard() {
+  var el = document.querySelector('.lux-code .lux-phone');
+  return el ? el.textContent.trim() : '';
+}
+
+function done(out) {
+  document.getElementById('report').textContent = JSON.stringify(out, null, 1);
+  document.title = out.verdict || 'measured';
+  document.body.setAttribute('data-verdict', out.verdict || 'measured');
+}
+</script>
+</body>
+</html>

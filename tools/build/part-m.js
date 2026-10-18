@@ -125,8 +125,13 @@ function luxuryCard(p, kind){
   const rows = coach
     ? [['التخصص', p.specialty || 'مدرب سباحة'], ['سنوات الخبرة', clubDigits((p.experience || '—') + ' سنة')],
        ['البريد الإلكتروني', p.email || '—'], ['الفوج', p.group_name || 'الطاقم الفني']]
+    /* The season is not in this list. It was, and it is printed on the card under
+       the photograph -- so a member's card said the season three times: once under
+       the picture, once as a row, once in the footer. On an eighty-five millimetre
+       card, a thing said three times is a third of the card saying it again, and
+       the eye stops reading the other two thirds. */
     : [['الفوج', p.group_name || '—'], ['فصيلة الدم', p.blood_group || '—'],
-       ['تاريخ الالتحاق', clubDigits(p.joined || '—')], ['الموسم', clubDigits(CLUB.season)]];
+       ['تاريخ الالتحاق', clubDigits(p.joined || '—')]];
   return '' +
   '<article class="lux-card ' + (coach ? 'is-coach' : 'is-swimmer') + '" data-no="' + esc(no) + '">' +
     '<div class="lux-side">' +
@@ -145,31 +150,45 @@ function luxuryCard(p, kind){
             ? '<img class="lux-photo-img" src="' + esc(photo) + '" alt="">'
             : '<img class="lux-photo-fallback" src="' + esc(assetUrl('assets/logo.png')) + '" alt="">') + '</div>' +
           /* The season, directly under the photograph. A card is kept for years and
-             filed by season, and the season used to appear only in the footer, at
-             the far edge of a card 85 mm wide -- the one thing on it that says
-             which year it is. */
+             filed by season, and it is printed here once and once only. */
           '<b class="lux-season">' + esc(clubDigits(CLUB.season)) + '</b>' +
-          /* The number stays in the digits it is quoted and looked up in. */
+          /* The number stays where the club has always read it from: under the
+             photograph, in the digits it is quoted in. It is printed here and not
+             here as well -- it used to be repeated under the barcode, eleven digits
+             twice on a card the size of a postage stamp, which teaches the eye that
+             the number is not worth reading twice, and that is the one thing on
+             this card that is. */
           '<b class="lux-no" dir="ltr">' + esc(no) + '</b>' +
         '</div>' +
         '<div class="lux-info">' +
+          /* The name is the card. It gets two lines rather than one clipped line,
+             because a family name cut off at the end is a name the gate cannot read
+             back and the parent cannot recognise on their own child's card. */
           '<h3>' + esc(name) + '</h3>' +
           '<p class="lux-fr" dir="ltr">' + esc(fr || '—') + '</p>' +
           ORNAMENT +
           '<div class="lux-rows">' + rows.map(r => '<div class="lux-row"><i>' + esc(r[0]) + '</i><b>' + esc(r[1]) + '</b></div>').join('') + '</div>' +
         '</div>' +
         '<div class="lux-code">' +
-          '<small>' + (coach ? 'رقم المدرب' : 'رقم التسجيل') + '</small>' +
-          /* The code is read out at the pool, so it is printed as digits rather than
-             scanned. A parent photographing a card in poor light, and a coach
-             writing the number onto a list, both need to be able to read it -- and a
-             QR that only a second phone can read fails both. */
-          '<b class="lux-reg" dir="ltr">' + esc(clubDigits(reg)) + '</b>' +
+          /* The barcode is drawn into this canvas after the card is in the page, by
+             the code that lives in this repository rather than by a script fetched
+             from a public CDN. It is here because a scanner at the gate reads a
+             number in a fraction of a second and a hand writes it down wrongly.
+             Both read the same string, so both must come from one place: the number
+             printed above it. */
+          '<canvas class="lux-barcode" data-barcode="' + esc(reg) + '" width="132" height="30"'
+            + ' role="img" aria-label="رمز التسجيل"></canvas>' +
+          /* No second copy of the number here. It is under the photograph, in the
+             same digits, and the bars beside it are that same number in the form a
+             scanner reads. Printing it a third time on eighty-five millimetres of
+             card buys nothing, and costs the eye the rest of the card. */
           '<b class="lux-phone" dir="ltr">' + esc(clubDigits(phone)) + '</b>' +
-          '<small>اعرضها عند المدرب أو المشرف</small>' +
         '</div>' +
       '</div>' +
-      '<div class="lux-foot"><span>' + esc(clubDigits(CLUB.season)) + '</span><span>' + esc(CLUB.address) + '</span></div>' +
+      /* No season here: it is under the photograph, which is where a card is filed by.
+         What is left is where the club is and how to reach it -- the two things a
+         card is picked up for when somebody cannot remember whose it is. */
+      '<div class="lux-foot"><span>' + esc(CLUB.address) + '</span><span dir="ltr">' + esc(clubDigits(CLUB.phone)) + '</span></div>' +
     '</div>' +
   '</article>';
 }
