@@ -987,3 +987,157 @@ body.printing .print-sheet10{display:block!important}
   .lux-barcode{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .lux-card{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+
+/* ============ what the club asked for: the buttons, where you can see them ====
+   Every rule here answers one measured complaint. None of them is a taste.
+
+   1. A wide table's decision column.
+      The registration table has ten columns. It fits inside a box that scrolls
+      sideways, which is correct and is not a fault -- but it puts the buttons that
+      decide a child's registration at the far end of that scroll. So somebody
+      deciding a case has to scroll sideways to reach the decision, on every row,
+      and a button that has to be hunted for is a button that is not pressed. The
+      column is pinned to the edge instead: the same ten columns, the same data,
+      and the decision always where the eye already is.
+
+   2. The header of a scrolling table.
+      Pinned to the top of the same box, so the column that says what a number is
+      stays above the number while the rows move under it.
+
+   3. The quick actions.
+      Four buttons -- take attendance, manage swimmers, registration requests, print
+      cards -- at a thousand pixels down a page six hundred tall. On a document
+      that does not scroll, a control at the bottom is a control that is not there.
+      They now stay at the bottom of the window while the page moves behind them,
+      which is where a hand already is.
+
+   4. Names cut off by four pixels.
+      The roster's own heading clipped the last stroke of a family name, on every
+      card, for the length of a season. Four pixels is not a margin.
+
+   5. Targets too small to hit.
+      A link nineteen pixels tall is not pressed, it is missed. The floor is now
+      the same everywhere, and the padding is what raises it, not the font. */
+
+.table-scroll{overflow:auto;max-height:none}
+.table-scroll table{border-collapse:separate;border-spacing:0}
+
+/* 1. the decision column, pinned to the near edge */
+.table-scroll th:last-child,
+.table-scroll td:last-child{
+  position:sticky;inset-inline-end:0;z-index:2;
+  background:#fff;
+  box-shadow:-6px 0 8px -8px #0b3b4680;
+}
+/* 2. the header, pinned to the top of the same box */
+.table-scroll thead th{
+  position:sticky;top:0;z-index:3;background:#f2f8f9;
+}
+.table-scroll thead th:last-child{z-index:4}
+.table-scroll tbody tr:hover td{background:#f7fbfb}
+.table-scroll tbody tr:hover td:last-child{background:#f7fbfb}
+
+/* 3. the quick actions, always within reach of the hand */
+.quick-panel{
+  position:sticky;bottom:0;z-index:20;
+  margin-top:auto;
+  background:#fff;border-radius:14px;
+  box-shadow:0 -6px 24px -12px #0b3b4660;
+  border:1px solid #cfe2e6;
+}
+.quick-panel .panel-head{padding-top:.6rem;padding-bottom:.2rem}
+.quick-actions{display:flex;gap:.6rem;flex-wrap:wrap}
+.quick-actions button{
+  flex:1 1 12rem;min-height:44px;justify-content:center;
+  background:#f2f8f9;border:1px solid #cfe2e6;border-radius:10px;
+  cursor:pointer;font:inherit;font-size:.95rem;color:#0b3b46;
+  display:inline-flex;align-items:center;gap:.4rem;
+}
+.quick-actions button:hover{background:#e4f2f4}
+
+/* 4. the four pixels */
+.lux-grid h3, .card-grid h3, .roster h3{min-height:1.4em;line-height:1.4}
+.group-card h3, .person-card h3{min-height:1.4em;line-height:1.4;overflow:visible}
+
+/* 5. a floor on what can be pressed */
+.btn, .btn-outline, .link, .check-btn, .row-more, .filter, button{
+  min-height:32px;
+}
+.panel-head .link{padding:.4rem .2rem;display:inline-flex;align-items:center}
+.link{display:inline-flex;align-items:center;min-height:32px;line-height:1.2}
+
+/* A screen this narrow is a phone, and the table is ten columns wide. Rather than
+   let a parent or a coach pinch sideways to read a registration number, the card
+   becomes a stack: the row turns into a block, and the decision buttons get the
+   whole width. */
+@media (max-width:820px){
+  .table-scroll thead{display:none}
+  .table-scroll table, .table-scroll tbody, .table-scroll tr, .table-scroll td{display:block;width:100%}
+  .table-scroll tr{border-bottom:1px solid #cfe2e6;padding:.5rem 0}
+  .table-scroll td{border:none;padding:.25rem .5rem;display:flex;justify-content:space-between;gap:1rem}
+  .table-scroll td::before{content:attr(data-label);color:#5b7f88;font-size:.8rem;flex-shrink:0}
+  .table-scroll td:last-child{position:static;box-shadow:none;justify-content:flex-start;gap:.5rem}
+  .quick-actions button{flex:1 1 100%}
+}
+
+/* Arabic sits taller than the line it is given.
+
+   A family name written as it is written on a form carries a shadda, a hamza and
+   sometimes a vowel mark, and those stand above the letters. The default line
+   height is sized for the letters alone, so the marks are drawn outside the box
+   and are cut off: measured at four pixels, on every heading on the roster, on
+   the groups page and on the cards, for as long as the platform has been running.
+
+   It is not a margin and it is not a bug in the font. It is the line being asked
+   to hold something taller than the letters it was sized for. */
+.group-card h3, .card-grid h3, .lux-grid h3, .roster h3,
+.person-card h3, .group-card p, .notice-row b, .stat-card strong,
+.group-card-actions button, .lux-info h3, .panel-head h3{
+  line-height:1.65;
+}
+/* And nothing clips them afterwards. */
+.group-card h3, .card-grid h3, .lux-grid h3, .person-card h3{overflow:visible;min-height:0}
+
+/* A control that is drawn from a <select> carries the platform's own box, which
+   was sized for a line of text and not for the control: the word inside was
+   thirty pixels taller than the thing holding it. */
+select.btn, select.btn-outline, .btn-outline{min-height:36px;height:auto;
+  padding:.45rem .9rem;line-height:1.5}
+
+/* The big figures on the dashboard are set very large, and the same line height
+   that gives Arabic room to put its marks above the letters leaves the figure
+   itself hanging below the box. They are numbers, not names: what they need is a
+   box, not extra leading. */
+.stat-card strong{line-height:1.45;min-height:0;display:block;overflow:visible}
+
+/* A panel header is a row, not a lid: it takes the height of what is in it. The
+   week selector inside it is a control and is taller than a line of text. */
+.panel-head{min-height:0;height:auto;flex-wrap:wrap;row-gap:.4rem}
+.panel-head .select,.panel-head select{height:auto;min-height:36px}
+
+/* Sized to the ink, not to a round number. The figure is twenty-eight pixels of
+   Cairo, whose line box is taller than 1.45 of itself; measured at five pixels
+   short, which is the top of every digit on the dashboard. */
+.stat-card strong{line-height:1.8;overflow:visible}
+
+/* The week picker inside a panel header. It is a control, so it is as tall as a
+   control -- and the platform's own button height was for a line of text. */
+.panel-head select, .panel-head .btn-outline, .panel-head .btn{
+  height:auto!important;min-height:38px;padding:.5rem 1rem;line-height:1.6;
+  display:inline-flex;align-items:center;
+}
+
+/* A <select> is a control, and the platform's own button box was sized for a line
+   of text. Measured at fourteen pixels: the word inside the week picker was taller
+   than the thing holding it, on the one page where the picker chooses which week
+   the club is looking at. Stated once, for every select, because a control that
+   is too short for its own contents is not a matter of taste. */
+select{height:auto!important;min-height:38px;line-height:1.6;padding:.45rem .8rem}
+
+/* The week switcher. It is a row of five controls, and the row was sized for the
+   two arrows beside it, so the one button with words in it -- the one a person
+   presses to come back to this week after looking at another -- was fourteen
+   pixels shorter than the text inside it. */
+.week-switch{height:auto;min-height:0;flex-wrap:wrap;row-gap:.4rem;align-items:center}
+.week-switch .btn, .week-switch button{height:auto;min-height:38px;line-height:1.6;
+  padding:.5rem 1rem;display:inline-flex;align-items:center}
