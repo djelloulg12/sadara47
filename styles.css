@@ -1141,3 +1141,51 @@ select{height:auto!important;min-height:38px;line-height:1.6;padding:.45rem .8re
 .week-switch{height:auto;min-height:0;flex-wrap:wrap;row-gap:.4rem;align-items:center}
 .week-switch .btn, .week-switch button{height:auto;min-height:38px;line-height:1.6;
   padding:.5rem 1rem;display:inline-flex;align-items:center}
+
+/* ============ which thing moves ==========================================
+
+   The club's words: "the view is tedious, I want the page to stay put and the
+   list to scroll."
+
+   Measured before this rule: the registration table grew the document to twelve
+   hundred and forty-two pixels, so the page scrolled, and the sidebar -- which is
+   fixed -- sat beside it doing nothing for all twelve hundred. Going from one row
+   to the next meant moving the whole page: the header went, the row above went,
+   and the row you were reading moved with them.
+
+   So the list is given a height of its own and a scrollbar of its own. The page
+   holds still at one screen, the sidebar holds still, the column headings stay
+   over the columns, and the only thing that moves is the list -- which is what
+   was asked for, and which is also how a person actually reads a long table.
+
+   The height is taken off the window rather than written down, because the
+   window is what changes: a desk, a laptop, a tablet in the club's office. */
+.table-scroll{
+  overflow:auto;
+  max-height:max(300px, calc(100vh - 250px));
+  scrollbar-gutter:stable;
+  overscroll-behavior:contain;   /* the wheel stops at the end of the list */
+}
+
+/* A scrollbar that is visible. The point of asking for one is to be able to see
+   how much is left; a bar that only appears while scrolling does not tell a
+   person how long the list is, which is the thing they were asking. */
+.table-scroll::-webkit-scrollbar{width:13px;height:13px}
+.table-scroll::-webkit-scrollbar-track{background:#eef5f6;border-inline-start:1px solid #cfe2e6}
+.table-scroll::-webkit-scrollbar-thumb{background:#9dc3ca;border-radius:7px;border:3px solid #eef5f6}
+.table-scroll::-webkit-scrollbar-thumb:hover{background:#6fa8b2}
+.table-scroll{scrollbar-color:#9dc3ca #eef5f6;scrollbar-width:thin}
+
+/* Printed, there is no window and nothing scrolls: the whole list is laid out on
+   the paper, across as many pages as it takes. A rule written for a screen must
+   be undone for a printer, or the second page of a printed list is blank. */
+@media print{
+  .table-scroll{max-height:none!important;overflow:visible!important;scrollbar-gutter:auto}
+}
+
+/* On a phone the window is short and the list is long, and a list with its own
+   scrollbar inside a page that also scrolls is worse than either. There, the page
+   scrolls and the list is as long as it needs to be. */
+@media (max-width:820px){
+  .table-scroll{max-height:none;overflow-x:auto;overflow-y:visible}
+}

@@ -143,6 +143,11 @@ child.on('close', () => {
       + '  ' + (p.page + '/' + p.role).padEnd(22)
       + (p.error ? ' ERROR ' + String(p.error).slice(0, 40) : '')
       + (p.drew ? '  drew: ' + p.drew : '')
+      + (p.tables && p.tables.length
+        ? '  | page ' + (p.pageScrolls ? 'scrolls' : 'holds')
+        + ', list ' + (p.tables[0].scrolls ? 'scrolls' : 'fits')
+        + ' (' + p.tables[0].h + ' of ' + p.tables[0].content + 'px)'
+        : '')
       + (unmeasured ? ' NOT MEASURED'
         : '  ' + String(p.belowFold || 0).padStart(3) + ' below the fold'
         + '  ' + String(p.offscreen || 0).padStart(3) + ' past the edge'

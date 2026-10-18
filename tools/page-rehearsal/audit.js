@@ -157,15 +157,40 @@
       return false;
     }
 
+    /* A control below the fold is only a fault when nothing can bring it into view.
+
+       Two things can: the document, and any box that scrolls on its own. Once the
+       long lists were given a scrollbar of their own -- which is what the club
+       asked for -- every row below the first few became "below the fold" and was
+       reported as unreachable, which is the opposite of the truth: they are one
+       scroll away, which is what a scrollbar is for.
+
+       So reachability is asked of the whole chain of boxes above the control,
+       not of the window alone. A control that no scroll, anywhere, can reach is a
+       control that is not there. */
+    function canReachVertically(el) {
+      /* the document itself */
+      if (scrollable) {
+        var r0 = el.getBoundingClientRect();
+        if (r0.top <= reach + vh) return true;
+      } else if (el.getBoundingClientRect().top <= vh) return true;
+
+      /* any box that scrolls between here and the document */
+      for (var p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+        var s = getComputedStyle(p);
+        if (/(auto|scroll)/.test(s.overflowY) && p.scrollHeight > p.clientHeight + 1) return true;
+        /* a box that is itself off screen but inside a scrollable one is fine */
+      }
+      return false;
+    }
+
     for (var i = 0; i < all.length; i++) {
       var el = all[i], r = el.getBoundingClientRect();
       if (!r.width || !r.height) continue;
       var label = (el.textContent || '').trim().slice(0, 28);
       var name = String(el.className || el.tagName);
 
-      /* `top` is measured from the viewport, so a control can be scrolled to when
-         its distance down the page is within what the document scrolls by. */
-      if (interactive(el) && r.top > vh && (!scrollable || r.top > reach + vh)) {
+      if (interactive(el) && r.top > vh && !canReachVertically(el)) {
         belowFold++;
         if (examples.length < 5) examples.push({ el: name, text: label, top: Math.round(r.top) });
       }
@@ -189,6 +214,30 @@
     line.docHeight = Math.round(document.documentElement.scrollHeight);
     line.scrollable = scrollable;
     line.horizontalScroll = document.documentElement.scrollWidth > vw + 1;
+
+    /* The club's own complaint, asked of the page rather than of the controls.
+
+       "The view is tedious: I want the page to stay put and the list to scroll."
+       That is a statement about which thing moves. If the document scrolls, the
+       page moves and the sidebar -- which is fixed -- sits beside it doing
+       nothing. If the list scrolls inside its own box, the page holds still, the
+       sidebar holds still, and the only thing that moves is the list.
+
+       So this records, for every page with a long list, whether the document
+       scrolls and whether the list has a scrollbar of its own. */
+    line.pageScrolls = scrollable;
+    var boxes = [];
+    for (var q = 0; q < all.length; q++) {
+      if (all[q].classList && all[q].classList.contains('table-scroll')) {
+        boxes.push({ scrolls: all[q].scrollHeight > all[q].clientHeight + 2,
+                     h: Math.round(all[q].clientHeight),
+                     content: Math.round(all[q].scrollHeight) });
+      }
+    }
+    line.tables = boxes.slice(0, 3);
+    if (boxes.length && boxes[0].scrolls && !line.hasOwnProperty('scrollerFixed')) {
+      line.scrollerFixed = false;
+    }
 
     if (belowFold) {
       line.findings.push(belowFold + ' control(s) cannot be reached by scrolling'
