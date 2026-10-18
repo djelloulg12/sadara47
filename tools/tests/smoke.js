@@ -54,7 +54,7 @@ function boot(seed) {
   w.scrollTo = () => {};
   w.HTMLElement.prototype.scrollIntoView = function () {};
   try {
-    w.eval(APP + "\n;window.__t={get state(){return state},set state(v){state=v},render:render,action:action,boot:boot,registrationFormUrl:registrationFormUrl,buildQRCodes:buildQRCodes,mySwimmer:mySwimmer,pageView:pageView,bind:bind,syncApi:syncApi};");
+    w.eval(APP + "\n;window.__t={get state(){return state},set state(v){state=v},render:render,action:action,setDoor_:setDoor_,boot:boot,registrationFormUrl:registrationFormUrl,buildQRCodes:buildQRCodes,mySwimmer:mySwimmer,pageView:pageView,bind:bind,syncApi:syncApi};");
   } catch (e) { errors.push('load app.js: ' + e.message); }
   w.addEventListener('unhandledrejection', e => errors.push('unhandled rejection: ' + ((e.reason && e.reason.message) || e.reason)));
   return w;
@@ -318,6 +318,81 @@ scenario('the account list can be searched, and the search is wired to the page'
   }
 });
 
+/* The switch the club closes registrations with must not be able to lie.
+
+   It did, for a season. The write was refused -- no rule existed for the document
+   it writes to -- the response was never read, the page set its own memory to what
+   had been asked for, and it said "registrations are closed". The club pressed it
+   and the form stayed open, and because the switch still looked right afterwards
+   it looked like it had worked.
+
+   So the refusal is staged here: the server says no, and the page is asked both
+   what it tells the person who pressed it and what it then believes. */
+scenario('a refused switch is reported as a refusal and does not move', () => {
+  const state = seededState();
+  const w = boot(state);
+  setUser(w, state.user);
+  setPage(w, 'settings');
+
+  let asked = null;
+  w.fetch = async (url, init) => {
+    if (String(url) === '/api/registration' && (init && init.method === 'PUT')) {
+      asked = JSON.parse(init.body);
+      return { ok: false, status: 403, json: async () => ({ error: 'تغيير فتح التسجيل مسيّر النادي فقط.' }) };
+    }
+    if (String(url) === '/api/registration') return { ok: true, json: async () => ({ open: true, note: '' }) };
+    return { ok: true, json: async () => ({}) };
+  };
+  w.render();
+
+  const box = w.document.getElementById('door-toggle');
+  if (!box) { errors.push('the settings page has no registration switch to press'); return Promise.resolve(); }
+  box.checked = true;
+
+  return w.__t.setDoor_(true).then(() => {
+    errors.push('a refused switch came back as a success: nothing would be said to the person who pressed it');
+  }, (e) => {
+    if (!/مسيّر النادي/.test(String(e && e.message))) {
+      errors.push('the refusal was thrown without the reason the server gave: ' + (e && e.message));
+    }
+    if (w.__t.state.registrationOpen === false) {
+      errors.push('after a refusal the page believes the door is closed: it kept the answer it was refused');
+    }
+    if (!asked || asked.open !== true) {
+      errors.push('the refused write never carried the value that was asked for');
+    }
+  });
+});
+
+/* And the other way: a switch that did work must not be reported as having
+   failed, and the page must believe what the server said rather than what it
+   asked for. The two are the same code read in opposite directions. */
+scenario('a switch the server accepted reports what the server actually did', () => {
+  const state = seededState();
+  const w = boot(state);
+  setUser(w, state.user);
+  setPage(w, 'settings');
+
+  /* The stub remembers, the way a server does. It did not at first, and it
+     answered every read with "open" even after it had just answered a write with
+     "closed" -- which made the page look as though it had thrown the decision
+     away. It had not: the stub had. */
+  let doorIsOpen = true;
+  w.fetch = async (url, init) => {
+    if (String(url) === '/api/registration' && (init && init.method === 'PUT')) {
+      doorIsOpen = false;
+      return { ok: true, status: 200, json: async () => ({ ok: true, open: doorIsOpen }) };
+    }
+    if (String(url) === '/api/registration') return { ok: true, json: async () => ({ open: doorIsOpen, note: '' }) };
+    return { ok: true, json: async () => ({}) };
+  };
+  w.render();
+  return w.__t.setDoor_(true).then((now) => {
+    if (now !== false) errors.push('the page believes the door is ' + now + ' after the server said it was closed');
+    if (w.__t.state.registrationOpen !== false) errors.push('the page did not record the answer it was given');
+  }, (e) => errors.push('a switch the server accepted was reported as a failure: ' + (e && e.message)));
+});
+
 scenario('every data-action used anywhere has a handler', () => {
   const w = boot(seededState());
   setUser(w, seededState().user);
@@ -346,9 +421,20 @@ scenario('every data-action used anywhere has a handler', () => {
 function collectFrom(doc, set) { doc.querySelectorAll('[data-action]').forEach(e => set.add(e.dataset.action)); }
 
 let failed = 0;
+
+/* A scenario may be synchronous or return a promise, and it is waited for either
+   way.
+
+   It was not: `try { s.fn(); }` and straight on to the verdict. Every scenario in
+   this file was synchronous, so nothing was missed until one had to await a
+   refused request -- and then its checks ran after the verdict had already been
+   printed, and it was announced PASS while the fault it was written to catch sat
+   in the page untouched. A check that has not finished is not a check, and a suite
+   that says PASS about one is worse than having no suite at all. */
+(async () => {
 for (const s of scenarios) {
   const before = errors.length;
-  try { s.fn(); } catch (e) { errors.push(`scenario "${s.name}" crashed: ${e.message}`); }
+  try { await s.fn(); } catch (e) { errors.push(`scenario "${s.name}" crashed: ${(e && e.message) || e}`); }
   const added = errors.length - before;
   console.log(`${added ? 'FAIL' : 'PASS'}  ${s.name}${added ? '  (+' + added + ')' : ''}`);
   if (added) failed++;
@@ -360,3 +446,4 @@ if (errors.length) {
   process.exit(1);
 }
 console.log('\nAll DOM scenarios passed.');
+})();

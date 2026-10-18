@@ -675,3 +675,85 @@ body.gate-open { overflow: hidden; }
 .btn-more:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 .done-sibling .done-sibling-text { text-align: center; margin-inline: auto; }
 .done-sibling { flex-direction: column; align-items: center; }
+
+/* ---- the closed door, on the public registration form --------------------
+   What a family gets instead of the form.
+
+   It is not an error message dressed up as a notice. It is a letter, and it is
+   laid out like one: the season's decision at the top, the thanks, the warning
+   about photographs set apart because it is the part somebody has to act on, and
+   the club's name at the foot. A family who reads only the red block still knows
+   what to do tomorrow, which is the whole purpose of putting it there. */
+
+.door-closed-page{
+  max-width:760px;margin:0 auto 34px;
+  background:#fff;border:1px solid #e6d3d6;border-radius:20px;
+  box-shadow:0 24px 60px -34px #5a1f28, 0 2px 0 #ffffff inset;
+  overflow:hidden;
+}
+
+/* The ribbon. Reads as a stamp on a letter rather than as a heading, which is
+   what it is: a decision the club has taken and is putting in front of you. */
+.door-ribbon{
+  background:linear-gradient(180deg,#a8232f,#8d1c26);
+  color:#fff;text-align:center;padding:13px 20px;
+  font-weight:700;font-size:1.06rem;letter-spacing:.01em;
+  box-shadow:0 6px 18px -12px #5a1f28;
+}
+.door-ribbon span{display:inline-block}
+
+.door-letter{
+  padding:34px 38px 30px;
+  /* The line rule the club's own printed notices use, kept light enough to read
+     a screen through: the Arabic sits at 2.05 so the diacritics and the tails
+     clear each other -- at 1.65 the club's own names were cut by four pixels. */
+  line-height:2.05;font-size:1.045rem;color:#3c2a2d;
+}
+.door-letter h1{
+  margin:0 0 22px;font-size:1.5rem;line-height:1.6;color:#8d1c26;
+  font-weight:800;letter-spacing:-.01em;
+  padding-bottom:18px;border-bottom:2px solid #f0dfe1;
+}
+.door-letter p{margin:0 0 1.05rem}
+.door-salute{font-weight:700;color:#5c2a30}
+
+/* The photograph warning. Set apart with a rule on the side and a tinted ground,
+   because it is the one paragraph with a deadline attached to it. */
+.door-warn{
+  margin:26px 0;padding:20px 24px;border-radius:14px;
+  background:#fff8ec;border:1px solid #f0dcae;
+  border-inline-start:6px solid #d98324;
+}
+.door-warn p{margin:0}
+.door-warn p + p{margin-top:.75rem}
+.door-warn-title{
+  display:flex;align-items:center;gap:.6rem;
+  font-weight:800;color:#8a4b06;font-size:1.1rem;line-height:1.7;
+}
+.door-warn-mark{
+  flex:0 0 auto;display:inline-grid;place-items:center;
+  width:26px;height:26px;border-radius:50%;
+  background:#d98324;color:#fff;font-weight:800;font-size:.95rem;line-height:1;
+}
+
+.door-sign{
+  margin-top:26px;padding-top:18px;border-top:1px solid #f0dfe1;
+  font-weight:800;color:#8d1c26;font-size:1.1rem;
+}
+.door-contact{margin-top:.5rem;font-size:.95rem;color:#6d5257}
+.door-contact span{font-weight:700;color:#8d1c26}
+
+/* On a phone the card is the page. Less padding, a size that can be read without
+   pinching, and the warning still set apart. */
+@media (max-width:640px){
+  .door-closed-page{border-radius:14px;margin-bottom:24px}
+  .door-letter{padding:24px 18px 22px;font-size:1rem;line-height:1.95}
+  .door-letter h1{font-size:1.24rem;line-height:1.55}
+  .door-warn{padding:16px 15px;margin:20px 0}
+  .door-ribbon{font-size:.98rem;padding:11px 14px}
+}
+
+/* The form is gone, not merely out of sight. An element that is hidden can still
+   be printed, filled in by a password manager, or submitted by a script that
+   never looked at the screen. */
+#reg-form[hidden]{display:none!important}

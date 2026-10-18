@@ -2051,15 +2051,55 @@
     return '';
   }
 
-  function doorNotice() {
-    return '<div class="door-closed door-closed-page" role="status">'
-      + '<h2>التسجيلات مغلقة حاليًا</h2>'
-      + '<p>أوقفت النادي استقبال طلبات التسجيل في هذه الفترة، '
-      + 'ولن يُفتح مجددًا دون أن تُبلَّغوا به.</p>'
-      + '<p>للاستفسار: <span dir="ltr">' + doorPhone() + '</span></p>'
-      + '</div>';
-  }
+/* The announcement, in the club's words.
 
+     Written out rather than assembled from pieces. This is a notice to parents
+     about their children, and it is going to be read on a phone by somebody who
+     was told the season was full. It carries two things that have to be said
+     exactly as the club said them: that registrations are closed for the season,
+     and that a subscription is suspended for anybody whose photograph is not an
+     official one. The second is the part a summary would lose, and it is the part
+     a family acts on tomorrow morning.
+
+     The notice replaces the form entirely. A greyed form full of fields is a form
+     somebody fills in and is then told about, at the end, after a child has been
+     described on paper -- so nothing of the form is left on the page to fill in. */
+  function doorNotice() {
+    return '<section class="door-closed-page" aria-labelledby="door-title">'
+      + '<div class="door-ribbon"><span>باب التسجيلات مغلق</span></div>'
+      + '<article class="door-letter">'
+
+      + '<h1 id="door-title">إعلان هام: إغلاق التسجيلات للموسم الحالي '
+      + 'وتنبيه يخص الصور الشخصية</h1>'
+
+      + '<p class="door-salute">أعضاءنا الكرام، أولياء الأمور الفاضلون،</p>'
+
+      + '<p>يعلن النادي الرياضي للسباحة عن غلق باب التسجيلات رسميًا للموسم '
+      + 'الرياضي الحالي، بعد اكتمال العدد المطلوب. نتقدم بخالص الشكر لكل من بادر '
+      + 'بالتسجيل، ونتمنى لجميع منخرطينا موسمًا رياضيًا حافلًا بالنشاط، '
+      + 'والانضباط، والتفوق.</p>'
+
+      + '<div class="door-warn">'
+      + '<p class="door-warn-title"><span class="door-warn-mark" aria-hidden="true">!</span>'
+      + 'تنبيه هام جدًا وعاجل للمسجلين</p>'
+      + '<p>لوحظ قيام بعض المنخرطين برفع صور عادية (صور سيلفي أو غير رسمية) في '
+      + 'ملفاتهم على المنصة. نؤكد أن الإدارة تقبل الصور الشمسية الرسمية فقط '
+      + '(ذات خلفية موحدة وواضحة، مطابقة لصور الوثائق الرسمية) لاستخدامها في '
+      + 'استخراج بطاقات العضوية الرقمية والمطبوعة.</p>'
+      + '</div>'
+
+      + '<p>بناءً عليه، سيتم تجميد أي اشتراك وإيقاف الحساب على المنصة لكل منخرط '
+      + 'لم يلتزم برفع صورة شمسية مطابقة للمواصفات. نرجو من المعنيين تدارك '
+      + 'الأمر وتحديث صورهم فورًا لتفادي تعليق عضويتهم.</p>'
+
+      + '<p>شكرًا لتفهمكم وتعاونكم المستمر.</p>'
+
+      + '<p class="door-sign">إدارة نادي الصدارة للسباحة</p>'
+
+      + '<p class="door-contact">وللاستفسار: <span dir="ltr">' + doorPhone() + '</span></p>'
+
+      + '</article></section>';
+  }
   function doorApply(open) {
     var form = document.getElementById('reg-form');
     if (!form) return;
@@ -2074,10 +2114,24 @@
         holder.innerHTML = doorNotice();
         form.parentNode.insertBefore(holder.firstChild, form);
       }
+      /* Two things still point at a form that is no longer there.
+
+         The skip link at the top of every page on this site jumps to #reg-form,
+         and the tab says the visitor is looking at a registration form. Both
+         describe a page they are not on, and both are the first things a person
+         meets after the notice -- so the tab is renamed and the skip link is sent
+         to the notice instead. A closed door that leaves the rest of the page
+         describing an open one is only half shut. */
+      var skip = document.querySelector('.skip');
+      if (skip) skip.setAttribute('href', '#door-title');
+      document.title = 'التسجيلات مغلقة | نادي الصدارة للسباحة';
     } else {
       form.hidden = false;
       form.removeAttribute('aria-hidden');
       if (shown && shown.parentNode) shown.parentNode.removeChild(shown);
+      var back = document.querySelector('.skip');
+      if (back && back.getAttribute('href') === '#door-title') back.setAttribute('href', '#reg-form');
+      document.title = 'استمارة التسجيل | نادي الصدارة للسباحة';
     }
   }
 

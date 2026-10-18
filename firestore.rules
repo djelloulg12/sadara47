@@ -68,6 +68,25 @@ service cloud.firestore {
       allow write: if ownerEmail();
     }
 
+    /* Whether a family may file a registration at all.
+
+       There was no rule for this document, which is why the switch did nothing.
+       Firestore refuses a document that no rule matches, and both halves of the
+       door were refused: the manager's write came back as an error the page did
+       not read, so the switch said "registrations are closed" and closed
+       nothing; and the visitor's read was refused too, and the error was caught
+       and read as "the door is open", so the form stayed open for everybody.
+
+       Readable by anybody, deliberately. A visitor has to be told the truth
+       about the form before signing in, and there is nothing in this document
+       but a yes or a no and a line of wording. Writable by management only:
+       opening and closing registrations is the club's decision and nobody's
+       else. */
+    match /config/registration {
+      allow read: if true;
+      allow write: if manager();
+    }
+
     // Accounts: a member reads only their own document; management reads all.
     match /users/{id} {
       allow read: if signedIn() && (request.auth.uid == id || manager());

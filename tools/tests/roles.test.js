@@ -62,6 +62,38 @@ else {
   }
 }
 
+/* ---- the door: whether a family may file a registration at all ----
+
+   There was no rule for config/registration, and Firestore refuses a document no
+   rule matches. Both halves of the door were refused with it: the manager's write,
+   which the page did not read, so the switch said "closed" and closed nothing; and
+   the visitor's read, which the page caught and read as "open", so the form stayed
+   open for everybody. Neither half threw where anybody could see it.
+
+   So the rule is named here, and named the other way round as well: readable by
+   anybody, because a visitor has to be told the truth before signing in; writable
+   by management only, because closing registrations is the club's decision. */
+const doorRule = rules.match(/match \/config\/registration\s*\{[\s\S]*?\n    \}/);
+if (!doorRule) {
+  errors.push('firestore.rules has no rule for config/registration, so the door cannot be opened, closed, or read');
+} else {
+  const body = doorRule[0];
+  const read = (body.match(/allow\s+read:[^;]*;/) || [''])[0];
+  const write = (body.match(/allow\s+write:[^;]*;/) || [''])[0];
+  /* `if true` and `if request.auth != null` are both "anyone may read". Only the
+     first is right here: this document has to answer a visitor who has never
+     signed in. */
+  if (!/if\s+true\s*;/.test(read)) {
+    errors.push('config/registration is not readable by a visitor, so a family is told the form is open when it is shut: ' + read);
+  }
+  if (!/manager\(\)|ownerEmail\(\)/.test(write)) {
+    errors.push('config/registration may be written by somebody who is not management: ' + write);
+  }
+  if (/coach|member|parent|swimmer_/.test(write)) {
+    errors.push('config/registration grants the switch to a role that should not close registrations: ' + write);
+  }
+}
+
 /* the roles that get their own page rather than the admin dashboard */
 const memberPages = ['coach', 'swimmer_adult', 'swimmer_minor', 'parent', 'member'];
 for (const role of memberPages) {

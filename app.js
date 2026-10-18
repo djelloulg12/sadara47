@@ -5260,13 +5260,34 @@ async function fetchDoor_() {
 
 async function setDoor_(open) {
   const body = { open: !!open };
-  await fetch(REGISTRATION_DOOR_PATH, {
+  const res = await fetch(REGISTRATION_DOOR_PATH, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
     body: JSON.stringify(body)
   });
-  state.registrationOpen = !!open;
+
+  /* The answer is read, and a refusal is an error.
+
+     It was not read. The call was made, the response was dropped on the floor,
+     and the page set its own memory to what had been asked for and said
+     "registrations are closed". The club closed the switch and the form stayed
+     open -- and because the switch looked right afterwards, it looked like it had
+     worked. A switch that reports a decision the database refused is worse than a
+     switch with no code behind it: this one lied.
+
+     So: whatever comes back is read, a refusal throws, and the switch does not
+     move. The server's own answer is also what is believed, rather than what was
+     asked for -- if the door did not go the way it was pushed, the label says what
+     the door actually is. */
+  let data = null;
+  try { data = await res.json(); } catch (_) { /* a refusal with no body is still a refusal */ }
+  if (!res.ok || !data || data.ok !== true) {
+    const why = (data && (data.error || data.message)) || '';
+    throw new Error(why || 'تعذّر تغيير حالة التسجيلات — لم يتغيّر شيء.');
+  }
+
+  state.registrationOpen = typeof data.open === 'boolean' ? data.open : !!open;
   return state.registrationOpen;
 }
 
