@@ -29,6 +29,7 @@ const SUITES = [
   ['card-layout', 'card-layout.test.js', 'the card is measured in a real browser: nothing cut, nothing off the edge'],
   ['official-form', 'official-form.test.js', 'the printed form: the declaration names the guardian, the ب: box the birthplace, and the child’s day appears once'],
   ['page-layout', 'page-layout.test.js', 'every page, every role, measured in a real browser at a real window'],
+  ['group-button', 'group-button.test.js', 'the group button: one field, the roles the server accepts, a refusal is a refusal'],
   ['notice-layout', 'notice-layout.test.js', 'the announcement in the shut door, measured on a phone and a desk'],
   ['smoke', 'smoke.js', 'every page, every control, every role'],
   ['adapter', 'adapter.test.js', 'Firestore adapter authorisation and limits']

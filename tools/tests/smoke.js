@@ -318,6 +318,149 @@ scenario('the account list can be searched, and the search is wired to the page'
   }
 });
 
+/* Putting a swimmer in a group, from the list, in one press.
+
+   The club asked for a button beside التعديل. What has to be true of it is not
+   that it exists -- that is a line of markup -- but that pressing it moves that
+   swimmer and nobody else, and that a server which says no leaves the row exactly
+   as it was.
+
+   Both are asked here rather than by reading the source, because a button that is
+   drawn and does nothing is the same as no button, and that is the whole class of
+   fault this platform keeps meeting. */
+
+const GROUP_STATE = (extra) => seededState(Object.assign({
+  groups: [{ id: 'g1', name: 'المبتدئون', coach: 'سليم' }, { id: 'g2', name: 'المتوسطون', coach: 'ياسين' }],
+  swimmers: [
+    { id: 'SDR-A1', name: 'أمين ب', group: 'المبتدئون', phone: '0661000001', status: 'نشط' },
+    { id: 'SDR-A2', name: 'ياسين م', group: 'المتوسطون', phone: '0661000002', status: 'نشط' }
+  ]
+}, extra || {}));
+
+const openTheList = (w) => { w.__t.state.page = 'users'; w.render(); };
+const rowsOf = (doc) => doc.querySelectorAll('#page-root tbody tr');
+
+/* Which group each row says, in order. */
+const groupsShown = (doc) => [...rowsOf(doc)].map(tr => {
+  const cell = tr.querySelectorAll('td')[2];
+  return cell ? cell.textContent.trim() : '';
+});
+
+scenario('the list offers the group button beside التعديل, to management only', async () => {
+  const asRole = async (role) => {
+    const state = GROUP_STATE();
+    const w = boot(state);
+    setUser(w, { id: 1, name: 'x', role: role, email: 'a@b.dz' });
+    openTheList(w);
+    const row = w.document.querySelector('[data-action="set-group"]');
+    return { w: w, present: !!row };
+  };
+  for (const role of ['admin', 'president']) {
+    const r = await asRole(role);
+    if (!r.present) errors.push('a ' + role + ' is not offered the group button on the swimmers list');
+    if (!r.w.document.querySelector('[data-action="edit-swimmer"]')) {
+      errors.push('a ' + role + ' lost the edit button while the group button was added');
+    }
+  }
+  for (const role of ['coach', 'member', 'parent', 'swimmer_adult']) {
+    const r = await asRole(role);
+    if (r.present) errors.push('a ' + role + ' is offered the group button, and has no business placing children in groups');
+  }
+});
+
+scenario('choosing a group moves that swimmer, and only that one', async () => {
+  const state = GROUP_STATE();
+  const w = boot(state);
+  setUser(w, state.user);
+  w.fetch = async (url, init) => {
+    if (String(url) === '/api/swimmers' && init && init.method === 'PUT') {
+      w.__sent = JSON.parse(init.body);
+      return { ok: true, json: async () => ({ ok: true }) };
+    }
+    return { ok: true, json: async () => ({}) };
+  };
+  openTheList(w);
+
+  w.__t.action('set-group', { dataset: { id: 'SDR-A2' } });
+  const picker = w.document.getElementById('set-group-value');
+  if (!picker) { errors.push('pressing the group button opened no list of groups'); return; }
+
+  const offered = [...picker.querySelectorAll('option')].map(o => o.textContent.trim());
+  for (const want of ['المبتدئون', 'المتوسطون']) {
+    if (offered.indexOf(want) === -1) errors.push('the dialog does not offer the group ' + want);
+  }
+
+  picker.value = 'المبتدئون';
+  await w.__t.action('save-group', { dataset: { id: 'SDR-A2' } });
+
+  if (!w.__sent) { errors.push('saving the group sent nothing to the server'); return; }
+  if (w.__sent.id !== 'SDR-A2') errors.push('the save was filed under the wrong swimmer: ' + w.__sent.id);
+  if (w.__sent.group_name !== 'المبتدئون') {
+    errors.push('the save did not carry the chosen group: ' + JSON.stringify(w.__sent.group_name));
+  }
+  /* Only the id and the group. Anything else and this is the edit form with a
+     shorter door, which is what it was built not to be. */
+  const extraKeys = Object.keys(w.__sent).filter(k => k !== 'id' && k !== 'group_name');
+  if (extraKeys.length) {
+    errors.push('a change of one field also sent: ' + extraKeys.join(', ')
+      + ' -- one wrong key here can wipe a name or a photograph');
+  }
+
+  const after = groupsShown(w.document);
+  if (after[1] !== 'المبتدئون') errors.push('the row still reads "' + after[1] + '" after the group was changed');
+  if (after[0] !== 'المبتدئون') errors.push('the move reached the wrong swimmer: the first row now reads "' + after[0] + '"');
+});
+
+scenario('a refused change leaves the row exactly as it was', async () => {
+  const state = GROUP_STATE();
+  const w = boot(state);
+  setUser(w, state.user);
+  w.fetch = async (url, init) => {
+    if (String(url) === '/api/swimmers' && init && init.method === 'PUT') {
+      return { ok: false, status: 403, json: async () => ({ error: 'تغيير الفوج لرئيس النادي فقط.' }) };
+    }
+    return { ok: true, json: async () => ({}) };
+  };
+  openTheList(w);
+  const before = groupsShown(w.document);
+
+  w.__t.action('set-group', { dataset: { id: 'SDR-A2' } });
+  const picker = w.document.getElementById('set-group-value');
+  if (picker) picker.value = 'المبتدئون';
+  await w.__t.action('save-group', { dataset: { id: 'SDR-A2' } });
+
+  const swimmer = w.__t.state.swimmers.find(x => x.id === 'SDR-A2');
+  if (!swimmer || swimmer.group !== 'المتوسطون') {
+    errors.push('a refused change still moved the swimmer to ' + (swimmer && swimmer.group)
+      + ' -- the page now disagrees with the server about a child');
+  }
+  const after = groupsShown(w.document);
+  if (JSON.stringify(after) !== JSON.stringify(before)) {
+    errors.push('a refused change still redrew the list differently: ' + after.join(' | '));
+  }
+});
+
+scenario('the button says which group the swimmer is in, without being pressed', async () => {
+  const state = GROUP_STATE();
+  const w = boot(state);
+  setUser(w, state.user);
+  openTheList(w);
+  const buttons = [...w.document.querySelectorAll('[data-action="set-group"]')];
+  if (buttons.length !== 2) { errors.push('the list carries ' + buttons.length + ' group buttons for 2 swimmers'); return; }
+  const said = buttons.map(b => b.textContent.trim());
+  if (said[0].indexOf('المبتدئون') === -1 || said[1].indexOf('المتوسطون') === -1) {
+    errors.push('the buttons do not say which group each swimmer is in: ' + said.join(' | '));
+  }
+  /* A swimmer in no group at all must still be assignable, and must not look as
+     though they are in one. */
+  w.__t.state.swimmers[1].group = '';
+  openTheList(w);
+  const none = w.document.querySelectorAll('[data-action="set-group"]')[1];
+  if (none.textContent.indexOf('تحديد') === -1) {
+    errors.push('a swimmer in no group reads as though they were in one: "' + none.textContent.trim() + '"');
+  }
+});
+
 /* The switch the club closes registrations with must not be able to lie.
 
    It did, for a season. The write was refused -- no rule existed for the document
