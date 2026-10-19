@@ -100,6 +100,66 @@ if (!reads) {
     + 'would close the dialog and change the row -- reporting a move that did not happen');
 }
 
+/* ---- the names this layer takes must be names nobody else is using ----
+
+   This is the check that was missing, and its absence is what reached a manager's
+   screen. This layer wraps the page's action router:
+
+       action = async function (a, el) { if (a === '...') { ...; return } ... }
+
+   and a wrapper that returns makes every handler for that name defined *before*
+   it unreachable. The layer first took `save-group`, which the «إضافة فوج» form --
+   drawn by the baseline -- already answers. So a manager filled in the add-group
+   form, pressed حفظ, and this layer ran instead: it looked for a swimmer, found
+   none, and refused. The group was never saved and nothing anywhere said why.
+
+   The rule is therefore read out of the two files rather than remembered: for
+   every name this layer answers and returns on, that name must not appear as an
+   `a === '...'` branch in the baseline it wraps. If it does, the form behind it
+   has been silenced. */
+const baseline = read('tools/build/baseline-201e0c8.js');
+const layer = read('tools/build/part-group.js');
+
+/* The names the layer intercepts. Only the ones inside the action wrapper, and
+   only where it returns without delegating -- `set-` opens a dialog of its own,
+   which is the whole point of the layer. Both are read as `a === 'name'`. */
+const takenNames = [...layer.matchAll(/if \(a === '([a-z0-9-]+)'\)/g)].map(m => m[1]);
+if (!takenNames.length) {
+  errors.push('this layer no longer answers any action by name; if it was renamed, '
+    + 'the collision check below has nothing to compare and has stopped checking');
+}
+const baselineNames = new Set([...baseline.matchAll(/a\s*===?\s*'([a-z0-9-]+)'/g)].map(m => m[1]));
+for (const name of takenNames) {
+  if (baselineNames.has(name)) {
+    errors.push('this layer answers `' + name + '` and returns, but the baseline already '
+      + 'handles `' + name + '` -- the form behind it can no longer run, and pressing its '
+      + 'own save button will do nothing and say nothing. This is exactly how the '
+      + 'add-group form was broken.');
+  }
+}
+
+/* ---- and it must not call a function this page does not have ----
+
+   `closeModal && closeModal()` reads as a guard and is not one: `closeModal` was
+   never defined in this page, so on the one path that reached it that line threw
+   `ReferenceError: closeModal is not defined` -- an error with no visible
+   relationship to what the person had just done.
+
+   Comments are stripped first. The explanation of this fault names the very
+   function it is about, and a check that reads its own explanation as a call
+   reports a fault that has already been fixed -- which is how a check teaches
+   people to ignore it. */
+const code = app
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .split('\n')
+  .map(line => line.replace(/\/\/.*$/, ''))
+  .join('\n');
+const callsCloseModal = (code.match(/\bcloseModal\s*\(/g) || []).length;
+if (callsCloseModal) {
+  errors.push('the page calls closeModal, which it does not define -- the line is a '
+    + 'ReferenceError on the path that reaches it, not a guard');
+}
+
 console.log('');
 if (errors.length) {
   console.log('GROUP PROBLEMS (' + errors.length + '):');

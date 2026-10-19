@@ -352,7 +352,7 @@ scenario('the list offers the group button beside التعديل, to management 
     const w = boot(state);
     setUser(w, { id: 1, name: 'x', role: role, email: 'a@b.dz' });
     openTheList(w);
-    const row = w.document.querySelector('[data-action="set-group"]');
+    const row = w.document.querySelector('[data-action="set-swimmer-group"]');
     return { w: w, present: !!row };
   };
   for (const role of ['admin', 'president']) {
@@ -381,8 +381,8 @@ scenario('choosing a group moves that swimmer, and only that one', async () => {
   };
   openTheList(w);
 
-  w.__t.action('set-group', { dataset: { id: 'SDR-A2' } });
-  const picker = w.document.getElementById('set-group-value');
+  w.__t.action('set-swimmer-group', { dataset: { id: 'SDR-A2' } });
+  const picker = w.document.getElementById('swimmer-group-value');
   if (!picker) { errors.push('pressing the group button opened no list of groups'); return; }
 
   const offered = [...picker.querySelectorAll('option')].map(o => o.textContent.trim());
@@ -391,7 +391,7 @@ scenario('choosing a group moves that swimmer, and only that one', async () => {
   }
 
   picker.value = 'المبتدئون';
-  await w.__t.action('save-group', { dataset: { id: 'SDR-A2' } });
+  await w.__t.action('save-swimmer-group', { dataset: { id: 'SDR-A2' } });
 
   if (!w.__sent) { errors.push('saving the group sent nothing to the server'); return; }
   if (w.__sent.id !== 'SDR-A2') errors.push('the save was filed under the wrong swimmer: ' + w.__sent.id);
@@ -424,10 +424,10 @@ scenario('a refused change leaves the row exactly as it was', async () => {
   openTheList(w);
   const before = groupsShown(w.document);
 
-  w.__t.action('set-group', { dataset: { id: 'SDR-A2' } });
-  const picker = w.document.getElementById('set-group-value');
+  w.__t.action('set-swimmer-group', { dataset: { id: 'SDR-A2' } });
+  const picker = w.document.getElementById('swimmer-group-value');
   if (picker) picker.value = 'المبتدئون';
-  await w.__t.action('save-group', { dataset: { id: 'SDR-A2' } });
+  await w.__t.action('save-swimmer-group', { dataset: { id: 'SDR-A2' } });
 
   const swimmer = w.__t.state.swimmers.find(x => x.id === 'SDR-A2');
   if (!swimmer || swimmer.group !== 'المتوسطون') {
@@ -445,7 +445,7 @@ scenario('the button says which group the swimmer is in, without being pressed',
   const w = boot(state);
   setUser(w, state.user);
   openTheList(w);
-  const buttons = [...w.document.querySelectorAll('[data-action="set-group"]')];
+  const buttons = [...w.document.querySelectorAll('[data-action="set-swimmer-group"]')];
   if (buttons.length !== 2) { errors.push('the list carries ' + buttons.length + ' group buttons for 2 swimmers'); return; }
   const said = buttons.map(b => b.textContent.trim());
   if (said[0].indexOf('المبتدئون') === -1 || said[1].indexOf('المتوسطون') === -1) {
@@ -455,9 +455,61 @@ scenario('the button says which group the swimmer is in, without being pressed',
      though they are in one. */
   w.__t.state.swimmers[1].group = '';
   openTheList(w);
-  const none = w.document.querySelectorAll('[data-action="set-group"]')[1];
+  const none = w.document.querySelectorAll('[data-action="set-swimmer-group"]')[1];
   if (none.textContent.indexOf('تحديد') === -1) {
     errors.push('a swimmer in no group reads as though they were in one: "' + none.textContent.trim() + '"');
+  }
+});
+
+/* The other direction, and the check that was missing.
+
+   The layer added for the button above wraps the page's action router and answers
+   before it, so any action name it takes is an action name the page behind it can
+   no longer answer. It took `save-group` -- the name of the «إضافة فوج» form's
+   save, drawn by the baseline -- and a manager filling that form in pressed حفظ
+   and watched it look for a swimmer. The group was not saved, and nothing said
+   why, because the form's own handler never ran.
+
+   So the form is filled in and its save pressed here, and what is asked is only
+   what the manager asked: is there now a group with that name? Nothing about this
+   layer, its names, or its markup -- the moment this check knows how the collision
+   happened it stops noticing the next one. */
+scenario('the add-group form still saves a group', async () => {
+  const state = GROUP_STATE();
+  const w = boot(state);
+  setUser(w, state.user);
+  w.__t.state.page = 'groups';
+  w.render();
+
+  const add = w.document.querySelector('[data-action="add-group"]');
+  if (!add) { errors.push('the groups page no longer offers «إضافة فوج»'); return; }
+  await w.__t.action('add-group', add);
+
+  const nameBox = w.document.getElementById('gr-name');
+  if (!nameBox) { errors.push('«إضافة فوج» opened no form to type a name into'); return; }
+  nameBox.value = 'فوج الأشبال';
+  const coach = w.document.getElementById('gr-coach');
+  if (coach) coach.value = 'سليم';
+
+  const before = (w.__t.state.groups || []).length;
+  await w.__t.action('save-group', { dataset: {} });
+
+  const after = (w.__t.state.groups || []).map(g => String(g.name || ''));
+  if (after.length !== before + 1) {
+    errors.push('pressing حفظ on «إضافة فوج» added ' + (after.length - before)
+      + ' groups -- the form a manager fills in does not save, which is what the '
+      + 'swimmer-group layer was doing to it');
+  }
+  if (after.indexOf('فوج الأشبال') === -1) {
+    errors.push('the group was not saved by that name: ' + JSON.stringify(after));
+  }
+  /* And the form is asked for a name, still: an empty name must not create a
+     group, or every stray press of حفظ leaves one behind. */
+  await w.__t.action('add-group', w.document.querySelector('[data-action="add-group"]'));
+  const empty = (w.__t.state.groups || []).length;
+  await w.__t.action('save-group', { dataset: {} });
+  if ((w.__t.state.groups || []).length !== empty) {
+    errors.push('«إضافة فوج» saved a group with no name');
   }
 });
 

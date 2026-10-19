@@ -161,6 +161,24 @@ child.on('close', () => {
     for (const t of (p.tiny || [])) console.log('           small: ' + t.el + ' "' + t.text + '" ' + t.w + 'x' + t.h);
   }
 
+  /* The group form is pressed, not just looked at. A walk that reports every page
+     as fitting, and never says whether the buttons on them do anything, would have
+     called the broken «إضافة فوج» clean -- it fitted the window perfectly. So a
+     missing flow result is a failure here, not a skip. */
+  if (!report.groupForm) {
+    console.log('FAIL  the walk did not press «إضافة فوج» and save it.');
+    console.log('      Every page can fit the window and still have a save button that');
+    console.log('      does nothing; that is the fault this stage exists to find, and it');
+    console.log('      did not run.');
+    process.exit(1);
+  }
+  console.log('  pressed «إضافة فوج» and its حفظ: '
+    + (report.groupForm.added === 1 ? 'the group was saved' : 'NOT SAVED')
+    + '  names now: ' + JSON.stringify(report.groupForm.names || [])
+    + (report.groupForm.puts && report.groupForm.puts.length
+      ? '  wrote: ' + JSON.stringify(report.groupForm.puts) : ''));
+  console.log('');
+
   if (report.problems.length) {
     console.log('\nPAGE PROBLEMS (' + report.problems.length + '):');
     [...new Set(report.problems)].slice(0, 40).forEach(p => console.log('  - ' + p));

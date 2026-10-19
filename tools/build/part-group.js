@@ -13,10 +13,27 @@
    a button that offers what the server refuses is a button that lies, and it is
    the same fault as a switch that reports a refused change as a success.
 
-   `managerView` in the adapter is the authority on that list and `tools/tests/
-   group-button.test.js` reads both files and compares them. A role added to one
-   and not the other fails the check rather than producing a button that does
-   nothing. */
+   ---------------------------------------------------------------------------
+   On the names of the two actions below.
+
+   This layer first called them `set-group` and `save-group`, and `save-group` was
+   already the name of the «إضافة فوج» form's save. This layer wraps the page's
+   action router and answers before it, so it took that name over: a manager
+   filling in the add-group form pressed حفظ, and the thing that ran was this
+   one, looking for a swimmer. There was no swimmer, so it refused -- and the
+   group was never saved, on a screen that had just asked for its name.
+
+   Nothing threw. Nothing was logged. The form's own handler simply never ran,
+   because a wrapper that returns on a name makes every handler for that name
+   that came before it unreachable -- and the group page is drawn by the
+   baseline, so its handler came first.
+
+   Both names are therefore prefixed with what they act on: `set-swimmer-group`
+   and `save-swimmer-group`. `tools/tests/group-button.test.js` now reads the
+   baseline and refuses any name this layer takes that the baseline already
+   handles, and `tools/tests/smoke.js` presses the add-group form's save and
+   checks that a group actually appears. A collision of this kind has to fail a
+   test rather than reach a manager's screen. */
 
 /* The roles the server will hear. Read out of the adapter rather than repeated
    here, so the two cannot drift apart quietly: the adapter's `managerView` is the
@@ -65,7 +82,7 @@ const groupChoices_ = () => {
 function groupButtonFor(s) {
   if (!canSetGroup()) return '';
   const now = String((s && s.group) || '').trim();
-  return '<button class="check-btn" data-action="set-group" data-id="' + esc(s.id) + '"'
+  return '<button class="check-btn" data-action="set-swimmer-group" data-id="' + esc(s.id) + '"'
     + ' title="' + esc(now ? 'فوجُه الآن: ' + now : 'ليس في فوج') + '">'
     + (now ? 'الفوج: ' + esc(now) : 'تحديد الفوج') + '</button> ';
 }
@@ -81,7 +98,7 @@ const setGroupDialog_ = (id) => {
     + (now ? 'فوجُه الآن: <b>' + esc(now) + '</b>' : 'ليس في أي فوج حاليًا.')
     + ' <br>تغيير الفوج لا يمسّ شيئًا آخر في ملفّه.</p>'
     + '<label class="field"><span>الفوج</span>'
-    + '<select id="set-group-value" aria-label="فوج ' + esc(s.name || 'السباح') + '">'
+    + '<select id="swimmer-group-value" aria-label="فوج ' + esc(s.name || 'السباح') + '">'
     + '<option value="">— بلا فوج —</option>'
     + choices.map(n => '<option' + (n === now ? ' selected' : '') + '>' + esc(n) + '</option>').join('')
     + '</select></label>'
@@ -89,29 +106,33 @@ const setGroupDialog_ = (id) => {
       : '<p class="hint">لا يوجد فوج معرَّف بعد. '
         + 'أضِف فوجًا من صفحة الأفواج أولًا، أو اكتب اسمًا جديدًا في العلبة.</p>')
     + '<label class="field"><span>أو اسم فوج جديد</span>'
-    + '<input id="set-group-new" placeholder="اتركه فارغًا إن كان الاسم في القائمة" '
+    + '<input id="swimmer-group-new" placeholder="اتركه فارغًا إن كان الاسم في القائمة" '
     + 'autocomplete="off"></label>';
-  openModal(formModal('تحديد فوج ' + (s.name || ''), body, 'save-group',
+  openModal(formModal('تحديد فوج ' + (s.name || ''), body, 'save-swimmer-group',
     ' data-id="' + esc(s.id) + '"'));
 };
 
 const coreActionGroup = action;
 action = async function (a, el) {
-  if (a === 'set-group') {
+  if (a === 'set-swimmer-group') {
     setGroupDialog_(el.dataset.id);
     return;
   }
-  if (a === 'save-group') {
+  if (a === 'save-swimmer-group') {
     const id = el.dataset.id;
     const s = (state.swimmers || []).find(x => String(x.id) === String(id));
     if (!s) return showToast('تعذّر العثور على السباح.', 'error');
-    const typed = String((document.getElementById('set-group-new') || {}).value || '').trim();
-    const chosen = String((document.getElementById('set-group-value') || {}).value || '').trim();
+    const typed = String((document.getElementById('swimmer-group-new') || {}).value || '').trim();
+    const chosen = String((document.getElementById('swimmer-group-value') || {}).value || '').trim();
     const group = typed || chosen;
 
     const before = String(s.group || '');
     if (group === before) {
-      closeModal && closeModal();
+      /* Closing the dialog is all that is left to do, and it is done the way the
+         rest of the page does it. There is no `closeModal` in this page -- there
+         never was -- so `closeModal && closeModal()` was not a guard but a
+         ReferenceError waiting for the one path that reaches it. */
+      document.querySelector('.modal-backdrop')?.remove();
       showToast('لم يتغيّر الفوج — هو نفسه.');
       return;
     }

@@ -294,6 +294,93 @@
     }
   }
 
+  /* ------------------------------------------------------------------
+     Pressing the things, not just looking at them.
+
+     The walk above measures what is drawn. It cannot tell a form that saves
+     from a form that only looks like one, and that is the fault the club just
+     met: «إضافة فوج» opened, it filled in, and حفظ did nothing, because the
+     layer added for the swimmer-group button answered `save-group` -- the
+     name that form's own save uses -- before the page could.
+
+     So the form is filled in and its own save button is pressed, and what is
+     asked is only what a manager would ask: is there now a group called that?
+     Nothing here knows how the collision happened, so it will notice the next
+     one whatever shape it takes. The fetch wrapper is proof of the narrower
+     question still: saving a group must not be a write to a swimmer.
+  ------------------------------------------------------------------ */
+  function driveGroupForm() {
+    var report = { steps: [], problems: [] };
+    var innerFetch = window.fetch;
+    try {
+      var seed = seedFor('groups', 'admin');
+      seed.groups = [{ id: 'g1', name: 'المبتدئون', coach: 'مدرّب سليم', schedule: 'السبت' }];
+      try { localStorage.setItem('sadara-state', JSON.stringify(seed)); } catch (e) {}
+      var mount = document.getElementById('app');
+      if (mount) mount.innerHTML = '';
+      try { state = Object.assign(state || {}, seed); } catch (e) {}
+      state.page = 'groups';
+      render();
+
+      var puts = [];
+      window.fetch = function (input, init) {
+        var url = typeof input === 'string' ? input : (input && input.url);
+        if (init && String(init.method || '').toUpperCase() === 'PUT') puts.push(String(url));
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: function () { return Promise.resolve({ ok: true }); }
+        });
+      };
+
+      var addBtn = document.querySelector('[data-action="add-group"]');
+      if (!addBtn) {
+        report.problems.push('the groups page offers no «إضافة فوج» button');
+      } else {
+        action('add-group', addBtn);
+        var nameBox = document.getElementById('gr-name');
+        report.opened = !!nameBox;
+        if (!nameBox) {
+          report.problems.push('«إضافة فوج» opened no form with a name in it');
+        } else {
+          nameBox.value = 'فوج الأشبال';
+          var before = state.groups.length;
+          action('save-group', { dataset: {} });
+          report.added = state.groups.length - before;
+          report.names = state.groups.map(function (g) { return String(g.name || ''); });
+          if (state.groups.length !== before + 1) {
+            report.problems.push('pressing حفظ on «إضافة فوج» saved ' + report.added
+              + ' groups -- the form a manager fills in does not save');
+          }
+          if (report.names.indexOf('فوج الأشبال') === -1) {
+            report.problems.push('the group is not saved under the name that was typed');
+          }
+          var grid = document.querySelector('.group-grid');
+          report.drawn = grid ? grid.textContent.indexOf('فوج الأشبال') !== -1 : null;
+          if (grid && !report.drawn) {
+            report.problems.push('the saved group is not drawn on the page it was saved from');
+          }
+          report.puts = puts;
+          if (puts.indexOf('/api/swimmers') !== -1) {
+            report.problems.push('saving a group wrote to a swimmer instead');
+          }
+        }
+      }
+    } catch (e) {
+      report.problems.push('the group form could not be driven at all: ' + ((e && e.message) || e));
+    }
+    window.fetch = innerFetch;
+    return report;
+  }
+
+  try {
+    out.groupForm = driveGroupForm();
+    for (var gi = 0; gi < out.groupForm.problems.length; gi++) {
+      out.problems.push('groups page, pressing حفظ: ' + out.groupForm.problems[gi]);
+    }
+  } catch (e) {
+    out.problems.push('the group form stage did not run: ' + ((e && e.message) || e));
+  }
+
   out.measured = measured;
   out.verdict = out.problems.length ? 'PROBLEMS' : 'CLEAN';
 
