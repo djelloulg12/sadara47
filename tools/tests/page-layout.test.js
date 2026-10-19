@@ -179,6 +179,20 @@ child.on('close', () => {
       ? '  wrote: ' + JSON.stringify(report.groupForm.puts) : ''));
   console.log('');
 
+  /* The group's A4 sheet, previewed and printed in a real browser. The same rule as
+     the group form: a stage that did not run is a failure, not a skip. A roster
+     button that opens nothing looks exactly like a roster button that works. */
+  if (!report.roster) {
+    console.log('FAIL  the walk did not preview and print a group list.');
+    process.exit(1);
+  }
+  console.log('  group list «' + String(report.roster.label || '').slice(0, 40) + '»: '
+    + (report.roster.rows != null ? report.roster.rows + ' of ' + report.roster.wanted + ' swimmers' : 'no sheet')
+    + ', ' + (report.roster.heads ? report.roster.heads.length + ' columns ' + JSON.stringify(report.roster.heads.slice(0, 8)) : 'no columns')
+    + ', ' + report.roster.signSlots + ' signature places'
+    + ', printed ' + (report.roster.printRows != null ? report.roster.printRows + ' rows' : 'nothing'));
+  console.log('');
+
   if (report.problems.length) {
     console.log('\nPAGE PROBLEMS (' + report.problems.length + '):');
     [...new Set(report.problems)].slice(0, 40).forEach(p => console.log('  - ' + p));

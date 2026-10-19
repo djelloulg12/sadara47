@@ -381,6 +381,159 @@
     out.problems.push('the group form stage did not run: ' + ((e && e.message) || e));
   }
 
+  /* ------------------------------------------------------------------
+     ورقة الفوج: المعاينة والطباعة.
+
+     الورقة التي يقف عليها المدرب في المسبح ويعلّم عليها بالقلم. الفحص
+     لا يسأل هل الزرّ موجود -- ذلك يقرؤه المشي أعلاه -- بل هل خرجت ورقة
+     فيها أعمدة الحصص الأربع وموضعا التوقيع والختم، وهل عدد سطورها عدد
+     سباحي الفوج لا عدد آخر، وهل الطباعة أعطت الورقة لا المعاينة.
+
+     يُقاس في المتصفح لأن ما لا يُقاس يُدَّعى: جدول فيه عمود خامس فارغ
+     يبدو في الشيفرة كجدول تام.
+  ------------------------------------------------------------------ */
+  function driveGroupRoster() {
+    var report = { problems: [] };
+    var innerFetch = window.fetch;
+    var innerPrint = window.print;
+    try {
+      var seed = seedFor('groups', 'admin');
+      seed.groups = [{ id: 'g1', name: 'المبتدئون', coach: 'مدرّب سليم', schedule: 'السبت · 16:00' }];
+      try { localStorage.setItem('sadara-state', JSON.stringify(seed)); } catch (e) {}
+      var mount = document.getElementById('app');
+      if (mount) mount.innerHTML = '';
+      try { state = Object.assign(state || {}, seed); } catch (e) {}
+      state.page = 'groups';
+      render();
+
+      window.fetch = function () {
+        return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true }); } });
+      };
+      var printed = 0;
+      window.print = function () { printed++; };
+
+      var button = document.querySelector('[data-action="group-roster"]');
+      if (!button) {
+        report.problems.push('the groups page offers no way to preview and print a group list');
+        window.fetch = innerFetch;
+        window.print = innerPrint;
+        return report;
+      }
+      report.label = (button.textContent || '').trim();
+      if (report.label.indexOf('معاينة') === -1) {
+        report.problems.push('the group list button does not say that it previews: "' + report.label + '"');
+      }
+
+      button.click();
+      var sheet = document.querySelector('.roster-sheet');
+      if (!sheet) {
+        report.problems.push('pressing the button opened no preview');
+      } else {
+        var heads = [];
+        var ths = sheet.querySelectorAll('th');
+        for (var t = 0; t < ths.length; t++) heads.push((ths[t].textContent || '').trim());
+        report.heads = heads;
+        for (var s = 1; s <= 4; s++) {
+          if (heads.indexOf('حصة ' + s) === -1) {
+            report.problems.push('the roster has no column for «حصة ' + s + '»: ' + JSON.stringify(heads));
+          }
+        }
+        if (!heads.some(function (h) { return /ملاحظات/.test(h); })) {
+          report.problems.push('the roster has no column for the coach\'s notes: ' + JSON.stringify(heads));
+        }
+
+        var want = 0;
+        try { want = swimmersOf('المبتدئون').length; } catch (e) {}
+        var rows = sheet.querySelectorAll('tbody tr');
+        report.rows = rows.length;
+        report.wanted = want;
+        if (want && rows.length !== want) {
+          report.problems.push('the sheet lists ' + rows.length + ' swimmers where the group has ' + want);
+        }
+        var marks = 0, notes = 0;
+        for (var i = 0; i < rows.length; i++) {
+          marks += rows[i].querySelectorAll('td.mark-cell').length;
+          notes += rows[i].querySelectorAll('td.note-cell').length;
+        }
+        report.marks = marks;
+        if (rows.length && (marks !== rows.length * 4 || notes !== rows.length)) {
+          report.problems.push('the marking row is not four sessions and a note per swimmer: '
+            + marks + ' session boxes and ' + notes + ' note boxes over ' + rows.length + ' rows');
+        }
+        report.signSlots = sheet.querySelectorAll('.roster-sign .sign-slot').length;
+        if (report.signSlots !== 2) {
+          report.problems.push('the sheet has ' + report.signSlots
+            + ' places to sign; it is signed by the coach and stamped by the administration');
+        }
+        var head = document.querySelector('.roster-modal-head');
+        report.headText = head ? (head.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120) : '';
+        if (!/النادي الرياضي الصدارة/.test(report.headText) || !/تاريخ الاستخراج/.test(report.headText)) {
+          report.problems.push('the preview does not carry the club\'s name and the date it was produced: "'
+            + report.headText + '"');
+        }
+        var box = document.querySelector('.roster-modal');
+        if (box) {
+          var r = box.getBoundingClientRect();
+          report.box = { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top) };
+          if (r.right > window.innerWidth + 2 || r.left < -2) {
+            report.problems.push('the preview is drawn past the edge of the window: '
+              + Math.round(r.width) + 'px wide in ' + window.innerWidth + 'px');
+          }
+        }
+
+        var print = document.querySelector('[data-action="print-group-roster"]');
+        if (!print) {
+          report.problems.push('the preview offers no way to print the sheet');
+        } else {
+          print.click();
+          var host = document.querySelector('.print-host');
+          if (!host) {
+            report.problems.push('printing produced no sheet');
+          } else {
+            report.printed = printed;
+            var prows = host.querySelectorAll('table.roster-table tbody tr');
+            report.printRows = prows.length;
+            if (!host.querySelector('.print-head')) {
+              report.problems.push('the printed sheet has no club header');
+            }
+            if (!/قائمة الفوج/.test(host.textContent || '')) {
+              report.problems.push('the printed sheet is not titled as a group list');
+            }
+            if (want && prows.length !== want) {
+              report.problems.push('the printed sheet carries ' + prows.length + ' of the group\'s ' + want);
+            }
+            var pmarks = 0;
+            for (var p = 0; p < prows.length; p++) pmarks += prows[p].querySelectorAll('td.mark-cell').length;
+            if (prows.length && pmarks !== prows.length * 4) {
+              report.problems.push('the printed sheet has ' + pmarks + ' session boxes over '
+                + prows.length + ' rows -- a coach cannot mark what is not printed');
+            }
+            /* asking for the dialog is deferred by a moment, so what is checked
+               here is that the print was armed, not that the dialog has opened */
+            report.armed = (typeof printReset === 'function');
+            if (!report.armed) {
+              report.problems.push('printing built a sheet but never armed the print dialog');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      report.problems.push('the group sheet could not be driven at all: ' + ((e && e.message) || e));
+    }
+    window.fetch = innerFetch;
+    window.print = innerPrint;
+    return report;
+  }
+
+  try {
+    out.roster = driveGroupRoster();
+    for (var ri = 0; ri < out.roster.problems.length; ri++) {
+      out.problems.push('groups page, the group sheet: ' + out.roster.problems[ri]);
+    }
+  } catch (e) {
+    out.problems.push('the group sheet stage did not run: ' + ((e && e.message) || e));
+  }
+
   out.measured = measured;
   out.verdict = out.problems.length ? 'PROBLEMS' : 'CLEAN';
 
