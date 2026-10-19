@@ -87,6 +87,25 @@ service cloud.firestore {
       allow write: if manager();
     }
 
+    /* The club's groups, in one document, so that the two places that show them
+       show the same thing.
+
+       There was no path for a group at all. The list lived in the page's own
+       memory and in the browser's localStorage, so the groups page and the swimmer
+       form were reading a list that existed on one machine, and matching a
+       child's group -- which is a field of the child's record, in the database --
+       against it by name. A group a manager added was invisible to every other
+       device, and a name written on a record but not in the local list had no card
+       to appear on and no count anywhere.
+
+       Readable by anybody signed in: the roster and the registration form both
+       have to draw the list, and a group's name is not a secret. Writable by
+       management, because only the club decides what a group is. */
+    match /config/groups {
+      allow read: if signedIn();
+      allow write: if manager();
+    }
+
     // Accounts: a member reads only their own document; management reads all.
     match /users/{id} {
       allow read: if signedIn() && (request.auth.uid == id || manager());

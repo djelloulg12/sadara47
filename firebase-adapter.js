@@ -1036,6 +1036,80 @@
         return jsonResponse({ ok: true, count: items.length });
       }
 
+      /* ---------------- the club's groups ----------------
+
+         One document, so that the groups page and the swimmer form draw the same
+         list. They used to draw two: the page's own `state.groups`, seeded in the
+         browser and kept in localStorage, and the names actually written on the
+         swimmers' records in the database. The two were compared by name, so a
+         child whose record said `مبتدئ` had no card on the groups page -- the card
+         is looked up by the group's name -- and the count beside every group was
+         the count of a list that only existed on that machine.
+
+         `readable` travels with the read for the same reason the registration door
+         carries it: a read that failed is not an empty list. An empty list would be
+         drawn as "the club has no groups", and the swimmer form would offer a
+         dropdown with nothing in it -- a control that looks like it works and
+         cannot. The page keeps the list it already had instead, and says nothing
+         false about it. */
+      if (path === '/api/groups' && method === 'GET') {
+        const user = await currentUser();
+        if (!user) return jsonResponse({ error: 'يرجى تسجيل الدخول' }, 401);
+        try {
+          const doc = await db.collection('config').doc('groups').get();
+          const data = doc.exists ? (doc.data() || {}) : {};
+          const stored = Array.isArray(data.groups) ? data.groups : null;
+          return jsonResponse({
+            groups: stored ? stored.map(g => ({
+              id: String(g.id || ''), name: String(g.name || ''),
+              coach: String(g.coach || ''), schedule: String(g.schedule || '')
+            })) : null,
+            readable: true
+          });
+        } catch (e) {
+          return jsonResponse({
+            groups: null, readable: false,
+            error: (e && e.message) || 'تعذّر قراءة قائمة الأفواج.'
+          });
+        }
+      }
+      if (path === '/api/groups' && method === 'PUT') {
+        const gate = await managerView('تعديل الأفواج للمدير أو رئيس النادي فقط.');
+        if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
+        const raw = Array.isArray(body.groups) ? body.groups : [];
+        const seen = {};
+        const list = [];
+        for (const item of raw) {
+          if (!item) continue;
+          const name = String(item.name || '').trim().slice(0, 80);
+          if (!name) continue;
+          /* One group per name. Two cards with one name would be two counts of one
+             group, and a swimmer could not say which of them they are in. Refused
+             rather than quietly merged, so the page has to report something. */
+          if (seen[name]) {
+            return jsonResponse({ error: 'اسم الفوج "' + name + '" مكرّر. لكل فوج اسم واحد.' }, 400);
+          }
+          seen[name] = true;
+          list.push({
+            id: String(item.id || '').replace(/[^\w-]/g, '_') || ('grp-' + (list.length + 1)),
+            name: name,
+            coach: String(item.coach || '').slice(0, 120),
+            schedule: String(item.schedule || '').slice(0, 120)
+          });
+        }
+        await db.collection('config').doc('groups').set({
+          groups: list,
+          updated_by: gate.profile.id,
+          updated_at: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        await db.collection('audit_logs').add({
+          action: 'groups_saved', entity_type: 'config', entity_id: 'groups',
+          details: { count: list.length }, user_id: gate.profile.id,
+          created_at: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        return jsonResponse({ ok: true, groups: list });
+      }
+
       /* ---------------- decision trail ---------------- */
       if (path === '/api/audit' && method === 'POST') {
         const gate = await managerView('\u0633\u062c\u0644 \u0627\u0644\u062a\u062f\u0642\u064a\u0642 \u0644\u0644\u0631\u0626\u064a\u0633\u0629 \u0641\u0642\u0637');
@@ -1325,6 +1399,7 @@
         await ref.set({
           membership_no: body.membership_no || 'SDR-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
           name: body.name || '', group_name: body.group_name || 'المبتدئون',
+          group_id: body.group_id || '',
           phone: body.phone || '', status: body.status === 'نشط' ? 'active' : (body.status || 'active')
         });
         return jsonResponse({ ok: true, id: ref.id }, 201);
@@ -1350,7 +1425,7 @@
         const EDITABLE = {
           name: 'name', first_name_ar: 'first_name_ar', last_name_ar: 'last_name_ar',
           birth_date: 'birth_date', gender: 'gender', blood_group: 'blood_group',
-          level: 'level', facility: 'facility', group_name: 'group_name',
+          level: 'level', facility: 'facility', group_name: 'group_name', group_id: 'group_id',
           phone: 'phone', whatsapp: 'whatsapp', national_id: 'national_id',
           address: 'address', email: 'email', photo: 'photo'
         };

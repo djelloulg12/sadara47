@@ -83,13 +83,18 @@ if (!fields) {
     + '(group_name) -- writing any other name would change nothing and report a change');
 }
 
-/* One field and no more. The whole point of the button is that it is narrower than
+/* One change and no more. The whole point of the button is that it is narrower than
    the edit form; a save that carried anything else would be the edit form with a
-   shorter door. */
-const save = (app.match(/method: 'PUT',\s*headers: \{ 'Content-Type': 'application\/json' \},\s*credentials: 'same-origin',\s*body: JSON\.stringify\(\{ id: id, group_name: group \}\)/) || [''])[0];
+   shorter door.
+
+   `group_id` is part of that one change and not a second field beside it: the name
+   is what a person reads and the id is what the record is looked up by, and they
+   are the id of the same group. Sending the name alone is what let the groups page
+   and the swimmer form disagree about which group a child is in. */
+const save = (app.match(/body: JSON\.stringify\(\{ id: id, group_name: group, group_id: groupIdFor_\(group\) \}\)/) || [''])[0];
 if (!save) {
-  errors.push('the group save sends something other than an id and a group: a change of '
-    + 'one field must not be able to carry others');
+  errors.push('the group save does not send the chosen group and its id: a change of '
+    + 'one field must not be able to carry others, and must not be a name with no id');
 }
 
 /* ---- and a refusal is a refusal ---- */

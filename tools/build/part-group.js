@@ -141,7 +141,7 @@ action = async function (a, el) {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify({ id: id, group_name: group })
+      body: JSON.stringify({ id: id, group_name: group, group_id: groupIdFor_(group) })
     });
     let data = {};
     try { data = await res.json(); } catch (_) { /* a refusal with no body is still a refusal */ }
@@ -159,6 +159,8 @@ action = async function (a, el) {
       return;
     }
     s.group = group;
+    s.group_name = group;
+    s.group_id = groupIdFor_(group);
     document.querySelector('.modal-backdrop')?.remove();
     render();
     showToast(group ? 'الفوج الآن: ' + group : 'أُزيل السباح من الفوج.');

@@ -60,7 +60,7 @@ function swimmerEditField(f, value) {
   const common = 'id="' + esc(id) + '"' + dir + ' data-swimmer-field="' + esc(f.key) + '"';
 
   if (f.type === 'choice' || f.type === 'group' || f.type === 'status') {
-    const options = f.type === 'group' ? groupOptions(value)
+    const options = f.type === 'group' ? groupOptions(value, true)
       : f.type === 'status' ? ['نشط', 'موقوف', 'بانتظار'].map(s =>
           '<option value="' + esc(s) + '"' + (String(value) === s ? ' selected' : '') + '>' + esc(s) + '</option>').join('')
       : f.options.map(o =>

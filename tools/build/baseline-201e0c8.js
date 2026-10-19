@@ -1935,13 +1935,17 @@ function pageUsers(){
 
   });
 
-  const groupNames=[...new Set([...(state.swimmers||[]).map(s=>s.group).filter(Boolean),...groups().map(g=>g.name)])];
+  /* Only the groups that have somebody in them. A filter for a group nobody is in
+     is a filter that can only ever narrow the list to nothing. */
+  const groupNames=filterGroupNames(f);
 
   return '<div class="toolbar"><div class="search">⌕<input placeholder="ابحث عن سباح..." id="user-search" value="'+esc(q)+'"></div>'
 
     +'<div class="toolbar-group">'
 
-    +'<select class="filter" id="group-filter"><option value="all">كل الأفواج</option>'+groupNames.map(n=>'<option'+(n===f?' selected':'')+'>'+esc(n)+'</option>').join('')+'</select>'
+    +'<select class="filter" id="group-filter"><option value="all">جميع الأفواج</option>'+groupNames.map(n=>'<option'+(n===f?' selected':'')+'>'+esc(n)+'</option>').join('')+'</select>'
+
+    +'<button class="btn btn-outline" data-action="reset-swimmer-filters">✕ إلغاء التصفية</button>'
 
     +printBtn('print-swimmers','طباعة القائمة')
 
@@ -1957,7 +1961,7 @@ function pageUsers(){
 
     +(list.length?list.map(s=>{const a=attendanceOf(s.id);return '<tr><td><span class="table-avatar">'+esc((s.name||'?')[0])+'</span><b>'+esc(s.name||'')+'</b></td>'
 
-      +'<td dir="ltr">'+esc(clubDigits(s.id||''))+'</td><td>'+esc(s.group||'—')+'</td><td dir="ltr">'+esc(clubDigits(s.phone||'—'))+'</td>'
+      +'<td dir="ltr">'+esc(clubDigits(s.id||''))+'</td><td>'+inlineGroupCell(s)+'</td><td dir="ltr">'+esc(clubDigits(s.phone||'—'))+'</td>'
 
       +'<td><span class="status '+(s.status==='نشط'?'success':'pending')+'">'+esc(s.status||'—')+'</span></td>'
 
@@ -2131,23 +2135,25 @@ function pageNotices(){
 
     const members=swimmersOf(g.name);
 
-    return '<article class="group-card" data-group="'+esc(g.id)+'"><div class="group-card-head"><span class="stat-icon blue">♟</span><span class="status success">نشط</span></div>'
+    return '<article class="group-card'+(g.source==='derived'?' is-derived':'')+'" data-group="'+esc(g.id)+'"><div class="group-card-head"><span class="stat-icon blue">♟</span><span class="status success">نشط</span></div>'
 
-      +'<h3>'+esc(g.name)+'</h3><p><b>عدد السباحين:</b> '+members.length+'</p>'
+      +'<h3>'+esc(g.name)+'</h3>'+groupSourceNote(g)+'<p><b>عدد السباحين:</b> '+members.length+'</p>'
 
       +'<p><b>المدرب المشرف:</b> '+esc(g.coach||'—')+'</p><p><b>البرنامج:</b> '+esc(g.schedule||'—')+'</p>'
 
-      +'<div class="group-card-actions"><button class="check-btn" data-action="print-group" data-group="'+esc(g.id)+'">🖨 طباعة القائمة</button>'
+      +'<div class="group-card-actions"><button class="check-btn" data-action="group-roster" data-group="'+esc(g.id)+'">🖨 معاينة وطباعة القائمة</button>'
 
       +'<button class="check-btn" data-action="edit-group" data-group="'+esc(g.id)+'">تعديل</button>'
 
-      +'<button class="check-btn no" data-action="delete-group" data-group="'+esc(g.id)+'">حذف</button></div></article>';
+      +groupDeleteButton(g)+'</div></article>';
 
   };
 
   return '<div class="toolbar"><span class="page-description">وزّع السباحين على الأفواج وحدد المدرب والمواعيد المشرفة على كل فوج.</span>'
 
     +'<div class="toolbar-group">'+printBtn('print-groups','طباعة قائمة الأفواج A4')+'<button class="btn btn-primary" data-action="add-group">+ إضافة فوج</button></div></div>'
+
+    +groupsSourceNote()
 
     +'<section class="group-grid">'+(list.length?list.map(row).join(''):'<p class="empty-cell">لا توجد أفواج. أضف فوجًا للبدء.</p>')+'</section>'
 
@@ -2871,7 +2877,33 @@ function openModal(html){document.querySelector('.modal-backdrop')?.remove();doc
 
 function formModal(title,body,action,extra){return '<div class="modal-backdrop"><div class="modal registration-modal"><button class="close" data-action="close">×</button><div class="modal-heading"><span class="logo">🏊</span><h2>'+esc(title)+'</h2></div>'+body+'<button class="btn btn-primary full" data-action="'+action+'"'+(extra||'')+'>حفظ</button></div></div>';}
 
-function groupOptions(value){return groups().map(g=>'<option'+(g.name===value?' selected':'')+'>'+esc(g.name)+'</option>').join('');}
+/* The groups a swimmer can be put in, as the page's own control.
+
+   The list is the same list the groups page draws and the same list the button
+   beside تعديل offers -- `groupChoices_` -- and not the page's saved groups
+   alone. It used to be `groups()`: the names the browser remembered. A record
+   carrying a name that list did not have (the club's swimmers carry `مبتدئ`,
+   the seeded list says `المبتدئون`) could be moved out of it by opening the form
+   and accepting what the select had already chosen, and could never be moved
+   back, because the name was not in it. That is the drift this closes.
+
+   `includeCurrent` adds the two things an edit form needs and an add form does
+   not: an explicit "no group" option, and the swimmer's own group even when
+   nothing else lists it -- so opening the form on a record cannot silently
+   change the answer. The add form is called without it and keeps what it had. */
+function groupOptions(value,includeCurrent){
+
+  const current=String(value==null?'':value).trim();
+
+  const names=groupChoices_();
+
+  const list=(includeCurrent&&current&&names.indexOf(current)===-1)?[current].concat(names):names;
+
+  return (includeCurrent?'<option value="">— بلا فوج —</option>':'')
+
+    +list.map(n=>'<option'+(n===current?' selected':'')+'>'+esc(n)+'</option>').join('');
+
+}
 
 function printTable(title,headers,rows,sub,notes){
 
@@ -3769,7 +3801,7 @@ async function syncApi(){
 
     state.swimmers=sw.map(x=>Object.assign({},x,{id:x.membership_no||x.id,doc_id:x.id,
 
-      name:x.name||'',group:x.group_name||x.group||'',phone:x.phone||'',
+      name:x.name||'',group:x.group_name||x.group||'',group_id:x.group_id||'',phone:x.phone||'',
 
       status:x.status==='active'?'نشط':(x.status||'نشط')}));
 

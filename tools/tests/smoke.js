@@ -340,10 +340,14 @@ const GROUP_STATE = (extra) => seededState(Object.assign({
 const openTheList = (w) => { w.__t.state.page = 'users'; w.render(); };
 const rowsOf = (doc) => doc.querySelectorAll('#page-root tbody tr');
 
-/* Which group each row says, in order. */
+/* Which group each row says, in order. The cell is an inline choice for a
+   manager now, so what a row "says" is what its select is set to -- reading the
+   text of a select would read every option it offers. */
 const groupsShown = (doc) => [...rowsOf(doc)].map(tr => {
   const cell = tr.querySelectorAll('td')[2];
-  return cell ? cell.textContent.trim() : '';
+  if (!cell) return '';
+  const picker = cell.querySelector('select[data-inline-group]');
+  return (picker ? picker.value : cell.textContent).trim();
 });
 
 scenario('the list offers the group button beside التعديل, to management only', async () => {
@@ -398,12 +402,19 @@ scenario('choosing a group moves that swimmer, and only that one', async () => {
   if (w.__sent.group_name !== 'المبتدئون') {
     errors.push('the save did not carry the chosen group: ' + JSON.stringify(w.__sent.group_name));
   }
-  /* Only the id and the group. Anything else and this is the edit form with a
-     shorter door, which is what it was built not to be. */
-  const extraKeys = Object.keys(w.__sent).filter(k => k !== 'id' && k !== 'group_name');
+  /* The id and the group it belongs to, and nothing else. Anything more and this
+     is the edit form with a shorter door, which is what it was built not to be.
+     `group_id` is part of the one change, not a second one: the name is what a
+     person reads and the id is what the record keeps, and they are the same
+     group. */
+  const extraKeys = Object.keys(w.__sent).filter(k => k !== 'id' && k !== 'group_name' && k !== 'group_id');
   if (extraKeys.length) {
     errors.push('a change of one field also sent: ' + extraKeys.join(', ')
       + ' -- one wrong key here can wipe a name or a photograph');
+  }
+  if (w.__sent.group_id !== 'g1') {
+    errors.push('the chosen group was sent without its id: ' + JSON.stringify(w.__sent.group_id)
+      + ' -- the name is written, the id is what the record is looked up by');
   }
 
   const after = groupsShown(w.document);
