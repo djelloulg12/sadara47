@@ -152,21 +152,33 @@ if (!m) {
       problems.push('the card was never measured: ' + (report.problems || []).join('; '));
     } else {
       console.log('      card            : ' + report.card.w + ' x ' + report.card.h + ' px');
+      if (process.env.SADARA_CARD_BOXES) console.log('      boxes           : ' + JSON.stringify(report.boxes));
       if (report.name) {
         console.log('      name            : needs ' + report.name.scrollW + ' x ' + report.name.scrollH
           + ', has ' + report.name.clientW + ' x ' + report.name.clientH);
       }
-      if (report.barcode) {
-        console.log('      barcode         : ' + report.barcode.w + ' x ' + report.barcode.h
-          + ', ' + report.barcode.darkColumns + ' dark columns, ' + report.barcode.transitions
-          + ' edges, quiet ' + report.barcode.quietLeft + '/' + report.barcode.quietRight);
+      if (report.qr) {
+        console.log('      code            : version ' + report.qr.version + ', mask ' + report.qr.mask
+          + ', ' + report.qr.edge + ' modules across, ' + report.qr.segments + ' marks, module '
+          + report.qr.moduleMm + ' mm, ' + report.qr.crisp);
       }
       (report.problems || []).forEach(p => problems.push('the card: ' + p));
+
+      /* The card is the size of a bank card, because that is the size the club
+         prints on -- and a card that is a millimetre out is a card that is cropped
+         by the printer's own margin. Measured, not read off the stylesheet. */
+      const wmm = report.card.w / 96 * 25.4;
+      const mm = report.card.h / 96 * 25.4;
+      console.log('      card size       : ' + wmm.toFixed(1) + ' x ' + mm.toFixed(1) + ' mm (CR80 is 85.6 x 54)');
+      if (Math.abs(wmm - 85.6) > 1) problems.push('the card is ' + wmm.toFixed(1) + ' mm wide, not the 85.6 mm of a bank card');
+      if (Math.abs(mm - 54) > 1) problems.push('the card is ' + mm.toFixed(1) + ' mm tall, not the 54 mm of a bank card');
+      if (report.qr && (!report.qr.version || report.qr.moduleMm < 0.4)) {
+        problems.push('the code on the card is too fine to be read off paper');
+      }
 
       /* Ten of these have to fit an A4 page: five rows of the card's height plus the
          page's own margins. Measured here rather than assumed, because the card used
          to be a fixed height that its contents did not fit inside. */
-      const mm = report.card.h / 96 * 25.4;
       const page = 5 * mm + 2 * 12;
       console.log('      ten on A4       : ' + mm.toFixed(1) + ' mm each, ' + page.toFixed(0)
         + ' mm of 297 -- ' + (page <= 297 ? 'fits' : 'DOES NOT FIT'));
@@ -193,6 +205,6 @@ if (problems.length) {
   [...new Set(problems)].forEach(p => console.log('  - ' + p));
   process.exit(1);
 }
-console.log('\nThe card fits itself, the name is whole, and the barcode is on the paper.');
+console.log('\nThe card is the size of a bank card, the name is whole, and the code is on the paper.');
 process.exit(0);
 }

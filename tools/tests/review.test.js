@@ -484,22 +484,26 @@ pending.push(Promise.resolve().then(() => {
   if (!/\.lux-photo > img\.lux-photo-img[^{]*\{[^}]*width:\s*100%\s*!important/.test(css)) {
     errors.push('[card] the photograph on the card is not sized by its frame, so a size rule wins on specificity');
   }
-  if (!/\.lux-photo \{[^}]*width:\s*16mm[^}]*height:\s*21mm/.test(css)) {
+  if (!/\.lux-photo\s*\{[^}]*width:\s*18\.5mm[^}]*height:\s*23\.5mm/.test(css)) {
     errors.push('[card] the photograph frame is not the size of an identity photograph');
   }
-  /* The code, in one place and not three. */
-  const qr = css.match(/\.lux-card \.qr-code,\s*\.lux-qr \.qr-code\s*\{[^}]*width:\s*9mm[^}]*height:\s*9mm/);
-  if (!qr) errors.push('[card] the code on the card is not sized in one place at 9 mm');
-  /* What governs, not what exists. An older rule from a print block is still in
-     the file and is harmless only because the new one carries !important -- so
-     asking that it be absent would be asking for something untrue. What can change
-     is the rule that applies, and that is the last one to speak about the code. */
-  const sizes = [...css.matchAll(/\.qr-code[^{]*\{[^{}]*width:\s*([\d.]+)mm/g)].map(m => m[1]);
-  if (!sizes.length) {
+  /* The code, sized once, and what governs is the last rule to speak about it: an
+     older rule from a print block is still in the file and is harmless only
+     because the new one carries !important. */
+  const boxes = [...css.matchAll(/\.lux-qr-box\s*\{[^{}]*width:\s*([\d.]+)mm/g)].map(m => m[1]);
+  if (!boxes.length) {
     errors.push('[card] nothing in the stylesheet gives the code a size');
-  } else if (sizes[sizes.length - 1] !== '9') {
-    errors.push('[card] the code prints at ' + sizes[sizes.length - 1]
-      + ' mm, which is the size that made it a quarter of the card');
+  } else if (boxes[boxes.length - 1] !== '17') {
+    errors.push('[card] the code prints at ' + boxes[boxes.length - 1]
+      + ' mm, which is not the 17 mm the code column was measured for');
+  }
+  if (!/\.lux-qr-svg\s*\{[^}]*width:\s*100%/.test(css)) {
+    errors.push('[card] the code is not drawn to fill the box it is given');
+  }
+  /* A code on a tinted ground is a code a scanner argues with, and a printer that
+     drops backgrounds turns the quiet margin into the card's own colour. */
+  if (!/@media print\s*\{[\s\S]*\.lux-qr-box\s*\{[^}]*background:\s*#fff\s*!important/.test(css)) {
+    errors.push('[card] the printed code does not keep its white ground');
   }
 }));
 

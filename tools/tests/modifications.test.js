@@ -63,7 +63,7 @@ function seed(user) {
   cleanup(w);
 }
 
-/* ---- 2) luxury card is the membership card, number under the photo ---- */
+/* ---- 2) luxury card is the membership card, code beside the club's stripe ---- */
 {
   const w = boot(Object.assign(seed({ id: 1, name: 'رئيس', role: 'admin' }), { swimmers: Array.from({ length: 12 }, (_, i) => ({ id: 'SDR-' + (2000 + i), name: 'س' + i, group: 'المتقدمون', phone: '06', status: 'نشط' })) }));
   w.__t.action('print-cards', null);
@@ -71,27 +71,34 @@ function seed(user) {
   if (!card) { errors.push('[2] no card rendered'); cleanup(w); }
   else {
     const photo = card.querySelector('.lux-photo');
-    const no = card.querySelector('.lux-no');
+    const no = card.querySelector('.lux-reg');
     if (!photo) errors.push('[2] card has no photo block');
-    if (!no) errors.push('[2] card has no membership number element');
+    if (!no) errors.push('[2] card has no registration number element');
     else {
-      if (photo.contains(no)) errors.push('[2] the number must sit under the photo frame, not inside it');
+      if (photo.contains(no)) errors.push('[2] the number must sit beside the photo, not inside the frame');
       /* Arabic-Indic digits: the club writes its numbers the way it writes its
          forms. Built from the number rather than typed out, so the expectation
          cannot be the wrong length. */
       if (!/^SDR-[0-9]{4}$/.test(no.textContent.trim())) {
         errors.push('[2] the number is not in the club\'s digits: ' + no.textContent.trim());
       }
-      const wrap = card.querySelector('.lux-photo-wrap');
-      if (!wrap) errors.push('[2] no wrapper around the photo frame');
-      else if (no.parentElement !== wrap) errors.push('[2] the number must be a direct child of the photo wrapper');
+      const qr = card.querySelector('.lux-qr');
+      if (!qr) errors.push('[2] no code column on the card');
       else {
-        const fr = photo.getBoundingClientRect(), nr = no.getBoundingClientRect();
-        if (fr.height && nr.height && nr.top < fr.bottom) errors.push('[2] the number renders above the frame bottom instead of under it');
-        if (/lux-photo[^\w-]/.test(no.className)) errors.push('[2] the number is styled as part of the frame');
+        if (no.parentElement !== qr) errors.push('[2] the number must be a direct child of the code column');
+        const box = qr.querySelector('.lux-qr-box');
+        if (!box) errors.push('[2] the code column carries no code box');
+        else if (box.compareDocumentPosition(no) !== 4) {
+          errors.push('[2] the number must come under the code, not above it');
+        }
       }
+      /* The number is printed once: it is under the code, and there is no second
+         copy anywhere else on the card. */
+      const times = (card.textContent.match(new RegExp(no.textContent.trim(), 'g')) || []).length;
+      if (times !== 1) errors.push('[2] the number is printed ' + times + ' times on one card');
     }
     if (!card.innerHTML.includes('assets/logo.png')) errors.push('[2] club logo missing from card');
+    if (/lux-barcode|data-barcode/.test(card.innerHTML)) errors.push('[2] the card still carries the old barcode');
   }
   cleanup(w);
   // coaches get their own card model
@@ -163,12 +170,17 @@ function seed(user) {
 
 /* ---- CSS must carry the new layouts ---- */
 {
-  const need = ['.lux-page', '.lux-slot', '.lux-no', '.print-sheet10', '.schedule-doc', '.sch-head', '.sch-grid',
+  const need = ['.lux-page', '.lux-slot', '.lux-reg', '.lux-qr-box', '.lux-name', '.print-sheet10', '.schedule-doc', '.sch-head', '.sch-grid',
     '.sch-day', '.sch-slot', '.sch-card', '.sch-legend', '.sch-notes', '.sch-sign', '.pf-grid', '.pf-readonly',
     '.pf-extra', '.pf-label', '.lux-preview', '.tone-dawn', '.tone-noon', '.tone-dusk'];
   for (const sel of need) if (!new RegExp(sel.replace(/\./g, '\\.') + '(?![\\w-])').test(CSS)) errors.push('CSS missing ' + sel);
-  if (!/\.lux-card\{[^}]*width:85mm/.test(CSS)) errors.push('card width must be 85mm for the 10-up sheet');
-  if (!/\.lux-card\{[^}]*height:52mm/.test(CSS)) errors.push('card height must be 52mm for the 10-up sheet');
+  /* The card is a bank card: 85.6 by 54 millimetres, which is what the club's
+     printer tray is sized for, and ten of them on one A4 sheet. Both numbers are
+     asserted because a card a tenth of a millimetre out is a card the printer
+     crops. */
+  if (!/\.lux-card\{[^}]*width:85\.6mm/.test(CSS)) errors.push('card width must be 85.6mm for a bank card');
+  if (!/\.lux-card\{[^}]*height:54mm/.test(CSS)) errors.push('card height must be 54mm for a bank card');
+  if (!/grid-template-columns:repeat\(2,85\.6mm\)/.test(CSS)) errors.push('the print sheet must lay two 85.6mm cards across');
 }
 
 if (errors.length) { console.log('PROBLEMS:\n  - ' + [...new Set(errors)].join('\n  - ')); process.exit(1); }

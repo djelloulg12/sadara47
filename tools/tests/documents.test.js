@@ -168,21 +168,43 @@ function clubShows(v) {
     errors.push('a sheet carries Arabic-Indic digits, which the club does not write');
   }
 
-  /* The card keeps a photograph, the season it was issued for, and the number,
-     in that order down the side. */
+  /* The card keeps a photograph, the code that opens the attendance page, and the
+     season it was issued for. The order across the card is the code, then the
+     name, then the photograph: in a right-to-left card that puts the code against
+     the club's stripe at the right and the photograph at the left, with the name
+     in the middle where nothing crowds it. */
   const card = w.__t.luxuryCard({ membership_no: 'SDR-0042', name: 'x', group_name: 'y',
                                   blood_group: 'O+', joined: '2026-09-01', phone: '0661234567' }, 'swimmer');
-  const under = card.match(/<div class="lux-photo-wrap">([\s\S]*?)<div class="lux-info">/);
-  if (!under.length) errors.push('the card has no photograph column to put the season under');
+  const body = card.match(/<div class="lux-body">([\s\S]*?)<div class="lux-foot">/);
+  if (!body) errors.push('the card has no body to lay its three columns out in');
   else {
-    const order = [...under[1].matchAll(/class="(lux-photo|lux-season|lux-no)"/g)].map(m => m[1]);
-    if (order.join('>') !== 'lux-photo>lux-season>lux-no') {
-      errors.push('under the photograph the card reads ' + order.join(' > ') + '; it should be photo > season > number');
+    const order = [...body[1].matchAll(/class="(lux-qr|lux-info|lux-photo-wrap)"/g)].map(m => m[1]);
+    if (order.join('>') !== 'lux-qr>lux-info>lux-photo-wrap') {
+      errors.push('across the card reads ' + order.join(' > ') + '; it should be code > name > photograph');
     }
   }
+  /* Under the code: what was scanned, then the number it carries, then the words
+     that tell a parent what scanning it does. */
+  const qr = card.match(/<div class="lux-qr">([\s\S]*?)<div class="lux-info">/);
+  if (!qr) errors.push('the card has no code column');
+  else {
+    const inside = [...qr[1].matchAll(/class="(lux-qr-box|lux-reg|lux-hint)"/g)].map(m => m[1]);
+    if (inside.join('>') !== 'lux-qr-box>lux-reg>lux-hint') {
+      errors.push('under the code the card reads ' + inside.join(' > ') + '; it should be code > number > hint');
+    }
+    if (!/data-qr="/.test(qr[1])) errors.push('the code box is not told what to carry');
+  }
+  /* The season is one of the rows of the card's own data now, printed once, and it
+     is the season the value itself is written in. */
   const SEASON_AR = '2027 / 2026';
-  if (!card.includes(SEASON_AR)) {
-    errors.push('the card does not carry the season in Arabic digits, later year first');
+  const rows = card.match(/<div class="lux-rows">([\s\S]*?)<\/div>\s*<\/div>/);
+  if (!rows) errors.push('the card has no data rows');
+  else if (!rows[1].includes(SEASON_AR)) {
+    errors.push('the season is not one of the card\'s data rows');
+  }
+  if ((card.match(/2027 \/ 2026/g) || []).length !== 1) {
+    errors.push('the season is printed on the card ' + (card.match(/2027 \/ 2026/g) || []).length
+      + ' times; on a card this size it is said once');
   }
   if (!card.includes('SDR-0042')) {
     errors.push('the card number is not printed in the club\'s digits');
@@ -237,7 +259,7 @@ try {
     const c = host.querySelector('.lux-card');
     if (!c) errors.push('lux card markup missing');
     else {
-      for (const n of ['lux-side', 'lux-logo', 'lux-code', 'lux-rows', 'lux-role', 'assets/logo.png']) {
+      for (const n of ['lux-side', 'lux-logo', 'lux-qr-box', 'lux-rows', 'lux-role', 'assets/logo.png']) {
         if (!host.innerHTML.includes(n)) errors.push('lux card missing ' + n);
       }
     }
@@ -260,7 +282,7 @@ try {
   const card = w.document.querySelector('.lux-card');
   if (!card) errors.push('membership card not rendered');
   else {
-    for (const n of ['lux-side', 'lux-photo', 'lux-no', 'lux-code']) {
+    for (const n of ['lux-side', 'lux-photo', 'lux-reg', 'lux-qr-box']) {
       if (!card.outerHTML.includes(n)) errors.push('membership card missing ' + n);
     }
   }
@@ -277,8 +299,9 @@ try {
 
 // 6. CSS coverage for the new classes
 const css = fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8');
-for (const cls of ['lux-card', 'lux-side', 'lux-main', 'lux-code', 'lux-rows', 'lux-role', 'lux-stars',
-  'lux-logo', 'lux-vert', 'lux-season', 'lux-foot', 'lux-fr', 'lux-info', 'lux-photo', 'lux-body',
+for (const cls of ['lux-card', 'lux-side', 'lux-main', 'lux-qr', 'lux-qr-box', 'lux-reg', 'lux-hint',
+  'lux-name', 'lux-rows', 'lux-role', 'lux-stars',
+  'lux-logo', 'lux-vert', 'lux-foot', 'lux-fr', 'lux-info', 'lux-photo', 'lux-body',
   'lux-top', 'lux-club', 'lux-grid', 'lux-preview', 'official-forms-list', 'card-band',
   'print-card-rail', 'print-card-inner', 'print-card-content', 'lux-row']) {
   if (!new RegExp('\\.' + cls + '(?![\\w-])').test(css)) errors.push('CSS missing .' + cls);

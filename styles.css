@@ -1297,3 +1297,133 @@ select{height:auto!important;min-height:38px;line-height:1.6;padding:.45rem .8re
 .door-closed-page p{margin:0 0 .6rem;color:#5c2a30;line-height:2}
 .door-closed-page span{font-weight:700}
 #reg-form[hidden]{display:none!important}
+
+/* ==========================================================================
+   بطاقة الانخراط — القياس الرسمي CR80 (85.6 × 54 مم)
+
+   كل قاعدة تخصّ البطاقة في هذا الملف كُتبت قبل هذه، وهذا الفصل مكتوب بعدها،
+   فهو آخر من يتكلّم عن البطاقة. والأعداد ليست ذوقًا: عرض البطاقة وارتفاعها
+   هما ما تقيسه مسطرة الطابعة (مقاس بطاقة البنك)، وعرض الصورة هو مقاس صورة
+   الهوية، وعمود الرمز هو ما يتّسع لرمز يحمل رابط حضور كاملًا ويبقى الواحد فيه
+   أكبر من أربعة أعشار المليمتر -- وهو الحدّ الذي يقرأ عنده هاتفٌ الرمز من ورقة.
+
+   والترتيب من اليمين: الشريط، فالرمز، فالاسم، فالصورة. وقد صار الرمز في طرف
+   البطاقة لصيقًا بالشريط لأن الماسح يُمرَّر على الطرف، والصورة في الطرف
+   الآخر، والاسم وحده في الوسط حيث لا يزاحمه شيء.
+
+   وثلاثة أعمدة بعرض واحد مرن لا يمكن أن تزيد على البطاقة: الشبكة توزّع ما بقي
+   على الاسم، فلو غُيّر مقاس البطاقة أو حسب المتصفح المليمتر على طريقته،
+   الثلاثة تبقى داخلة. وهذا هو الخطأ الذي وقع مرتين وبقي على البطاقة المطبوعة
+   زمنًا: عمودان بعرض ثابت يزيدان معًا على عرض البطاقة. */
+
+.lux-card{
+  width:85.6mm!important;height:54mm!important;min-height:54mm!important;
+  border-radius:2.6mm!important;overflow:hidden;
+  display:grid!important;grid-template-columns:14mm minmax(0,1fr)!important;
+  background:linear-gradient(135deg,#f8fdfd,#e6f4f5);border:.25mm solid #a9cfd6;
+  box-shadow:0 10px 24px #0b3b4618;position:relative;
+  page-break-inside:avoid;break-inside:avoid;
+}
+.lux-card.is-coach{background:linear-gradient(135deg,#fffdf8,#fcf2e0);border-color:#ddc48f}
+
+/* الشريط الرأسي: النجوم، الشعار، والعبارة -- على اليمين كما هي */
+.lux-side{padding:2.6mm 1.2mm}
+.lux-logo{width:11mm}
+.lux-vert{font-size:5.6pt}
+
+.lux-main{display:flex!important;flex-direction:column;padding:1.4mm 1.7mm;min-width:0;box-sizing:border-box}
+.lux-top{padding-bottom:.7mm}
+.lux-club b{font-size:6.6pt}
+.lux-club small{font-size:5pt}
+.lux-role{font-size:6pt;padding:.45mm 1.6mm}
+
+/* ثلاثة أعمدة: الرمز 17 مم (يمين)، الاسم ما بقي (وسط)، الصورة 18.5 مم (يسار) */
+.lux-body{
+  display:grid!important;grid-template-columns:17mm minmax(0,1fr) 18.5mm!important;
+  gap:1.5mm;align-items:center;flex:1 1 auto;min-height:0;
+  padding:1mm 0;box-sizing:border-box;
+}
+.lux-body > *{min-width:0}
+
+/* الرمز: صندوق أبيض يعطيه هامشه الهادئ، ثم الرقم، ثم العبارة */
+.lux-qr{display:flex;flex-direction:column;align-items:center;gap:.5mm;width:17mm;min-width:0}
+.lux-qr-box{
+  display:block;width:17mm;height:17mm;box-sizing:border-box;padding:.5mm;
+  background:#fff;border:.2mm solid #cfe2e6;border-radius:1mm;
+}
+.lux-qr-svg{display:block;width:100%;height:100%}
+.lux-reg{
+  display:block;font-size:7.2pt;font-weight:800;color:#0a4f63;
+  letter-spacing:.1px;white-space:nowrap;font-variant-numeric:tabular-nums;
+  max-width:100%;
+}
+.lux-hint{display:block;font-size:4.4pt;line-height:1.25;color:#7d9aa2;text-align:center}
+
+/* الصورة في إطار ناعم، بمقاس صورة الهوية */
+.lux-photo-wrap{width:18.5mm;display:flex;align-items:center;justify-content:center}
+.lux-photo{
+  width:18.5mm!important;height:23.5mm;border-radius:1.6mm;
+  border:.25mm solid #bcd9de;background:#fff;overflow:hidden;
+  display:block!important;padding:0;box-shadow:0 .4mm 1.2mm #0b3b4614;
+}
+.lux-photo > img.lux-photo-img{width:100%!important;height:100%!important;object-fit:cover;display:block}
+.lux-photo > img.lux-photo-fallback{width:100%;height:100%;object-fit:contain;padding:2.4mm;opacity:.45}
+
+/* الاسم: سطران، ثم يتقلّص إن طال قبل أن يُقصّ. والقائمة تحته إلى اليمين */
+.lux-info{flex:1 1 auto;min-width:0}
+/* The name: two lines, then it is shrunk, then it is ellipsised -- and it is never
+   clipped by the box it sits in. The line box was 1.18 times the letters, which
+   looked tight and tidy on screen and was wrong on paper: Cairo puts its shadda
+   and its hamza below the line box as well as above it, and a line box shorter
+   than the letters it holds is a line whose descenders are cut off -- visibly, by
+   four pixels, on every name that wrapped to two lines. A line box at least as
+   tall as the letters is the smallest honest box for this font. */
+.lux-info h3.lux-name{
+  margin:-.3mm 0 -1mm;font-size:10pt;line-height:1.45;font-weight:800;color:#08313c;
+  white-space:normal;overflow-wrap:anywhere;word-break:normal;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  /* The padding is the room the letters need and the negative margins give it back
+     to the layout, so the card is no taller for it. Cairo's shadda and hamza
+     hang outside its own line box; with `overflow:hidden` -- which the two-line
+     clamp requires -- whatever hangs outside the padding box is cut off, and a
+     name whose descenders are cut off is a card the club cannot read back. */
+  padding:.3mm 0 1mm;
+}
+/* Above twenty letters the name steps down a size rather than being asked to
+   wrap into a third line it cannot be given. */
+.lux-info h3.lux-name.is-long{font-size:8pt;line-height:1.42}
+.lux-fr{margin:.3mm 0 0;font-size:5pt;color:#7d9aa2;min-height:1.9mm;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lux-info .orn{display:block;width:100%;height:1.8mm;color:#12a0a8;margin:.5mm 0;opacity:.7}
+.lux-card.is-coach .lux-info .orn{color:#d99a1d}
+.lux-rows{display:grid;grid-template-columns:1fr;gap:.4mm;text-align:start}
+.lux-row{display:flex;align-items:baseline;gap:1mm;justify-content:flex-start;
+  border-bottom:.15mm dotted #b9d9de;padding-bottom:.3mm;min-width:0}
+.lux-row i{font-style:normal;font-size:4.8pt;color:#5b7f88;white-space:nowrap}
+.lux-row b{font-size:6.2pt;color:#16414d;white-space:normal;overflow-wrap:anywhere;min-width:0}
+
+/* التذييل: عنوان النادي وهاتفه، ولم يتغيّرا */
+.lux-foot{display:flex;justify-content:space-between;gap:1.5mm;
+  border-top:.2mm solid #9fc4cb;padding-top:.6mm;font-size:4.6pt;color:#5b7f88}
+
+/* A QR in a box that is not the card's -- the older white card, which also asks
+   for one through [data-qr] -- is drawn to fill whatever it was given. */
+[data-qr] > .lux-qr-svg{display:block;width:100%;height:auto}
+
+/* Printed at the real size: 85.6 × 54 مم، صفّان في الصفحة، وبلا قصّ */
+@media print{
+  .lux-page{grid-template-columns:repeat(2,85.6mm)!important;grid-auto-rows:54mm!important;gap:0 4mm!important;width:100%!important}
+  .lux-slot{width:85.6mm;height:54mm}
+  .lux-card{
+    width:85.6mm!important;height:54mm!important;min-height:54mm!important;border-radius:2.6mm!important;
+    box-shadow:none!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
+  /* A background the printer drops turns the code's white margin into the card's
+     own colour, and a QR on a tinted ground is a QR a scanner argues with. */
+  .lux-qr-box{background:#fff!important;border-color:#cfe2e6!important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .lux-qr-svg{width:100%!important;height:100%!important}
+  .lux-qr-svg rect{fill:#fff!important}
+  .lux-qr-svg path{fill:#000!important}
+  .lux-photo{box-shadow:none!important}
+}

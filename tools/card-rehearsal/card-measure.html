@@ -3,6 +3,12 @@
 <head>
 <meta charset="utf-8">
 <title>قياس البطاقة</title>
+<!-- The club's page loads Cairo from the web; so does this, or the rehearsal would
+     measure the name in whatever font the machine happens to have and report a card
+     that is not the card the club prints. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../../firebase-public/styles.css">
 <style>
   /* The rehearsal runs on a machine with no screen. The card is built by the same
@@ -12,20 +18,22 @@
      Everything measured is written into #report as JSON, so the check can be run
      from a command line by something that has no idea what a browser is. */
   body{background:#8fa3ad;margin:0;padding:20px;font-family:system-ui,sans-serif}
-  .stage{width:85mm;margin:0 auto 20px}
+  .stage{width:85.6mm;margin:0 auto 20px}
   pre{background:#0b1b2b;color:#d7f0f2;padding:12px;font-size:12px;overflow:auto;max-height:60vh}
 </style>
 </head>
 <body>
-<div class="stage" id="stage"></div>
+<div id="stages"></div>
 <pre id="report">measuring...</pre>
 <script src="../../firebase-public/firebase-config.js"></script>
 <script src="../../firebase-public/firebase-adapter.js"></script>
 <script src="../../firebase-public/app.js"></script>
 <script>
-/* A member with a photograph and a name long enough to break a card: four names,
-   with the hamza and the shadda, which is how they are written on a form filled in
-   by hand and is the shape that does not fit. */
+/* The cards are measured at the size the club prints them, one card per case, and
+   every case is a name that has already broken a card or comes close to it: the
+   hamza and the shadda, four parts, twenty letters, twenty-one, and one word with
+   no space to break at. A rehearsal with one comfortable name in it measures the
+   one name that was never the problem. */
 var PHOTO = 'data:image/svg+xml;base64,' + btoa(
   '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="300">' +
   '<rect width="240" height="300" fill="#cfe3e2"/>' +
@@ -34,87 +42,169 @@ var PHOTO = 'data:image/svg+xml;base64,' + btoa(
 
 var NO = 'E2026100021';
 
-/* Everything is inside a try, and a failure is written into the report rather than
-   thrown away. A measurement that fails quietly is the one thing worse than no
-   measurement: it reads as a card that was checked and found fine. */
-try {
-  state.swimmers = [{ id: NO, doc_id: 'APP-DEMO', membership_no: NO, registration_id: NO,
-    name: 'مُهَيَّم مُقدَّم بن طَرَفَة بن عَليّ', group: 'المتوسطون', phone: '0661000001',
-    status: 'نشط', blood_group: 'O+', joined: '2026-10-01', photo: PHOTO,
-    facility: 'المسبح النصف اولمبي' }];
-  state.applications = [{ id: 'APP-DEMO', application_no: 'APP-DEMO', first_name_ar: 'مُهَيَّم',
-    last_name_ar: 'مُقدَّم بن طَرَفَة بن عَليّ', status: 'approved', registration_id: NO, photo: PHOTO }];
+var CASES = [
+  { label: 'a name in four parts', name: 'مُهَيَّم مُقدَّم بن طَرَفَة بن عَليّ' },
+  { label: 'the name the walk complained about', name: 'مُهنَّد ب بن طَرَفَة' },
+  { label: 'a name of twenty letters', name: 'عبد الرحمان بن محمد' },
+  { label: 'a name of twenty-one letters', name: 'عبد الرحمان بن محمدي' },
+  { label: 'a name of thirty-five letters', name: 'عبد الرحمان بن محمد بن عثمان قندوز بلعيد' },
+  { label: 'one word with nothing to break at', name: 'عبدالرحمانبنمحمدبنعثمانبنقندوزبلعيد' }
+];
 
-  document.getElementById('stage').innerHTML = luxuryCard(
-    swimmerCardModel(state.swimmers[0]), 'swimmer');
+var out = { at: new Date().toISOString(), problems: [], cases: [] };
+
+try {
+  var stages = document.getElementById('stages');
+  CASES.forEach(function (c, i) {
+    var swimmer = { id: NO, doc_id: 'APP-DEMO', membership_no: NO, registration_id: NO,
+      name: c.name, group: 'المتوسطون', phone: '0661000001',
+      status: 'نشط', blood_group: 'O+', joined: '2026-10-01',
+      photo: i === CASES.length - 1 ? '' : PHOTO, facility: 'المسبح النصف اولمبي' };
+    state.swimmers = [swimmer];
+    state.applications = [{ id: 'APP-DEMO', application_no: 'APP-DEMO', first_name_ar: 'مُهَيَّم',
+      last_name_ar: 'مُقدَّم بن طَرَفَة بن عَليّ', status: 'approved', registration_id: NO, photo: PHOTO }];
+    var stage = document.createElement('div');
+    stage.className = 'stage';
+    stage.setAttribute('data-case', c.label);
+    stage.innerHTML = luxuryCard(swimmerCardModel(swimmer), 'swimmer');
+    stages.appendChild(stage);
+  });
 } catch (e) {
-  done({ verdict: 'NOT BUILT', problems: ['the card could not be built: ' + ((e && e.message) || e)] });
+  done({ verdict: 'NOT BUILT', problems: ['the cards could not be built: ' + ((e && e.message) || e)] });
 }
 
-/* The bars are drawn by the same hook the page uses; called here because the card
-   was put into the page directly rather than by a render. */
+/* The codes are drawn by the same hook the page uses; called here because the cards
+   were put into the page directly rather than by a render. */
 try { if (typeof buildQRCodes === 'function') buildQRCodes(); } catch (_) {}
 
+/* The first card is the one the rest of the checks read: the code, the repetition
+   counts and the geometry are the same on all six, and one of each is enough. */
+var card = document.querySelector('.lux-card');
+
 (function measure() {
-  var card = document.querySelector('.lux-card');
-  var out = { at: new Date().toISOString(), problems: [] };
   if (!card) { out.problems.push('the card was not built at all'); done(out); return; }
 
   var cb = card.getBoundingClientRect();
   out.card = { w: Math.round(cb.width), h: Math.round(cb.height) };
   out.boxes = {};
-  ['.lux-info', '.lux-info h3', '.lux-fr', '.lux-rows', '.lux-code', 'canvas.lux-barcode',
-   '.lux-photo', '.lux-season', '.lux-no', '.lux-foot'].forEach(function (s) {
+  ['.lux-info', '.lux-info h3', '.lux-fr', '.lux-rows', '.lux-qr', '.lux-qr-box',
+   '.lux-qr-svg', '.lux-reg', '.lux-hint', '.lux-photo', '.lux-foot'].forEach(function (s) {
     var el = card.querySelector(s);
     if (!el) { out.boxes[s] = 'MISSING'; return; }
     var b = el.getBoundingClientRect();
-    out.boxes[s] = { w: Math.round(b.width), h: Math.round(b.height) };
+    out.boxes[s] = { w: Math.round(b.width), h: Math.round(b.height), left: Math.round(b.left) };
+  });
+  /* The photo is on the left and the code on the right, which is a statement about
+     position and cannot be read off a box. */
+  var photoBox = card.querySelector('.lux-photo'), qrBox = card.querySelector('.lux-qr');
+  if (photoBox && qrBox) {
+    var pb = photoBox.getBoundingClientRect(), qb = qrBox.getBoundingClientRect();
+    if (!(pb.left < qb.left)) out.problems.push('the photograph is not to the left of the code');
+    if (qrBox.compareDocumentPosition(photoBox) !== 4) {
+      out.problems.push('the code does not precede the photograph in the card');
+    }
+  }
+
+  /* The name is the card, and it is asked of every case rather than of the first
+     one: whether a name fits is a question about that name. */
+  out.name = null;
+  Array.prototype.forEach.call(document.querySelectorAll('#stages .stage'), function (stage, i) {
+    var c = CASES[i] || { label: 'case ' + i };
+    var cardI = stage.querySelector('.lux-card');
+    if (!cardI) { out.problems.push('a card was not built: ' + c.label); return; }
+    var r = cardI.getBoundingClientRect();
+    var h3 = cardI.querySelector('.lux-info h3');
+    if (!h3) { out.problems.push('no name on the card: ' + c.label); return; }
+    var text = h3.textContent.trim();
+    var cs = getComputedStyle(h3);
+    var row = {
+      label: c.label, name: text, letters: text.length,
+      isLong: h3.className.indexOf('is-long') !== -1, fontSize: cs.fontSize,
+      scrollW: h3.scrollWidth, clientW: h3.clientWidth,
+      scrollH: h3.scrollHeight, clientH: h3.clientHeight,
+      cardW: Math.round(r.width), cardH: Math.round(r.height)
+    };
+    out.cases.push(row);
+    if (!out.name) out.name = row;
+    if (h3.scrollWidth > h3.clientWidth + 1) {
+      out.problems.push('the name "' + text + '" is cut off across: it needs ' + h3.scrollWidth
+        + ' and has ' + h3.clientWidth);
+    }
+    if (h3.scrollHeight > h3.clientHeight + 1) {
+      out.problems.push('the name "' + text + '" needs ' + h3.scrollHeight + ' tall and has '
+        + h3.clientHeight + ': it is being clipped');
+    }
+    if (text.length > 20 && !row.isLong) {
+      out.problems.push('a name of ' + text.length + ' letters was not dropped a size: ' + text);
+    }
+    if (row.cardW !== Math.round(cb.width) || row.cardH !== Math.round(cb.height)) {
+      out.problems.push('a card came out a different size: ' + c.label);
+    }
   });
 
-  /* the name is the card */
-  var h3 = card.querySelector('.lux-info h3');
-  out.name = h3 ? {
-    text: h3.textContent.trim(),
-    scrollW: h3.scrollWidth, clientW: h3.clientWidth,
-    scrollH: h3.scrollHeight, clientH: h3.clientHeight
-  } : null;
-  if (h3 && (h3.scrollWidth > h3.clientWidth + 1 || h3.scrollHeight > h3.clientHeight + 1)) {
-    out.problems.push('the name is cut off: it needs ' + h3.scrollWidth + ' x ' + h3.scrollHeight
-      + ' and has ' + h3.clientWidth + ' x ' + h3.clientHeight);
-  }
-
-  /* the barcode must be drawn, with quiet space at both ends */
-  var cv = card.querySelector('canvas.lux-barcode');
-  if (!cv) {
-    out.problems.push('the card carries no barcode');
+  /* The code has to have been drawn -- a white box where a code should be is a
+     card that is accepted at the desk and fails at the gate. What is measured is
+     the real element the page drew: an SVG whose path is a grid of modules, whose
+     edge is a whole number of modules plus the quiet margin, and whose module is
+     still big enough for a phone to read off a printed card. */
+  var qrBox2 = card.querySelector('.lux-qr-box');
+  var svg = card.querySelector('.lux-qr-svg');
+  if (!qrBox2) {
+    out.problems.push('the card carries no code box');
+  } else if (!svg) {
+    out.problems.push('the code was never drawn: the box is empty');
+    out.qr = { state: qrBox2.getAttribute('data-qr-state') || 'not drawn',
+               payload: qrBox2.getAttribute('data-qr') || '' };
   } else {
-    var px = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
-    var cols = [];
-    for (var x = 0; x < cv.width; x++) {
-      var dark = false;
-      for (var y = 0; y < cv.height; y += 2) if (px[(y * cv.width + x) * 4] < 128) dark = true;
-      cols.push(dark);
+    var path = svg.querySelector('path');
+    var view = (svg.getAttribute('viewBox') || '').split(/\s+/).map(Number);
+    var version = Number(svg.getAttribute('data-qr-version') || 0);
+    var edge = view[2];
+    var boxW = qrBox2.getBoundingClientRect().width;
+    out.qr = {
+      version: version, mask: Number(svg.getAttribute('data-qr-mask') || -1),
+      edge: edge, boxPx: Math.round(boxW * 10) / 10,
+      moduleMm: Math.round((boxW / edge) / 96 * 25.4 * 1000) / 1000,
+      crisp: svg.getAttribute('shape-rendering'),
+      segments: path ? (path.getAttribute('d').match(/M/g) || []).length : 0,
+      payload: qrBox2.getAttribute('data-qr') || ''
+    };
+    if (!path || !path.getAttribute('d')) out.problems.push('the code has no modules drawn');
+    out.qr.segments && out.qr.segments < 40 && out.problems.push('the code has too few marks to be a code: ' + out.qr.segments);
+    if (out.qr.crisp !== 'crispEdges') out.problems.push('the code is not drawn with sharp edges, so a printer will blur it');
+    if (!version) out.problems.push('the code does not say which version it is');
+    if (edge !== version * 4 + 21) {
+      out.problems.push('the code is ' + edge + ' modules across, which is not version ' + version
+        + ' (' + (version * 4 + 17) + ') plus its quiet margin');
     }
-    var darkN = 0, transitions = 0, prev = false;
-    for (var i = 0; i < cols.length; i++) { if (cols[i]) darkN++; if (cols[i] !== prev) transitions++; prev = cols[i]; }
-    out.barcode = { w: cv.width, h: cv.height, darkColumns: darkN, transitions: transitions,
-                    quietLeft: cols.indexOf(true), quietRight: cols.length - 1 - cols.lastIndexOf(true) };
-    if (!darkN) out.problems.push('the barcode canvas is blank: a white rectangle is not a barcode');
-    if (cols.indexOf(true) < 2) out.problems.push('the barcode has no quiet space on its left');
-    if (cols.length - 1 - cols.lastIndexOf(true) < 2) out.problems.push('the barcode has no quiet space on its right');
-    if (transitions < 20) out.problems.push('the barcode has too few edges to be Code 128: ' + transitions);
+    if (out.qr.moduleMm < 0.4) {
+      out.problems.push('a module of the code prints at ' + out.qr.moduleMm + ' mm, finer than a phone can read');
+    }
+    var printed = (card.querySelector('.lux-reg') || {}).textContent || '';
+    if (!printed || out.qr.payload.indexOf(printed.trim()) === -1) {
+      out.problems.push('the code does not carry the number printed under it');
+    }
+    if (!/^https?:\/\//.test(out.qr.payload)) {
+      out.problems.push('the code carries no link, so scanning it opens nothing: ' + out.qr.payload);
+    }
   }
 
-  /* nothing drawn outside the card, nothing scrolled out of its own box */
+  /* Nothing drawn outside the card, nothing scrolled out of its own box -- asked of
+     every case, because a card that fits one name and spills the next is the fault
+     that reaches paper. */
   out.spills = []; out.clipped = [];
-  Array.prototype.forEach.call(card.querySelectorAll('*'), function (el) {
-    var b = el.getBoundingClientRect();
-    if (!b.width || !b.height) return;
-    var over = Math.max(b.right - cb.right, cb.left - b.left, b.bottom - cb.bottom, cb.top - b.top);
-    if (over > 1) out.spills.push({ el: String(el.className || el.tagName), over: Math.round(over) });
-    if (el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1) {
-      out.clipped.push({ el: String(el.className || el.tagName), by: el.scrollWidth - el.clientWidth });
-    }
+  Array.prototype.forEach.call(document.querySelectorAll('#stages .lux-card'), function (cardI, i) {
+    var c = CASES[i] || { label: 'case ' + i };
+    var b0 = cardI.getBoundingClientRect();
+    Array.prototype.forEach.call(cardI.querySelectorAll('*'), function (el) {
+      var b = el.getBoundingClientRect();
+      if (!b.width || !b.height) return;
+      var over = Math.max(b.right - b0.right, b0.left - b.left, b.bottom - b0.bottom, b0.top - b.top);
+      if (over > 1) out.spills.push({ el: String(el.className || el.tagName) + ' [' + c.label + ']', over: Math.round(over) });
+      if (el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1) {
+        out.clipped.push({ el: String(el.className || el.tagName) + ' [' + c.label + ']', by: el.scrollWidth - el.clientWidth });
+      }
+    });
   });
   if (out.spills.length) {
     out.problems.push(out.spills.length + ' thing(s) drawn outside the card: '
@@ -157,12 +247,14 @@ try { if (typeof buildQRCodes === 'function') buildQRCodes(); } catch (_) {}
 
   out.verdict = out.problems.length ? 'NOT CLEAN' : 'CLEAN';
   done(out);
-})();
 
 function phoneOfCard() {
-  var el = document.querySelector('.lux-code .lux-phone');
+  /* The telephone lives in the footer now, with the address -- the two things a
+     card is picked up for when somebody cannot remember whose it is. */
+  var el = document.querySelector('.lux-card .lux-foot span[dir="ltr"]') || document.querySelector('.lux-card .lux-foot span:last-child');
   return el ? el.textContent.trim() : '';
 }
+})();
 
 function done(out) {
   document.getElementById('report').textContent = JSON.stringify(out, null, 1);

@@ -106,7 +106,7 @@ const seed = (user, page) => ({ user, page, swimmers: SW, applications: APPS, sc
   }
 }
 
-/* ---------- 4. the card carries photo, number under the frame, printed code ---------- */
+/* ---------- 4. the card carries photo, the code on the right, printed number ---------- */
 {
   const w = boot(seed({ id: 1, name: 'x', role: 'admin' }, 'card'));
   w.__t.state.profile = { photo: 'https://example.com/p.jpg', blood_group: 'O+' };
@@ -117,49 +117,60 @@ const seed = (user, page) => ({ user, page, swimmers: SW, applications: APPS, sc
   if (!host) { problems.push('card sheet not produced'); }
   else {
     const card = host.querySelector('.lux-card');
+    const body = card && card.querySelector('.lux-body');
     const wrap = card && card.querySelector('.lux-photo-wrap');
     const frame = card && card.querySelector('.lux-photo');
-    const no = card && card.querySelector('.lux-no');
     if (!frame || !frame.querySelector('img')) problems.push('card has no member photo element');
     else if (!/lux-photo-img/.test(frame.innerHTML)) problems.push('card does not show the uploaded photo');
-    if (!no) problems.push('card has no membership number');
+    /* The photograph is one of the three columns and nothing is inside it: the
+       number used to live in the frame under the picture, which is where a
+       photograph's caption goes, and the picture was the only thing the frame
+       ever had to hold. */
+    if (wrap && frame.contains(card.querySelector('.lux-reg'))) {
+      problems.push('the number sits inside the photograph frame');
+    }
+    if (body && wrap && wrap.parentElement !== body) {
+      problems.push('the photograph is not one of the card\'s three columns');
+    }
+
+    /* The code is on the card as an SVG drawn by this repository, and the barcode
+       is not on it at all. Both are stated as markup rather than as pixels,
+       because this harness has no layout engine -- whether the code actually
+       reaches the paper is proved elsewhere, in a real browser, by reading its
+       modules off the card at print size. */
+    const qrBox = card && card.querySelector('.lux-qr-box');
+    if (!qrBox) problems.push('the card carries no code box');
     else {
-      if (wrap && frame.contains(no)) problems.push('the number must sit BELOW the photo frame, not inside it');
-      if (wrap && no.parentElement !== wrap) problems.push('the number is not a sibling under the frame');
-      const f = frame.getBoundingClientRect(), n = no.getBoundingClientRect();
-      if (f.height && n.height && n.top < f.bottom) problems.push('the number is not positioned under the frame');
+      if (!qrBox.getAttribute('data-qr')) problems.push('the code is not told what to carry');
+      if (!card.querySelector('.lux-reg')) problems.push('the code has no number under it');
+      if (!card.querySelector('.lux-hint')) problems.push('the code does not say what scanning it is for');
     }
-    /* The QR is gone, the barcode is asked for, and the number is printed once.
-
-       The barcode is checked here as markup rather than as bars, because the
-       harness this runs in has no canvas and cannot draw one -- and it says so
-       rather than leaving a white frame, which is the behaviour worth keeping.
-       Whether the bars actually reach the paper is proved elsewhere, in a real
-       browser, by reading the pixels off the canvas.
-
-       Where the number sits was decided by looking at the card, not at this file:
-       under the photograph, where the club has always read it from. Repeating it
-       beside the barcode taught the eye that the one number on the card was not
-       worth reading twice. So it is counted on the card as a whole. */
-    const codeBox = card && card.querySelector('.lux-code');
-    const number = card && card.querySelector('.lux-no');
-    if (card && card.querySelector('.qr-code')) problems.push('the membership card still carries a QR code');
-    if (card && card.querySelector('.lux-qr')) problems.push('the QR block is still on the card');
-    if (!codeBox) problems.push('the card has no barcode block');
-    else if (!codeBox.querySelector('.lux-phone')) problems.push('no telephone number beside the barcode');
-
-    /* Asked for, with the number attached to it -- the two come from one value in
-       the source, so the bars can never be of a different number to the one
-       printed beside them. */
-    if (!/class="lux-barcode" data-barcode="'\s*\+\s*esc\(/.test(APP)) {
-      problems.push('the card does not ask for a barcode of the registration number');
+    /* The barcode was taken off the card, and the source must not ask for one --
+       a canvas left in the markup is a blank rectangle on paper. */
+    if (card && /lux-barcode|data-barcode/.test(card.innerHTML)) {
+      problems.push('the card still asks for a barcode');
     }
-    if (!number) problems.push('the card carries no membership number');
+    if (!/class="lux-qr-box"\s+data-qr="'\s*\+\s*esc\(qrPayloadFor_/.test(APP)) {
+      problems.push('the code on the card is not built from the number beside it');
+    }
+
+    /* The number is printed once and once only, beside the code that carries it. */
+    const number = card && card.querySelector('.lux-reg');
+    if (!number) problems.push('the card carries no registration number');
     else {
       const printed = (card.textContent.match(new RegExp(number.textContent.trim()
         .replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
       if (printed !== 1) {
-        problems.push('the membership number is printed ' + printed + ' times on one card; it should be once');
+        problems.push('the registration number is printed ' + printed + ' times on one card; it should be once');
+      }
+    }
+    /* The photograph is on the left and the code on the right, which in an
+       RTL document means the code comes first in the card and the photograph last.
+       This is a statement about position and cannot be read off a box. */
+    if (body && qrBox && wrap) {
+      const kids = [].map.call(body.children, k => k.className.split(' ')[0]);
+      if (kids.join(' ') !== 'lux-qr lux-info lux-photo-wrap') {
+        problems.push('the columns of the card are ' + kids.join(', ') + ' and not code, name, photograph');
       }
     }
   }
