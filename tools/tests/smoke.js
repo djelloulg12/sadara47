@@ -104,7 +104,7 @@ scenario('admin: each page renders and every print button builds a print sheet',
         const host = w.document.querySelector('.print-host');
         if (!host) { errors.push(`${p}/${a}: no .print-host created`); }
         else {
-          const bare = /print-(cards|lux-one|lux-coaches|coach-luxtour|all-cards)/.test(a);
+          const bare = /print-(cards|lux-one|lux-coaches|lux-admins|admin-card|coach-luxtour|all-cards)/.test(a);
           if (!bare && !host.querySelector('.print-head')) errors.push(`${p}/${a}: print sheet has no header`);
           if (!bare && !host.querySelector('.print-foot')) errors.push(`${p}/${a}: print sheet has no footer`);
           if (bare && (host.querySelector('.print-head') || host.querySelector('.print-foot'))) errors.push(`${p}/${a}: bare sheet must not carry header or footer`);
@@ -193,24 +193,24 @@ scenario('role dashboards: navigation works for swimmers, parent, member', () =>
 
 /* الشريط الجانبي يقول الدور قبل أن يُقرأ الاسم.
    ---------------------------------------------------------------------------
-   صاحب النادي والمدير يرون كل شيء؛ والمسير يرى الحضور والماسح والبرنامج
-   والإعلانات ولا يرى السباحين ولا الطلبات ولا الأفواج؛ والمدرب يرى عمله اليومي
-   وبطاقاته. والاختبار لا يسأل «هل اللون موجود؟» بل يسأل: هل يصل هذا الحساب إلى
-   ما لا يحقّ له؟ فصفحة محفوظة في `state.page` من حساب سابق يجب ألّا تُفتح. */
+   صاحب النادي والمدير والمسير يرون كل شيء إداريًا (والمسير صار إداريًا كاملًا:
+   الأفواج والسباحون والمدربون)؛ والمدرب يرى عمله اليومي وبطاقاته. والاختبار لا
+   يسأل «هل اللون موجود؟» بل يسأل: هل يصل هذا الحساب إلى ما لا يحقّ له؟ فصفحة
+   محفوظة في `state.page` من حساب سابق يجب ألّا تُفتح. */
 scenario('the sidebar is coloured and filtered by the account', () => {
   const CASES = [
     { name: 'owner', user: { role: 'admin', owner: true }, tone: 'owner', label: 'صاحب النادي',
-      has: ['home','attendance','scan','users','applications','subscriptions','groups','audit'], hasNot: [] },
+      has: ['home','attendance','scan','users','applications','subscriptions','groups','accounts','audit'], hasNot: [] },
     { name: 'admin', user: { role: 'admin' }, tone: 'admin', label: 'مدير المنصة',
-      has: ['home','attendance','scan','users','applications','subscriptions','card','groups','audit'], hasNot: [] },
+      has: ['home','attendance','scan','users','applications','subscriptions','card','groups','accounts','audit'], hasNot: [] },
     { name: 'president', user: { role: 'president' }, tone: 'admin', label: 'رئيس الجمعية',
-      has: ['users','groups','audit'], hasNot: [] },
+      has: ['users','groups','accounts','audit'], hasNot: [] },
     { name: 'manager', user: { role: 'manager' }, tone: 'manager', label: 'مسير النادي',
-      has: ['home','attendance','scan','schedule','notices'],
-      hasNot: ['users','applications','subscriptions','card','groups','audit'] },
+      has: ['home','attendance','scan','schedule','users','applications','subscriptions',
+        'card','groups','accounts','audit','notices'], hasNot: [] },
     { name: 'coach', user: { role: 'coach' }, tone: 'coach', label: 'مدرب',
       has: ['home','attendance','scan','schedule','card','notices'],
-      hasNot: ['users','applications','subscriptions','groups','audit'] }
+      hasNot: ['users','applications','subscriptions','groups','accounts','audit'] }
   ];
 
   for (const c of CASES) {
@@ -235,7 +235,7 @@ scenario('the sidebar is coloured and filtered by the account', () => {
     for (const k of c.hasNot) if (items.includes(k)) errors.push(`sidebar/${c.name}: «${k}» is offered to an account that may not open it`);
 
     const bottom = [...side.querySelectorAll('.side-bottom [data-page]')].map(a => a.dataset.page);
-    const wantsSettings = c.tone === 'owner' || c.tone === 'admin';
+    const wantsSettings = ['owner', 'admin', 'manager'].indexOf(c.tone) !== -1;
     if (wantsSettings !== bottom.includes('settings')) {
       errors.push(`sidebar/${c.name}: the settings link is ${wantsSettings ? 'missing' : 'offered'}`);
     }
@@ -244,7 +244,8 @@ scenario('the sidebar is coloured and filtered by the account', () => {
     setPage(w, 'users');
     w.render();
     const reached = !!w.document.querySelector('#page-root table');
-    if ((c.tone === 'owner' || c.tone === 'admin') !== reached) {
+    const mayManage = ['owner', 'admin', 'manager'].indexOf(c.tone) !== -1;
+    if (mayManage !== reached) {
       errors.push(`sidebar/${c.name}: the swimmers page was ${reached ? 'opened' : 'withheld'} for the wrong account`);
     }
   }

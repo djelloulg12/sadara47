@@ -72,6 +72,13 @@ function server(w, options) {
       if (opts.refuseSwimmer) return { ok: false, status: 403, json: async () => ({ error: 'هذه العملية لرئيس النادي فقط' }) };
       return { ok: true, json: async () => ({ ok: true }) };
     }
+    if (String(url) === '/api/groups' && method === 'PUT') {
+      if (opts.writesBack) opts.groups = (body && body.groups) || [];
+      return { ok: true, json: async () => ({ ok: true, groups: (body && body.groups) || [] }) };
+    }
+    if (String(url) === '/api/session') {
+      return { ok: true, json: async () => ({ user: opts.sessionUser || null }) };
+    }
     return { ok: true, json: async () => ({ ok: true }) };
   };
   return w;
@@ -95,8 +102,9 @@ const callsTo = (w, url, method) => (w.__calls || []).filter(c => c.url === url 
 (async function run() {
   /* ================= 1. قائمة واحدة، ومصدر واحد ================= */
 
-  /* الخادم هو المصدر: ما يعرضه الجدول هو ما في اللائحة، وما على السجلات
-     يُضاف إليه معروضًا لا مكتوبًا. */
+  /* الخادم هو المصدر الوحيد. والاسم الذي تحمله سجلات ولا يعرّفه النادي لا
+     يُضاف إلى القائمة: من أضافه وجد الفوج المحذوف يعود بعد كل قراءة، لأن
+     سباحًا واحدًا ما زال يحمله على بطاقته. */
   {
     const w = boot(seed());
     server(w, { groups: [{ id: 'g1', name: 'المبتدئون', coach: 'سليم', schedule: 'السبت · 16:00' }] });
@@ -105,21 +113,49 @@ const callsTo = (w, url, method) => (w.__calls || []).filter(c => c.url === url 
     if (names[0] !== 'المبتدئون') {
       errors.push('[1] the club\'s own group is not the first in the list: ' + JSON.stringify(names));
     }
-    if (names.indexOf('مبتدئ') === -1) {
-      errors.push('[1] a group name that a record carries is not shown: ' + JSON.stringify(names)
-        + ' -- the count beside every card is then the count of a list that only exists on one machine');
-    }
-    const derived = (w.__t.state.groups || []).find(g => g.name === 'مبتدئ');
-    if (!derived || derived.source !== 'derived') {
-      errors.push('[1] the name a record carries is not marked as one the club has not defined');
+    if (names.indexOf('مبتدئ') !== -1) {
+      errors.push('[1] a name only the records carry was turned into a group: ' + JSON.stringify(names)
+        + ' -- deleting that group would bring it back on the next read');
     }
     const manager = w.__t.managerGroups_().map(g => g.name);
-    if (manager.indexOf('مبتدئ') !== -1) {
-      errors.push('[1] a name only a record carries is counted as one the club defined');
+    if (manager.length !== 1 || manager[0] !== 'المبتدئون') {
+      errors.push('[1] the page holds groups the club did not define: ' + JSON.stringify(manager));
     }
-    /* والعدد حقيقي: السباح الموجود في «مبتدئ» يُعدّ في «مبتدئ». */
+    /* والعدد حقيقي: السباح الموجود في «مبتدئ» يُعدّ باسمه لمن يبحث عنه. */
     if (w.eval('swimmersOf("مبتدئ").length') !== 1) {
-      errors.push('[1] the count beside a group a record carries is wrong');
+      errors.push('[1] the count by a record\'s own group name is wrong');
+    }
+  }
+
+  /* والحذف لا يُلغى من نفسه: القائمة بعد القراءة التالية هي ما كتبه المسير. */
+  {
+    const w = boot(seed());
+    const opts = {
+      groups: [{ id: 'g1', name: 'المبتدئون' }, { id: 'g2', name: 'المتوسطون' }],
+      writesBack: true, sessionUser: ADMIN
+    };
+    server(w, opts);
+    await w.eval('syncApi()');
+    w.__t.state.page = 'groups';
+    w.__t.render();
+    await w.__t.action('delete-group', { dataset: { group: 'g1' } });
+    await tick();
+
+    const put = callsTo(w, '/api/groups', 'PUT');
+    const written = put.length ? (put[put.length - 1].body.groups || []).map(g => g.name) : [];
+    if (written.indexOf('المبتدئون') !== -1) {
+      errors.push('[1] deleting a group still wrote it back: ' + JSON.stringify(written));
+    }
+
+    await w.eval('syncApi()');
+    await tick();
+    const after = (w.__t.state.groups || []).map(g => g.name);
+    if (after.indexOf('المبتدئون') !== -1) {
+      errors.push('[1] a deleted group came back on the next read: ' + JSON.stringify(after)
+        + ' -- a swimmer still carrying the name must not recreate it');
+    }
+    if (after.indexOf('المتوسطون') === -1) {
+      errors.push('[1] deleting one group took the other with it: ' + JSON.stringify(after));
     }
   }
 

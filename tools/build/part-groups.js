@@ -64,13 +64,6 @@ function categoryLabel_(key) {
   return groupCategories_()[String(key || '')] || '';
 }
 
-/* فوج لا يعرّفه النادي وإنما يحمله سجل. معرّفه اسمه: لا شيء خارج هذه
-   الصفحة يحتاج أن يعرفه، والاسم هو الشيء الوحيد المتطابق فعلًا على كل
-   جهاز فيه السجل. */
-function derivedGroupId_(name) {
-  return 'derived:' + String(name == null ? '' : name).trim();
-}
-
 /* ---------------- الشكل والحفظ ---------------- */
 
 /* الفوج كما يكتبه الخادم: عشرة حقول، لا لافتة داخلها.
@@ -144,7 +137,11 @@ function filterGroupNames(selected) {
   const out = [];
   const seen = new Set();
   const swimmers = state.swimmers || [];
-  for (const name of [UNASSIGNED_NAME].concat((groups() || []).map(g => String((g && g.name) || '').trim()))) {
+  /* الأفواج المعرَّفة، ثم الأسماء التي تحملها السجلات. والثاني ليس فوجًا:
+     هو عنوان مؤقّت لطفل ينتظر التوزيع، ووجوده في التصفية يجعله يُوجد. */
+  const names = [UNASSIGNED_NAME].concat(managerGroups_().map(g => String((g && g.name) || '').trim()));
+  swimmers.forEach(s => names.push(String((s && s.group) || '').trim()));
+  for (const name of names) {
     if (!name || seen.has(name)) continue;
     if (!swimmers.some(s => String(s.group || '').trim() === name)) continue;
     seen.add(name); out.push(name);
@@ -168,10 +165,15 @@ function inlineGroupCell(s) {
     + '</select>';
 }
 
-/* إعادة بناء قائمة الصفحة من القائمة المشتركة.
-   ولماذا تُضاف الأسماء التي تحملها السجلات: الحساب الذي يقرأ قبل أن يُحفظ
-   شيء يجب أن يعرض ما على السباحين، وإلا رأى المدير ناديًا بلا أفواج. وهذه
-   الأسماء مشتقّة لا تُكتب، وتختفي من تلقائها بعد أول حفظ يضمّها. */
+/* إعادة بناء قائمة الصفحة من القائمة المشتركة وحدها.
+
+   وكانت تُضاف إليها أسماء يحملها السباحون ولا يعرّفها النادي، فتعود الأفواج
+   المحذوفة بعد كل قراءة: يحذف المسير «المبتدئون»، فتعود لأن سباحًا واحدًا
+   ما زال يحمل الاسم على بطاقته. وهذا قلبٌ للقاعدة: القائمة قائمة النادي،
+   ومن ليس في فوج معرَّف ينتظر في «غير مفرز» حتى يوزّعه المسير.
+
+   فلا اسم يدخل القائمة إلا من `config/groups`. والاسم الذي على السجل يبقى
+   على السجل، ويُعرض في الاستمارة وفي التصفية، ولا يصير فوجًا من تلقاء نفسه. */
 function adoptGroups_(served) {
   const manager = [];
   const seen = new Set();
@@ -195,15 +197,7 @@ function adoptGroups_(served) {
       source: 'manager'
     });
   });
-  const derived = [];
-  (state.swimmers || []).forEach(s => {
-    const name = String((s && s.group) || '').trim();
-    if (!name || name === UNASSIGNED_NAME || seen.has(name)) return;
-    seen.add(name);
-    derived.push({ id: derivedGroupId_(name), name: name, category: '', days: [], start: '', end: '',
-      capacity: 0, coach: '', assistants: [], pool: '', notes: '', members: 0, source: 'derived' });
-  });
-  state.groups = manager.concat(derived);
+  state.groups = manager;
 }
 
 /* مركز الأفواج كاملًا: القائمة والفئات والأيام وعدد غير المفرزين.
@@ -552,8 +546,7 @@ async function saveGroupFromForm_() {
   if (dup) { showToast('اسم الفوج «' + g.name + '» مستعمل. لكل فوج اسم واحد.', 'error'); return; }
 
   const list = managerGroups_().filter(x => String(x.id) !== String(g.id)).concat([g]);
-  state.groups = list.concat((state.groups || []).filter(x => x.source === 'derived'
-    && !list.some(m => String(m.name) === String(x.name))));
+  state.groups = list;
   save();
   if (document.querySelector('.modal-backdrop')) document.querySelector('.modal-backdrop').remove();
   renderPageOnly();
@@ -575,7 +568,7 @@ async function deleteGroup_(id) {
     + '\n\nلا يمكن التراجع عن حذف الفوج نفسه.');
   if (!ok) return;
   const list = managerGroups_().filter(x => String(x.id) !== String(id));
-  state.groups = list.concat((state.groups || []).filter(x => x.source === 'derived'));
+  state.groups = list;
   save();
   if (document.querySelector('.modal-backdrop')) document.querySelector('.modal-backdrop').remove();
   renderPageOnly();
@@ -593,17 +586,15 @@ function assignUnassigned_() {
   showToast('اختر الفوج الجديد من خانة الفوج في الجدول.', 'info');
 }
 
-/* ملاحظة على فوج يحمله سباحون ولا يعرّفه النادي. */
-function groupSourceNote(g) {
-  return g && g.source === 'derived'
-    ? '<p class="group-source">اسم يحمله سباحون · غير معرَّف في قائمة الأفواج</p>'
-    : '';
+/* ملاحظة على فوج: لم تعد هناك أفواج مشتقّة من السجلات، فكل بطاقة فوج
+   يعرّفه النادي. تُبقي الدالة شكل النداء لمن قد يقرأها. */
+function groupSourceNote() {
+  return '';
 }
 
 /* زرّا التعديل والحذف على البطاقة. الحذف لصاحب النادي وحده، والحذف على فوج
    مشتقّ لا معنى له: ليس في القائمة أصلًا. */
 function groupDeleteButton(g) {
-  if (g && g.source === 'derived') return '';
   if (!canSetGroup()) return '';
   return '<button class="check-btn" data-action="edit-group" data-group="' + esc(g.id) + '">تعديل</button>'
     + '<button class="check-btn no" data-action="delete-group" data-group="' + esc(g.id) + '">حذف</button>';
@@ -623,10 +614,9 @@ function groupDaysLine_(g) {
 }
 
 function groupCard_(g) {
-  const members = g.source === 'derived' ? swimmersOf(g.name).length : Number(g.members || 0);
+  const members = Number(g.members || 0);
   const capacity = Number(g.capacity || 0);
   const full = capacity && members > capacity;
-  const derived = g.source === 'derived';
   const bits = [];
   if (g.category) bits.push('<span class="group-badge">' + esc(categoryLabel_(g.category)) + '</span>');
   if (g.start && g.end) bits.push('<span class="group-badge time">🕒 ' + esc(g.start + ' – ' + g.end) + '</span>');
@@ -635,12 +625,11 @@ function groupCard_(g) {
   const helpers = Array.isArray(g.assistants) ? g.assistants.filter(Boolean) : [];
   const days = groupDaysLine_(g);
 
-  return '<article class="group-card' + (derived ? ' is-derived' : '') + '" data-group="' + esc(g.id) + '">'
+  return '<article class="group-card" data-group="' + esc(g.id) + '">'
     + '<div class="group-card-head"><span class="stat-icon blue">♟</span>'
-    + (derived ? '<span class="status warn">اسم غير معرَّف</span>' : '<span class="status success">نشط</span>')
+    + '<span class="status success">نشط</span>'
     + '</div>'
     + '<h3>' + esc(g.name) + '</h3>'
-    + groupSourceNote(g)
     + (bits.length ? '<div class="group-badges">' + bits.join('') + '</div>' : '')
     + (days ? '<p><b>أيام التدريب:</b> ' + esc(days) + '</p>' : (g.schedule ? '<p><b>البرنامج:</b> ' + esc(g.schedule) + '</p>' : ''))
     + '<p><b>المدرب الرئيسي:</b> ' + esc(g.coach || '—')
@@ -661,9 +650,7 @@ function groupCard_(g) {
    والترتيب مقصود: شريط «غير مفرز» يعلو البطاقات، لأن فيه أطفالًا بلا فوج
    ينتظرون قرارًا؛ وما تحته جدول منظّم للطباعة. */
 pageGroups = function () {
-  const list = managerGroups_();
-  const bands = (state.groups || []).filter(g => g && g.source === 'derived');
-  const all = list.concat(bands);
+  const all = managerGroups_();
 
   return '<div class="toolbar"><span class="page-description">عرّف الأفواج بفئاتها وأيامها وتوقيتها وطاقمها — وينتشر التعديل على بطاقات المنخرطين فورًا.</span>'
     + '<div class="toolbar-group">' + printBtn('print-groups', 'طباعة قائمة الأفواج A4')
@@ -678,8 +665,8 @@ pageGroups = function () {
     + '<div class="table-scroll"><table><thead><tr>'
     + '<th>الفوج</th><th>الفئة</th><th>الأيام والتوقيت</th><th>الطاقم التدريبي</th><th>المسبح</th><th>العدد</th>'
     + '</tr></thead><tbody>'
-    + (list.length
-      ? list.map(g => '<tr><td><b>' + esc(g.name) + '</b></td>'
+    + (all.length
+      ? all.map(g => '<tr><td><b>' + esc(g.name) + '</b></td>'
         + '<td>' + esc(categoryLabel_(g.category) || '—') + '</td>'
         + '<td>' + esc(groupScheduleLine_(g)) + '</td>'
         + '<td>' + esc(groupCoachesLine_(g)) + '</td>'

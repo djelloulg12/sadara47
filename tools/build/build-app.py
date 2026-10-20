@@ -12,6 +12,22 @@ from prune import prune as _prune
 base, _dropped = _prune(base)
 print("pruned %d chars of dead legacy code from the baseline" % _dropped)
 
+# ---------------------------------------------------------------------------
+#   لا أفواج مزروعة.
+#
+#   كان السطر التالي يزرع ثلاثة أفواج في كل متصفح يُفتح أول مرة: «المبتدئون»
+#   و«المتوسطون» و«المتقدمون». فمن حذفها من صفحة الأفواج وجدها تعود مع كل
+#   حساب جديد أو ذاكرة ممسوحة، وظنّ أن الحذف لا يعمل. والقاعدة التي طلبها
+#   النادي: القائمة قائمته وحده -- لا اسم يُفرض عليه من الشيفرة.
+#
+#   والإبدال هنا لا في اللقطة المجمّدة: اللقطة شاهد على ما كان، والبناء هو
+#   موضع تصحيحه.
+# ---------------------------------------------------------------------------
+base, _seeded = re.subn(r"^state\.groups \|\|= \[.*?\];$", "state.groups ||= [];", base, flags=re.M)
+if _seeded > 1:
+    raise AssertionError("more than one seeded group list in the baseline")
+print("seeded groups removed from first paint: %d" % _seeded)
+
 # apply the bare print mode to the baseline printArea
 h0 = base.index("  const head=document.createElement('header');")
 h1 = base.index("  host.appendChild(head);") + len("  host.appendChild(head);")
@@ -55,7 +71,7 @@ base = base.replace("['card','\u0628\u0637\u0627\u0642\u0627\u062a \u0627\u0644\
                     "['card','\u0628\u0637\u0627\u0642\u0627\u062a \u0627\u0644\u0627\u0646\u062e\u0631\u0627\u0637'],['audit','\u0633\u062c\u0644 \u0627\u0644\u062a\u062f\u0642\u064a\u0642']].map")
 assert "aria-label" in base and "bare = options.bare" in base and "سجل التدقيق" in base
 
-order = ["part-h.js","part-i.js","part-j.js","part-k.js","part-l.js","part-barcode.js","part-qr.js","part-swimmer-edit.js","part-door.js","part-group.js","part-groups.js","part-scan.js","part-m.js","part-n.js","part-p.js","part-s.js","part-t.js","part-u.js","part-v.js","part-q.js","part-w.js","part-x.js","part-y.js","part-z.js","part-tables.js","part-columns.js","part-resilience.js","part-roles.js"]
+order = ["part-h.js","part-i.js","part-j.js","part-k.js","part-l.js","part-barcode.js","part-qr.js","part-swimmer-edit.js","part-door.js","part-group.js","part-groups.js","part-scan.js","part-m.js","part-n.js","part-p.js","part-s.js","part-t.js","part-u.js","part-v.js","part-q.js","part-w.js","part-x.js","part-y.js","part-z.js","part-tables.js","part-columns.js","part-resilience.js","part-roles.js","part-mobile.js"]
 layers = [gconst] + [io.open(tmp + "\\" + n, encoding="utf-8").read().rstrip() for n in order]
 out = base + "\n\n/* ---------- layers added after the baseline commit ---------- */\n\n" + "\n\n".join(layers)
 out = out.rstrip() + "\n\n/* ---------- final layer ---------- */\n\n" + io.open(tmp + r"\part-r.js", encoding="utf-8").read().rstrip() + "\n"

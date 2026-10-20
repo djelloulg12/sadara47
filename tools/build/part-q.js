@@ -68,15 +68,13 @@ action=async function(a,el){
     });
     return;
   }
-  if(a==='delete-group'){
-    const g=(state.groups||[]).find(x=>x.id===el.dataset.group);
-    confirmDialog('حذف الفوج «' + ((g&&g.name)||'') + '»؟ لن تتأثر بيانات سباحيه.','حذف', () => {
-      state.groups=(state.groups||[]).filter(x=>x.id!==el.dataset.group);
-      logDecision('حذف فوج','group',el.dataset.group,{name:g&&g.name});
-      save(); render(); showToast('تم حذف الفوج.');
-    });
-    return;
-  }
+  /* حذف الفوج: مقصود ألّا يُعالَج هنا.
+
+     كان لهذه الطبقة معالج `delete-group` قديم يحذف من `state.groups` وحدها
+     ولا يكتب على الخادم. ولأنها تُلبَّس بعد طبقة الأفواج، كانت تسبقها: المسير
+     يضغط «حذف» على صفحة الأفواج، فيُحذف الفوج من الشاشة، ثم تعود القائمة من
+     الخادم في القراءة التالية -- فيظنّ أن الحذف لا يعمل. والحذف الحقيقي، مع
+     نقل المنخرطين إلى «غير مفرز»، في `part-groups.js`. */
   if(a==='mark-all-present'){
     const list=state.swimmers||[];
     if(!list.length){showToast('لا يوجد سباحون لتسجيل حضورهم.','error');return}

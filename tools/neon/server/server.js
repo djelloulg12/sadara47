@@ -320,6 +320,25 @@ ROUTES['GET /api/attendance'] = async (req, res) => {
 
 function strongEnough(pw) { return typeof pw === 'string' && pw.length >= 10; }
 
+/* كلمة المرور المؤقتة: تُولَّد في الخادم، ولا تتكرّر.
+
+   الأبجدية تُسقط المحارف التي تُقرأ على وجهين -- O/0 وI/1 وl -- لأن الكلمة
+   تُقرأ من ورقة أو تُقال في الهاتف. وستّة عشر محرفًا من ثمانية وعشرين حرفًا
+   فضاءٌ لا يتكرّر اتفاقًا. والضمانة الثانية: مجموعة ما أُصدر في عمر العملية،
+   فلا تُعاد الكلمة نفسها ولو وقع التصادم. */
+const TEMP_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const issuedTempPasswords = new Set();
+function tempPassword() {
+  for (let attempt = 0; attempt < 64; attempt++) {
+    let out = '';
+    for (let i = 0; i < 16; i++) out += TEMP_ALPHABET[crypto.randomInt(TEMP_ALPHABET.length)];
+    if (issuedTempPasswords.has(out)) continue;
+    issuedTempPasswords.add(out);
+    return out;
+  }
+  throw new Error('could not generate a unique temporary password');
+}
+
 async function setPassword(uid, password, { mustChange, by }) {
   const salt = crypto.randomBytes(16).toString('base64');
   const params = { N: 16384, r: 8, p: 1, keylen: 64 };
@@ -362,7 +381,8 @@ ROUTES['POST /api/password'] = async (req, res, body) => {
 ROUTES['POST /api/accounts/password'] = async (req, res, body) => {
   const actor = await currentUser(req);
   if (!actor) return sendJSON(res, { error: 'يرجى تسجيل الدخول' }, 401);
-  if (!R.isManager(actor, await owners())) {
+  const ownerSet = await owners();
+  if (!R.isManager(actor, ownerSet)) {
     return sendJSON(res, { error: 'ضبط كلمة المرور متاح للمدير أو رئيس النادي فقط' }, 403);
   }
   const uid = String(body.id || body.uid || '');
@@ -370,36 +390,73 @@ ROUTES['POST /api/accounts/password'] = async (req, res, body) => {
   if (!uid) return sendJSON(res, { error: 'معرّف الحساب مطلوب' }, 400);
   if (uid === actor.id) return sendJSON(res, { error: 'لا يمكنك تغيير كلمة مرور حسابك من هنا.' }, 403);
   if (!strongEnough(password)) return sendJSON(res, { error: 'كلمة المرور يجب أن تكون عشرة محارف على الأقل.' }, 400);
-  const target = await D.one('select id, email from public.app_users where id=$1', [uid]);
+  const target = await D.one('select id, email, role from public.app_users where id=$1', [uid]);
   if (!target) return sendJSON(res, { error: 'لا يوجد حساب بهذا المعرّف.' }, 404);
+  /* كلمة مرور صاحب النادي لا تُمسّ من هنا: هو يُديرها بنفسه، ولا يضعها له مسير. */
+  if (R.isOwner(target, ownerSet)) {
+    return sendJSON(res, { error: 'كلمة مرور صاحب النادي تُدار من حسابه وحده، لا من هنا.' }, 403);
+  }
+  if (!R.canManageAccount(actor, target, ownerSet)) {
+    return sendJSON(res, { error: 'لا يمكنك تغيير كلمة مرور مسير أو مدير آخر.' }, 403);
+  }
   await setPassword(uid, password, { mustChange: body.must_change !== false, by: actor.id });
   sendJSON(res, { ok: true, email: target.email, must_change: body.must_change !== false });
 };
 
-/* كلمة مرور واحدة لكل حساب، والجميع مُلزَمون بتغييرها. تُعاد الكلمة مرة
-   واحدة إلى المسير ليبلّغ بها، ولا تُخزَّن نصًّا. */
-ROUTES['POST /api/accounts/default-password'] = async (req, res, body) => {
+/* إعادة تعيين كلمة المرور: كلمة مؤقتة فريدة يُولّدها الخادم، وتُعاد مرة واحدة.
+
+   لماذا في الخادم لا في الصفحة؟ لأن الكلمة التي تُولَّد في المتصفّح تمرّ في
+   الشبكة نصًّا، وقد تُحفظ في سجلّ؛ وهي هنا تُكتب تجزئةً فقط، ولا يعود الخادم
+   يذكرها. والذي يُعيدها هو من يملك الصلاحية على الحساب، لا من يطلبها.
+
+   والكلمة تُعاد في هذا الردّ وحده، ليراها من وزّعها ويسلّمها لصاحبها. */
+ROUTES['POST /api/accounts/reset-password'] = async (req, res, body) => {
   const actor = await currentUser(req);
   if (!actor) return sendJSON(res, { error: 'يرجى تسجيل الدخول' }, 401);
   const ownerSet = await owners();
   if (!R.isManager(actor, ownerSet)) {
-    return sendJSON(res, { error: 'كلمة المرور الافتراضية متاحة للمدير أو رئيس النادي فقط' }, 403);
+    return sendJSON(res, { error: 'إعادة تعيين كلمة المرور للمدير أو المسير فقط' }, 403);
   }
-  const password = String(body.password || '');
-  if (!strongEnough(password)) return sendJSON(res, { error: 'كلمة المرور يجب أن تكون عشرة محارف على الأقل.' }, 400);
+  const uid = String(body.id || body.uid || '');
+  if (!uid) return sendJSON(res, { error: 'معرّف الحساب مطلوب' }, 400);
+  if (uid === actor.id) {
+    return sendJSON(res, { error: 'كلمة مرورك تُغيَّر من صفحة ملفك بكلمتك الحالية، لا من هنا.' }, 403);
+  }
+  const target = await D.one('select id, email, role from public.app_users where id=$1', [uid]);
+  if (!target) return sendJSON(res, { error: 'لا يوجد حساب بهذا المعرّف.' }, 404);
+  if (R.isOwner(target, ownerSet)) {
+    return sendJSON(res, { error: 'كلمة مرور صاحب النادي لا تُعاد من هنا.' }, 403);
+  }
+  if (!R.canManageAccount(actor, target, ownerSet)) {
+    return sendJSON(res, { error: 'لا يمكنك إعادة تعيين كلمة مرور مسير أو مدير آخر.' }, 403);
+  }
+  const password = tempPassword();
+  await setPassword(uid, password, { mustChange: true, by: actor.id });
+  sendJSON(res, { ok: true, email: target.email, password, must_change: true,
+    note: 'كلمة مؤقتة تُعرض مرة واحدة. تُسلَّم لصاحبها، ويُطلب منه تغييرها عند أول دخول.' });
+};
 
-  /* استثناء صاحب النادي: لا تُدهَس كلمته، وإلا أُغلق خارج منصته بكلمة
-     جماعية يعرفها كل من قرأ الورقة. */
-  const rows = await D.all("select id, email from public.app_users where email is not null");
-  let done = 0;
-  for (const r of rows) {
-    if (ownerSet.has(String(r.email).toLowerCase())) continue;
-    if (r.id === actor.id) continue;
-    await setPassword(r.id, password, { mustChange: true, by: actor.id });
-    done++;
+/* كلمة مرور واحدة للجميع: أُلغيت.
+   ----------------------------------------------------------------------------
+   كانت تعطي كل الحسابات الكلمة نفسها ثم تُلزم كل واحد بتغييرها. وهذا يناقض
+   ما طلبه النادي صراحةً: كلمة مؤقتة فريدة لكل شخص، لا يتشابه فيها حسابان.
+   وكلمةٌ واحدة معلومة تعني أن أول من يقرأ الورقة يدخل إلى حساب أي أحد قبل أن
+   يغيّرها صاحبها.
+
+   فالطريق الباقي هو `POST /api/accounts/reset-password`: كلمة مؤقتة واحدة،
+   لحساب واحد، تُعاد مرة واحدة. والمسار يُبقي رفضًا صريحًا بدل أن يختفي، حتى
+   لا يظنّ من جرّبه أن المنصة تعطّلت. */
+ROUTES['POST /api/accounts/default-password'] = async (req, res) => {
+  const actor = await currentUser(req);
+  if (!actor) return sendJSON(res, { error: 'يرجى تسجيل الدخول' }, 401);
+  if (!R.isManager(actor, await owners())) {
+    return sendJSON(res, { error: 'هذا الإجراء للمدير أو رئيس النادي فقط' }, 403);
   }
-  sendJSON(res, { ok: true, accounts: done, must_change: true,
-    note: 'كل حساب يفتح بهذه الكلمة، ثم يُلزَم بتعيين كلمة خاصة به.' });
+  sendJSON(res, {
+    error: 'لم تعد كلمة المرور الجماعية تُستعمل: لكل حساب كلمة مؤقتة فريدة. '
+      + 'استعمل «إعادة تعيين كلمة المرور» على صفّ الحساب.',
+    use: '/api/accounts/reset-password'
+  }, 410);
 };
 
 /* ---------------- الحسابات وصلاحياتها ----------------
@@ -412,7 +469,7 @@ ROUTES['GET /api/accounts'] = async (req, res) => {
   if (!R.isManager(user, ownerSet)) {
     return sendJSON(res, { error: 'عرض الحسابات لرئيس النادي فقط' }, 403);
   }
-  const rows = await D.all('select id, email, display_name, role from public.app_users where email is not null');
+  const rows = await D.all('select id, email, display_name, role, must_change from public.app_users where email is not null');
   const profiles = await D.all('select uid, raw from sadara.users');
   const byUid = new Map(profiles.map(p => [p.uid, p.raw || {}]));
   const list = rows.map(r => {
@@ -429,6 +486,7 @@ ROUTES['GET /api/accounts'] = async (req, res) => {
       registration_id: p.registration_id || '',
       role: r.role || 'member',
       roles: Array.isArray(p.roles) ? p.roles : (r.role ? [r.role] : []),
+      must_change: r.must_change === true,
       owner: ownerSet.has(String(email).toLowerCase())
     };
   }).filter(Boolean);
@@ -447,9 +505,18 @@ ROUTES['PUT /api/accounts'] = async (req, res, body) => {
   if (!uid) return sendJSON(res, { error: 'معرّف الحساب مطلوب' }, 400);
   if (R.ROLES.indexOf(role) === -1) return sendJSON(res, { error: 'سلمي غير معروف: ' + role }, 400);
   if (uid === actor.id) return sendJSON(res, { error: 'لا يُغيّر صلاحتياتك بنفسك' }, 400);
-  const target = await D.one('select email from public.app_users where id=$1', [uid]);
-  if (target && ownerSet.has(String(target.email || '').toLowerCase())) {
+  const target = await D.one('select email, role from public.app_users where id=$1', [uid]);
+  if (!target) return sendJSON(res, { error: 'لا يوجد حساب بهذا المعرّف.' }, 404);
+  if (R.isOwner(target, ownerSet)) {
     return sendJSON(res, { error: 'حساب صاحب النادي لا تُغيَّر صلاحيته من هنا.' }, 403);
+  }
+  /* صلاحية مسير أو مدير لا يُنزلها ولا يرفعها إلا صاحب النادي: هذا هو الخطّ
+     الذي يفصل المدير العام عن المسيرين. */
+  if (!R.canManageAccount(actor, target, ownerSet)) {
+    return sendJSON(res, { error: 'لا يغيّر صلاحية مسير أو مدير إلا صاحب النادي.' }, 403);
+  }
+  if (role === 'manager' && !R.isOwner(actor, ownerSet)) {
+    return sendJSON(res, { error: 'تعيين المسيرين وعزلهم من صلاحيات صاحب النادي وحده.' }, 403);
   }
   await D.run('update public.app_users set role=$1, updated_at=now() where id=$2', [role, uid]);
   sendJSON(res, { ok: true, id: uid, role });
@@ -1484,6 +1551,12 @@ ROUTES['DELETE /api/users/:uid'] = async (req, res, body, url) => {
   }
   if ((await owners()).has(address)) {
     return sendJSON(res, { error: 'هذا حساب رئيس النادي. لا يمكن حذفه من هنا.' }, 403);
+  }
+
+  /* حذف حساب مسير أو مدير لا يفعله إلا صاحب النادي. */
+  const targetRow = await D.one('select role from public.app_users where id=$1', [uid]);
+  if (targetRow && !R.canManageAccount(gate.user, { role: targetRow.role, email: address }, await owners())) {
+    return sendJSON(res, { error: 'لا يحذف حساب مسير أو مدير إلا صاحب النادي.' }, 403);
   }
 
   const reason = String((body && body.reason) || '').trim();

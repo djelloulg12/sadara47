@@ -1,4 +1,55 @@
 /* ---------------------- ربط التعديلات الأربعة ---------------------- */
+/* The rank a card wears. It accepts the card kind the print code passes and the
+   account role the app stores, so the two can never disagree: a card is black
+   because its holder is an administrator, not because a caller remembered. */
+function cardKindForRole_(value){
+  const v = String(value || '').trim().toLowerCase();
+  if (v === 'coach') return 'coach';
+  if (v === 'admin' || v === 'manager' || v === 'owner' || v === 'president') return 'admin';
+  return 'swimmer';
+}
+/* A card for a person who is not a swimmer: the manager, the owner, the coach.
+   The number is their account's own -- never invented from an email. */
+function staffCardModel(u){
+  const account = u || {};
+  const role = String(account.role || '');
+  const titles = { owner: 'المدير العام', admin: 'مدير النادي', manager: 'مسير', president: 'رئيس النادي', coach: 'مدرب' };
+  return {
+    membership_no: account.member_no || account.membership_no || account.id || '',
+    name: account.name || account.display_name || account.email || 'مسؤول',
+    group_name: account.group_name || 'الإدارة',
+    role_title: account.owner ? 'المدير العام' : (titles[role] || 'مسؤول النادي'),
+    specialty: account.specialty || 'مدرب سباحة',
+    experience: account.experience || '—',
+    photo: account.photo || ''
+  };
+}
+/* A coach's own card: their coach file when there is one, the account otherwise,
+   so the badge reads «مدرب» even before the application is approved. */
+function selfCoachCardModel(){
+  const u = state.user || {};
+  const base = staffCardModel(u);
+  const email = String(u.email || '').trim().toLowerCase();
+  const app = email ? coaches().find(c => String(c.coach_email || '').trim().toLowerCase() === email) : null;
+  const file = app ? coachCardModel(app) : {};
+  return Object.assign(base, file, { coach_name: file.coach_name || base.name });
+}
+/* Every administrative card the club may print. The accounts list is loaded on
+   the accounts page; the signed-in administrator is always here even before it. */
+function managerCardModels_(){
+  const out = [];
+  const seen = {};
+  const add = u => {
+    if (!u || cardKindForRole_(u.role) !== 'admin') return;
+    const key = String(u.email || u.id || u.name || '').trim().toLowerCase();
+    if (key && seen[key]) return;
+    if (key) seen[key] = true;
+    out.push(staffCardModel(u));
+  };
+  add(state.user);
+  (state.accounts || []).forEach(add);
+  return out;
+}
 function swimmersActive(){return (state.swimmers||[]).filter(s=>s.status==='نشط'||!s.status);}
 function coaches(){return (state.applications||[]).filter(a=>a.application_type==='coach');}
 function coachCardModel(c){
@@ -40,7 +91,20 @@ action=async function(a,el){
     printCardSheets(swimmersActive().map(swimmerCardModel),'swimmer');
     return;
   }
-  if(a==='print-role-card'){const me=mySwimmer();if(me)printCardSheets([swimmerCardModel(me)],'swimmer');else showToast('حسابك غير مربوط ببطاقة انخراط.','error');return}
+  if(a==='print-role-card'){
+    const kind=cardKindForRole_(state.user&&state.user.role);
+    if(kind==='admin'){printCardSheets([staffCardModel(state.user)],'admin');return}
+    if(kind==='coach'){printCardSheets([selfCoachCardModel()],'coach');return}
+    const me=mySwimmer();if(me)printCardSheets([swimmerCardModel(me)],'swimmer');else showToast('حسابك غير مربوط ببطاقة انخراط.','error');return
+  }
+  if(a==='print-lux-admins'){printCardSheets(managerCardModels_(),'admin');return}
+  if(a==='print-admin-card'){
+    const key=String(el.dataset.id);
+    const card=managerCardModels_().find(m=>String(m.membership_no)===key||String(m.name)===key);
+    if(card)printCardSheets([card],'admin');
+    else showToast('تعذّر العثور على بطاقة المسؤول.','error');
+    return;
+  }
   if(a==='print-lux-one'){
     const s=(state.swimmers||[]).find(x=>String(x.id)===String(el.dataset.id));
     if(s)printCardSheets([swimmerCardModel(s)],'swimmer');
@@ -91,6 +155,7 @@ function pageCards(){
   const list=(state.swimmers||[]).filter(s=>s.status==='نشط'||!s.status);
   const models=list.map(swimmerCardModel);
   const coachModels=coaches().map(coachCardModel);
+  const staffModels=managerCardModels_();
   return '<section class="card-intro"><div><span class="eyebrow">بطاقة انخراط النادي</span><h2>بطاقات أنيقة<br>برقم التسجيل.</h2>'
     +'<p>التصميم المعتمد للنادي — 85 × 52 مم — عشر بطاقات في ورقة A4 واحدة.</p>'
     +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-cards">🖨 طباعة كل البطاقات</button>'
@@ -113,7 +178,14 @@ function pageCards(){
     +(coachModels.length?'<section class="lux-preview">'+coachModels.map(m=>luxuryCard(m,'coach')).join('')+'</section>'
       +'<div class="official-forms-list" style="margin-top:14px">'+coachModels.map(m=>
         '<button data-action="print-coach-luxtour" data-id="'+esc(m.membership_no)+'"><b>'+esc(m.coach_name)+'</b><span>'+esc(m.specialty)+' · بطاقة واحدة</span></button>').join('')+'</div>'
-      :'<p class="empty-cell">لا توجد طلبات مدربين بعد.</p>');
+      :'<p class="empty-cell">لا توجد طلبات مدربين بعد.</p>')
+
+    +'<div class="toolbar" style="margin-top:26px"><span class="page-description">بطاقات المسؤولين ('+staffModels.length+') — الإدارة والمدير والمسيرون</span>'
+    +'<div class="toolbar-group"><button class="btn btn-primary" data-action="print-lux-admins">🖤 طباعة بطاقات المسؤولين</button></div></div>'
+    +(staffModels.length?'<section class="lux-preview">'+staffModels.map(m=>luxuryCard(m,'admin')).join('')+'</section>'
+      +'<div class="official-forms-list" style="margin-top:14px">'+staffModels.map(m=>
+        '<button data-action="print-admin-card" data-id="'+esc(m.membership_no)+'"><b>'+esc(m.name)+'</b><span>'+esc(m.role_title)+' · بطاقة واحدة</span></button>').join('')+'</div>'
+      :'<p class="empty-cell">لا توجد حسابات إدارية محمّلة بعد.</p>');
 }
 
 /* --- الجدول الأسبوعي: زر الطباعة الإبداعي --- */
@@ -149,6 +221,19 @@ roleDashboard=function(){
     +'<main class="role-main"><h2 class="role-page-title">'+esc(title)+'</h2>'+((views[key]||views.home)())+'</main></div>';
 };
 roleCards=function(){
+  const role=(state.user&&state.user.role)||'member';
+  const kind=cardKindForRole_(role);
+  if(kind==='admin'||kind==='coach'){
+    const model=kind==='admin'?staffCardModel(state.user):selfCoachCardModel();
+    const line=kind==='admin'?'اعرضها في التفتيش الميداني أو عند البوابة؛ صفتك مطبوعة بوضوح.':'اعرضها عند تسجيل الحضور أو في التفتيش الميداني.';
+    return '<section class="card-intro"><div><span class="eyebrow">بطاقتك الرسمية</span><h2>بطاقتك<br>في جيبك.</h2>'
+      +'<p>'+esc(line)+'</p>'
+      +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-role-card">🖨 طباعة بطاقة</button>'
+      +'<button class="btn btn-outline" data-role-page="profile">✎ تعديل ملفي</button></div></div>'
+      +'<div class="membership-card"><span>'+esc(CLUB.name)+'</span><b>🏊</b><strong>بطاقة '+(kind==='admin'?'مسؤول':'مدرب')+'</strong>'
+      +'<small>'+esc(model.role_title||model.group_name||CLUB.unit)+' · '+esc(CLUB.season)+'</small><div><i>'+esc(model.name||'')+'</i><i dir="ltr">'+esc(model.membership_no||'')+'</i></div></div></section>'
+      +'<section class="lux-preview single">'+luxuryCard(model,kind)+'</section>';
+  }
   const me=mySwimmer();
   if(!me)return '<section class="panel"><p class="empty-cell">حسابك غير مربوط ببطاقة انخراط. تواصل مع إدارة النادي لربط رقم العضوية.</p></section>';
   return '<section class="card-intro"><div><span class="eyebrow">بطاقتك الرسمية</span><h2>بطاقة انخراط<br>في جيبك.</h2>'

@@ -18,12 +18,25 @@
 (function () {
   'use strict';
 
+  /* الأدوار التي يضعها صاحب النادي. والمسير يضع منها ما دون الإدارة العليا
+     فقط -- يُحسب له ذلك في `panel`، ويُفرض في الخادم. */
   const ROLES = [
-    ['admin', 'مدير'], ['president', 'رئيس النادي'], ['coach', 'مدرب'],
-    ['member', 'عضو'], ['parent', 'ولي'], ['swimmer_adult', 'سباح بالغ'],
-    ['swimmer_minor', 'سباح صغير']
+    ['manager', 'مسير'], ['admin', 'مدير'], ['president', 'رئيس النادي'],
+    ['coach', 'مدرب'], ['member', 'عضو'], ['parent', 'ولي'],
+    ['swimmer_adult', 'سباح بالغ'], ['swimmer_minor', 'سباح صغير']
   ];
   const label = role => (ROLES.filter(r => r[0] === role)[0] || [role, role])[1];
+
+  /* الأدوار العليا: من يحملها لا يضع له مسير كلمة مرور، ولا يغيّر صلاحيته.
+     والقائمة تطابق `PRIVILEGED_ROLES` في الخادم حرفًا بحرف -- والنسخة هنا
+     للعرض فقط، والفرض في الخادم. */
+  const PRIVILEGED = ['manager', 'admin', 'president'];
+  const isPrivileged = role => PRIVILEGED.indexOf(role) !== -1;
+
+  /* هل الخادم هو خادم Neon؟ إعادة تعيين كلمة المرور تحتاج تجزئةً يكتبها
+     الخادم، وهذا لا يملكه محوّل Firebase. فالإجراء يظهر حيث يعمل فقط. */
+  const apiIsMine = () => typeof window.SADARA_LOCAL_API === 'boolean'
+    && window.SADARA_LOCAL_API === true;
 
   /* What the check found, and a way to act on it.
 
@@ -113,22 +126,39 @@
     if (!Array.isArray(list)) return '';
     const q = String(state.accountsQuery || '').trim();
     const shown = q ? list.filter(a => matchesText(accountHaystack(a), q)) : list;
+    /* من ينظر إلى الصفحة، وما يملك فيها. والمالك يُعرَف بعنوانه (`owner:true`)،
+       لا بالدور `admin` الذي يحمله في الصفّ. */
+    const viewer = state.user || {};
+    const iAmOwner = viewer.owner === true;
     const rows = shown.map(a => {
       const mine = String(a.id) === String(me);
-      const who = a.owner
+      const owner = a.owner === true;
+      /* صفّ لا يُمسّ: صفّي، أو صاحب النادي، أو حساب مسير/مدير ينظر إليه مسير. */
+      const locked = mine || owner || (!iAmOwner && isPrivileged(a.role));
+      const who = owner
         ? '<small class="owner-mark" title="صاحب كل الصلاحيات">★ المالك</small>' : '';
-      const options = mine
+      const pending = a.must_change === true
+        ? '<small class="pass-pending" title="دخل بكلمة مؤقتة ولم يغيّرها بعد">كلمة مؤقتة</small>' : '';
+      const options = locked
         ? '<span class="role-fixed">' + esc(label(a.role)) + '</span>'
         : '<select data-role-for="' + esc(a.id) + '" aria-label="صلاحية ' + esc(a.name || a.email) + '">'
-          + ROLES.map(r => '<option value="' + r[0] + '"'
+          + ROLES.filter(r => iAmOwner || !isPrivileged(r[0])).map(r => '<option value="' + r[0] + '"'
             + (r[0] === a.role ? ' selected' : '') + '>' + r[1] + '</option>').join('')
           + '</select>';
+      /* كلمة مرور مؤقتة جديدة: يكتبها الخادم ويُعيدها مرة واحدة. ولا يظهر
+         الزرّ على محوّل Firebase، لأن كلمة مرور غيره هناك تحتاج دالّة سحابية. */
+      const reset = (!locked && apiIsMine())
+        ? '<button class="check-btn" data-action="reset-account-password" data-id="' + esc(a.id)
+          + '" data-name="' + esc(a.name || a.email || '') + '" data-email="' + esc(a.email || '')
+          + '">كلمة مرور جديدة</button>'
+        : '';
       return '<div class="requirement-row account-row">'
         + '<div class="account-who"><b>' + esc(a.name || a.email || 'حساب') + '</b>'
-        + '<span>' + esc(a.email || '') + who + '</span></div>'
+        + '<span>' + esc(a.email || '') + who + pending + '</span></div>'
         + options
-        + '<button class="check-btn ok" data-action="save-account-role" data-id="'
-        + esc(a.id) + '">حفظ</button>'
+        + reset
+        + (locked ? '' : '<button class="check-btn ok" data-action="save-account-role" data-id="'
+          + esc(a.id) + '">حفظ</button>')
         + '</div>';
     }).join('');
     /* The count is said out loud, and says what was asked for as well as what was
@@ -143,9 +173,10 @@
       : '<p class="hint">لا توجد حسابات.</p>';
     return '<section class="panel settings" id="accounts-panel">'
       + '<div class="panel-head"><div>'
-      + '<h3>صلاحيات الحسابات</h3>'
-      + '<p>من يستطيع الدخول، وما يستطيع أن يفعل. صفك لا يُغيَّر — '
-      + 'استعمل حساباً آخر للتجريب.</p>'
+      + '<h3>الحسابات وكلمات المرور</h3>'
+      + '<p>من يستطيع الدخول، وما يستطيع أن يفعل. كلمة المرور المؤقتة فريدة لكل حساب، '
+      + 'تُعرض مرة واحدة، ويُلزَم صاحبها بتغييرها عند أول دخول. '
+      + 'وصفّك وصفّ المسيرين والمدير العام محميّة.</p>'
       + '</div><div class="toolbar-group">'
       + '<button class="btn btn-outline" data-action="check-duplicate-accounts">فحص الحسابات المكررة</button>'
       + '<button class="btn btn-outline" data-action="reload-accounts">تحديث</button></div></div>'
@@ -156,6 +187,16 @@
       + '<div id="accounts-list">' + (rows || empty) + '</div>'
       + '<div id="duplicate-accounts" hidden></div>'
       + '</section>';
+  };
+
+  /* صفحة مستقلة للحسابات: المسير يحتاج إلى كلمة مرور مؤقتة لمدرب أو سباح،
+     ولا يحتاج بقية الإعدادات (الرسوم، المسابح). فالباب يُفتح على قدر الحاجة. */
+  const corePageViewAccounts = pageView;
+  pageView = function (p) {
+    if (p === 'accounts') {
+      return '<div class="page-root" id="page-root">' + panel(state.accounts, state.user && state.user.id) + '</div>';
+    }
+    return corePageViewAccounts.apply(this, arguments);
   };
 
   const coreAccountsSettings = pageSettings;
@@ -202,13 +243,42 @@
     } catch (_) { state.duplicateAccounts = { groups: [], checked: 0 }; }
   }
 
+  /* الحسابات تُحمَّل لمن يملك إدارتها: المدير العام (admin هنا)، الرئيس،
+     والمسير. والمسير يحتاجها لإعادة تعيين كلمة مرور مدرب أو سباح. */
+  const ACCOUNT_ROLES = ['admin', 'president', 'manager'];
+  const seesAccounts = () => !!state.user && ACCOUNT_ROLES.indexOf(state.user.role) !== -1;
+
   const coreSyncAccounts = syncApi;
   syncApi = async function () {
     await coreSyncAccounts();
-    if (state.user && ['admin', 'president'].indexOf(state.user.role) !== -1) {
+    if (seesAccounts()) {
       await loadAccounts();
     }
   };
+
+  /* نافذة الكلمة المؤقتة: تُعرض مرة واحدة ولا تُحفظ في أي مكان.
+
+     الكلمة لا تُكتب في `state` ولا تُحفظ في التخزين المحلي: من أغلق النافذة
+     ولم ينسخها، أعاد الإجراء. وهذا أخفّ ضررًا من كلمة مرور تبقى في الجهاز
+     لمن يدخل بعده. */
+  function tempPasswordModal(email, password) {
+    document.getElementById('temp-password-modal')?.remove();
+    document.body.insertAdjacentHTML('beforeend',
+      '<div class="modal-backdrop" id="temp-password-modal" role="dialog" aria-modal="true"'
+      + ' aria-label="كلمة مرور مؤقتة">'
+      + '<div class="modal auth-modal temp-pass">'
+      + '<div class="modal-heading"><span class="logo">🔑</span>'
+      + '<h2>كلمة مرور مؤقتة</h2>'
+      + '<p>لحساب <b dir="ltr">' + esc(email || '') + '</b>. تُعرض مرة واحدة، '
+      + 'ولا يمكن استرجاعها بعد الإغلاق.</p></div>'
+      + '<div class="temp-pass-box" id="temp-password-value" dir="ltr">' + esc(password || '') + '</div>'
+      + '<button class="btn btn-primary full" data-action="copy-temp-password">نسخ الكلمة</button>'
+      + '<button class="btn btn-outline full" data-action="close-temp-password">نسختها — إغلاق</button>'
+      + '<p class="hint">سلّمها لصاحبها. عند أول دخول تُطلب منه كلمة خاصة به، '
+      + 'ولا يستطيع تصفّح المنصة قبل أن يضعها.</p>'
+      + '</div></div>');
+    bind();
+  }
 
   const coreActionAccounts = action;
   action = async function (a, el) {
@@ -248,9 +318,54 @@
     }
     if(a==='reload-accounts'){
       await loadAccounts();
-      if (state.page !== 'settings') { state.page = 'settings'; save(); }
+      if (state.page !== 'settings' && state.page !== 'accounts') { state.page = 'accounts'; save(); }
       render();
       showToast('حُدِّثت قائمة الحسابات.');
+      return;
+    }
+    /* ---- كلمة مرور مؤقتة جديدة لمدرب أو سباح ---- */
+    if(a==='reset-account-password'){
+      const id = el.dataset.id;
+      const who = el.dataset.name || el.dataset.email || 'هذا الحساب';
+      if (!confirm('إعادة تعيين كلمة مرور «' + who + '»؟\n\n'
+        + 'ستتوقّف كلمته الحالية عن العمل فورًا، ويُعطى كلمة مؤقتة جديدة '
+        + 'تُعرض لك مرة واحدة. وعند أول دخول يُلزَم بتغييرها.')) return;
+      const res = await api('/api/accounts/reset-password', 'POST', { id })
+        .catch(e => ({ error: (e && e.message) || 'تعذّرت إعادة تعيين كلمة المرور.' }));
+      if (!res || res.error || !res.password) {
+        showToast((res && res.error) || 'تعذّرت إعادة تعيين كلمة المرور.', 'error');
+        return;
+      }
+      const row = (state.accounts || []).find(x => String(x.id) === String(id));
+      if (row) row.must_change = true;
+      save();
+      render();
+      tempPasswordModal(res.email || el.dataset.email, res.password);
+      return;
+    }
+    if(a==='copy-temp-password'){
+      const box = document.getElementById('temp-password-value');
+      const text = box ? box.textContent : '';
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('نُسخت الكلمة. الصقها في رسالة إلى صاحبها.');
+      } catch (_) {
+        /* متصفّح بلا حافظة: نُعلّم النصّ ليُنسخ بيد. */
+        if (box && window.getSelection) {
+          const range = document.createRange();
+          range.selectNodeContents(box);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+          showToast('النصّ محدَّد — انسخه بيدك.', 'error');
+        } else {
+          showToast('تعذّر النسخ التلقائي.', 'error');
+        }
+      }
+      return;
+    }
+    if(a==='close-temp-password'){
+      document.getElementById('temp-password-modal')?.remove();
       return;
     }
     if(a==='save-account-role'){
@@ -273,6 +388,6 @@
   const coreBootAccounts = boot;
   boot = async function () {
     await coreBootAccounts();
-    if (state.user && ['admin', 'president'].indexOf(state.user.role) !== -1) await loadAccounts();
+    if (seesAccounts()) await loadAccounts();
   };
 })();

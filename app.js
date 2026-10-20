@@ -38,7 +38,7 @@ const seed = {
 
 let state = JSON.parse(localStorage.getItem('sadara-state') || 'null') || seed;
 
-state.groups ||= [{id:'g1',name:'المبتدئون',coach:'المدرب سليم',schedule:'السبت والثلاثاء · 16:00'},{id:'g2',name:'المتوسطون',coach:'المدرب سليم',schedule:'الأحد · 17:00'},{id:'g3',name:'المتقدمون',coach:'المدربة نادية',schedule:'الإثنين والخميس · 16:00'}];
+state.groups ||= [];
 
 let save = () => localStorage.setItem('sadara-state', JSON.stringify(state));
 
@@ -4360,6 +4360,57 @@ async function saveProfile(){
 }
 
 /* ---------------------- ربط التعديلات الأربعة ---------------------- */
+/* The rank a card wears. It accepts the card kind the print code passes and the
+   account role the app stores, so the two can never disagree: a card is black
+   because its holder is an administrator, not because a caller remembered. */
+function cardKindForRole_(value){
+  const v = String(value || '').trim().toLowerCase();
+  if (v === 'coach') return 'coach';
+  if (v === 'admin' || v === 'manager' || v === 'owner' || v === 'president') return 'admin';
+  return 'swimmer';
+}
+/* A card for a person who is not a swimmer: the manager, the owner, the coach.
+   The number is their account's own -- never invented from an email. */
+function staffCardModel(u){
+  const account = u || {};
+  const role = String(account.role || '');
+  const titles = { owner: 'المدير العام', admin: 'مدير النادي', manager: 'مسير', president: 'رئيس النادي', coach: 'مدرب' };
+  return {
+    membership_no: account.member_no || account.membership_no || account.id || '',
+    name: account.name || account.display_name || account.email || 'مسؤول',
+    group_name: account.group_name || 'الإدارة',
+    role_title: account.owner ? 'المدير العام' : (titles[role] || 'مسؤول النادي'),
+    specialty: account.specialty || 'مدرب سباحة',
+    experience: account.experience || '—',
+    photo: account.photo || ''
+  };
+}
+/* A coach's own card: their coach file when there is one, the account otherwise,
+   so the badge reads «مدرب» even before the application is approved. */
+function selfCoachCardModel(){
+  const u = state.user || {};
+  const base = staffCardModel(u);
+  const email = String(u.email || '').trim().toLowerCase();
+  const app = email ? coaches().find(c => String(c.coach_email || '').trim().toLowerCase() === email) : null;
+  const file = app ? coachCardModel(app) : {};
+  return Object.assign(base, file, { coach_name: file.coach_name || base.name });
+}
+/* Every administrative card the club may print. The accounts list is loaded on
+   the accounts page; the signed-in administrator is always here even before it. */
+function managerCardModels_(){
+  const out = [];
+  const seen = {};
+  const add = u => {
+    if (!u || cardKindForRole_(u.role) !== 'admin') return;
+    const key = String(u.email || u.id || u.name || '').trim().toLowerCase();
+    if (key && seen[key]) return;
+    if (key) seen[key] = true;
+    out.push(staffCardModel(u));
+  };
+  add(state.user);
+  (state.accounts || []).forEach(add);
+  return out;
+}
 function swimmersActive(){return (state.swimmers||[]).filter(s=>s.status==='نشط'||!s.status);}
 function coaches(){return (state.applications||[]).filter(a=>a.application_type==='coach');}
 function coachCardModel(c){
@@ -4401,7 +4452,20 @@ action=async function(a,el){
     printCardSheets(swimmersActive().map(swimmerCardModel),'swimmer');
     return;
   }
-  if(a==='print-role-card'){const me=mySwimmer();if(me)printCardSheets([swimmerCardModel(me)],'swimmer');else showToast('حسابك غير مربوط ببطاقة انخراط.','error');return}
+  if(a==='print-role-card'){
+    const kind=cardKindForRole_(state.user&&state.user.role);
+    if(kind==='admin'){printCardSheets([staffCardModel(state.user)],'admin');return}
+    if(kind==='coach'){printCardSheets([selfCoachCardModel()],'coach');return}
+    const me=mySwimmer();if(me)printCardSheets([swimmerCardModel(me)],'swimmer');else showToast('حسابك غير مربوط ببطاقة انخراط.','error');return
+  }
+  if(a==='print-lux-admins'){printCardSheets(managerCardModels_(),'admin');return}
+  if(a==='print-admin-card'){
+    const key=String(el.dataset.id);
+    const card=managerCardModels_().find(m=>String(m.membership_no)===key||String(m.name)===key);
+    if(card)printCardSheets([card],'admin');
+    else showToast('تعذّر العثور على بطاقة المسؤول.','error');
+    return;
+  }
   if(a==='print-lux-one'){
     const s=(state.swimmers||[]).find(x=>String(x.id)===String(el.dataset.id));
     if(s)printCardSheets([swimmerCardModel(s)],'swimmer');
@@ -4452,6 +4516,7 @@ function pageCards(){
   const list=(state.swimmers||[]).filter(s=>s.status==='نشط'||!s.status);
   const models=list.map(swimmerCardModel);
   const coachModels=coaches().map(coachCardModel);
+  const staffModels=managerCardModels_();
   return '<section class="card-intro"><div><span class="eyebrow">بطاقة انخراط النادي</span><h2>بطاقات أنيقة<br>برقم التسجيل.</h2>'
     +'<p>التصميم المعتمد للنادي — 85 × 52 مم — عشر بطاقات في ورقة A4 واحدة.</p>'
     +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-cards">🖨 طباعة كل البطاقات</button>'
@@ -4474,7 +4539,14 @@ function pageCards(){
     +(coachModels.length?'<section class="lux-preview">'+coachModels.map(m=>luxuryCard(m,'coach')).join('')+'</section>'
       +'<div class="official-forms-list" style="margin-top:14px">'+coachModels.map(m=>
         '<button data-action="print-coach-luxtour" data-id="'+esc(m.membership_no)+'"><b>'+esc(m.coach_name)+'</b><span>'+esc(m.specialty)+' · بطاقة واحدة</span></button>').join('')+'</div>'
-      :'<p class="empty-cell">لا توجد طلبات مدربين بعد.</p>');
+      :'<p class="empty-cell">لا توجد طلبات مدربين بعد.</p>')
+
+    +'<div class="toolbar" style="margin-top:26px"><span class="page-description">بطاقات المسؤولين ('+staffModels.length+') — الإدارة والمدير والمسيرون</span>'
+    +'<div class="toolbar-group"><button class="btn btn-primary" data-action="print-lux-admins">🖤 طباعة بطاقات المسؤولين</button></div></div>'
+    +(staffModels.length?'<section class="lux-preview">'+staffModels.map(m=>luxuryCard(m,'admin')).join('')+'</section>'
+      +'<div class="official-forms-list" style="margin-top:14px">'+staffModels.map(m=>
+        '<button data-action="print-admin-card" data-id="'+esc(m.membership_no)+'"><b>'+esc(m.name)+'</b><span>'+esc(m.role_title)+' · بطاقة واحدة</span></button>').join('')+'</div>'
+      :'<p class="empty-cell">لا توجد حسابات إدارية محمّلة بعد.</p>');
 }
 
 /* --- الجدول الأسبوعي: زر الطباعة الإبداعي --- */
@@ -4510,6 +4582,19 @@ roleDashboard=function(){
     +'<main class="role-main"><h2 class="role-page-title">'+esc(title)+'</h2>'+((views[key]||views.home)())+'</main></div>';
 };
 roleCards=function(){
+  const role=(state.user&&state.user.role)||'member';
+  const kind=cardKindForRole_(role);
+  if(kind==='admin'||kind==='coach'){
+    const model=kind==='admin'?staffCardModel(state.user):selfCoachCardModel();
+    const line=kind==='admin'?'اعرضها في التفتيش الميداني أو عند البوابة؛ صفتك مطبوعة بوضوح.':'اعرضها عند تسجيل الحضور أو في التفتيش الميداني.';
+    return '<section class="card-intro"><div><span class="eyebrow">بطاقتك الرسمية</span><h2>بطاقتك<br>في جيبك.</h2>'
+      +'<p>'+esc(line)+'</p>'
+      +'<div class="hero-actions"><button class="btn btn-primary" data-action="print-role-card">🖨 طباعة بطاقة</button>'
+      +'<button class="btn btn-outline" data-role-page="profile">✎ تعديل ملفي</button></div></div>'
+      +'<div class="membership-card"><span>'+esc(CLUB.name)+'</span><b>🏊</b><strong>بطاقة '+(kind==='admin'?'مسؤول':'مدرب')+'</strong>'
+      +'<small>'+esc(model.role_title||model.group_name||CLUB.unit)+' · '+esc(CLUB.season)+'</small><div><i>'+esc(model.name||'')+'</i><i dir="ltr">'+esc(model.membership_no||'')+'</i></div></div></section>'
+      +'<section class="lux-preview single">'+luxuryCard(model,kind)+'</section>';
+  }
   const me=mySwimmer();
   if(!me)return '<section class="panel"><p class="empty-cell">حسابك غير مربوط ببطاقة انخراط. تواصل مع إدارة النادي لربط رقم العضوية.</p></section>';
   return '<section class="card-intro"><div><span class="eyebrow">بطاقتك الرسمية</span><h2>بطاقة انخراط<br>في جيبك.</h2>'
@@ -6189,13 +6274,6 @@ function categoryLabel_(key) {
   return groupCategories_()[String(key || '')] || '';
 }
 
-/* فوج لا يعرّفه النادي وإنما يحمله سجل. معرّفه اسمه: لا شيء خارج هذه
-   الصفحة يحتاج أن يعرفه، والاسم هو الشيء الوحيد المتطابق فعلًا على كل
-   جهاز فيه السجل. */
-function derivedGroupId_(name) {
-  return 'derived:' + String(name == null ? '' : name).trim();
-}
-
 /* ---------------- الشكل والحفظ ---------------- */
 
 /* الفوج كما يكتبه الخادم: عشرة حقول، لا لافتة داخلها.
@@ -6269,7 +6347,11 @@ function filterGroupNames(selected) {
   const out = [];
   const seen = new Set();
   const swimmers = state.swimmers || [];
-  for (const name of [UNASSIGNED_NAME].concat((groups() || []).map(g => String((g && g.name) || '').trim()))) {
+  /* الأفواج المعرَّفة، ثم الأسماء التي تحملها السجلات. والثاني ليس فوجًا:
+     هو عنوان مؤقّت لطفل ينتظر التوزيع، ووجوده في التصفية يجعله يُوجد. */
+  const names = [UNASSIGNED_NAME].concat(managerGroups_().map(g => String((g && g.name) || '').trim()));
+  swimmers.forEach(s => names.push(String((s && s.group) || '').trim()));
+  for (const name of names) {
     if (!name || seen.has(name)) continue;
     if (!swimmers.some(s => String(s.group || '').trim() === name)) continue;
     seen.add(name); out.push(name);
@@ -6293,10 +6375,15 @@ function inlineGroupCell(s) {
     + '</select>';
 }
 
-/* إعادة بناء قائمة الصفحة من القائمة المشتركة.
-   ولماذا تُضاف الأسماء التي تحملها السجلات: الحساب الذي يقرأ قبل أن يُحفظ
-   شيء يجب أن يعرض ما على السباحين، وإلا رأى المدير ناديًا بلا أفواج. وهذه
-   الأسماء مشتقّة لا تُكتب، وتختفي من تلقائها بعد أول حفظ يضمّها. */
+/* إعادة بناء قائمة الصفحة من القائمة المشتركة وحدها.
+
+   وكانت تُضاف إليها أسماء يحملها السباحون ولا يعرّفها النادي، فتعود الأفواج
+   المحذوفة بعد كل قراءة: يحذف المسير «المبتدئون»، فتعود لأن سباحًا واحدًا
+   ما زال يحمل الاسم على بطاقته. وهذا قلبٌ للقاعدة: القائمة قائمة النادي،
+   ومن ليس في فوج معرَّف ينتظر في «غير مفرز» حتى يوزّعه المسير.
+
+   فلا اسم يدخل القائمة إلا من `config/groups`. والاسم الذي على السجل يبقى
+   على السجل، ويُعرض في الاستمارة وفي التصفية، ولا يصير فوجًا من تلقاء نفسه. */
 function adoptGroups_(served) {
   const manager = [];
   const seen = new Set();
@@ -6320,15 +6407,7 @@ function adoptGroups_(served) {
       source: 'manager'
     });
   });
-  const derived = [];
-  (state.swimmers || []).forEach(s => {
-    const name = String((s && s.group) || '').trim();
-    if (!name || name === UNASSIGNED_NAME || seen.has(name)) return;
-    seen.add(name);
-    derived.push({ id: derivedGroupId_(name), name: name, category: '', days: [], start: '', end: '',
-      capacity: 0, coach: '', assistants: [], pool: '', notes: '', members: 0, source: 'derived' });
-  });
-  state.groups = manager.concat(derived);
+  state.groups = manager;
 }
 
 /* مركز الأفواج كاملًا: القائمة والفئات والأيام وعدد غير المفرزين.
@@ -6677,8 +6756,7 @@ async function saveGroupFromForm_() {
   if (dup) { showToast('اسم الفوج «' + g.name + '» مستعمل. لكل فوج اسم واحد.', 'error'); return; }
 
   const list = managerGroups_().filter(x => String(x.id) !== String(g.id)).concat([g]);
-  state.groups = list.concat((state.groups || []).filter(x => x.source === 'derived'
-    && !list.some(m => String(m.name) === String(x.name))));
+  state.groups = list;
   save();
   if (document.querySelector('.modal-backdrop')) document.querySelector('.modal-backdrop').remove();
   renderPageOnly();
@@ -6700,7 +6778,7 @@ async function deleteGroup_(id) {
     + '\n\nلا يمكن التراجع عن حذف الفوج نفسه.');
   if (!ok) return;
   const list = managerGroups_().filter(x => String(x.id) !== String(id));
-  state.groups = list.concat((state.groups || []).filter(x => x.source === 'derived'));
+  state.groups = list;
   save();
   if (document.querySelector('.modal-backdrop')) document.querySelector('.modal-backdrop').remove();
   renderPageOnly();
@@ -6718,17 +6796,15 @@ function assignUnassigned_() {
   showToast('اختر الفوج الجديد من خانة الفوج في الجدول.', 'info');
 }
 
-/* ملاحظة على فوج يحمله سباحون ولا يعرّفه النادي. */
-function groupSourceNote(g) {
-  return g && g.source === 'derived'
-    ? '<p class="group-source">اسم يحمله سباحون · غير معرَّف في قائمة الأفواج</p>'
-    : '';
+/* ملاحظة على فوج: لم تعد هناك أفواج مشتقّة من السجلات، فكل بطاقة فوج
+   يعرّفه النادي. تُبقي الدالة شكل النداء لمن قد يقرأها. */
+function groupSourceNote() {
+  return '';
 }
 
 /* زرّا التعديل والحذف على البطاقة. الحذف لصاحب النادي وحده، والحذف على فوج
    مشتقّ لا معنى له: ليس في القائمة أصلًا. */
 function groupDeleteButton(g) {
-  if (g && g.source === 'derived') return '';
   if (!canSetGroup()) return '';
   return '<button class="check-btn" data-action="edit-group" data-group="' + esc(g.id) + '">تعديل</button>'
     + '<button class="check-btn no" data-action="delete-group" data-group="' + esc(g.id) + '">حذف</button>';
@@ -6748,10 +6824,9 @@ function groupDaysLine_(g) {
 }
 
 function groupCard_(g) {
-  const members = g.source === 'derived' ? swimmersOf(g.name).length : Number(g.members || 0);
+  const members = Number(g.members || 0);
   const capacity = Number(g.capacity || 0);
   const full = capacity && members > capacity;
-  const derived = g.source === 'derived';
   const bits = [];
   if (g.category) bits.push('<span class="group-badge">' + esc(categoryLabel_(g.category)) + '</span>');
   if (g.start && g.end) bits.push('<span class="group-badge time">🕒 ' + esc(g.start + ' – ' + g.end) + '</span>');
@@ -6760,12 +6835,11 @@ function groupCard_(g) {
   const helpers = Array.isArray(g.assistants) ? g.assistants.filter(Boolean) : [];
   const days = groupDaysLine_(g);
 
-  return '<article class="group-card' + (derived ? ' is-derived' : '') + '" data-group="' + esc(g.id) + '">'
+  return '<article class="group-card" data-group="' + esc(g.id) + '">'
     + '<div class="group-card-head"><span class="stat-icon blue">♟</span>'
-    + (derived ? '<span class="status warn">اسم غير معرَّف</span>' : '<span class="status success">نشط</span>')
+    + '<span class="status success">نشط</span>'
     + '</div>'
     + '<h3>' + esc(g.name) + '</h3>'
-    + groupSourceNote(g)
     + (bits.length ? '<div class="group-badges">' + bits.join('') + '</div>' : '')
     + (days ? '<p><b>أيام التدريب:</b> ' + esc(days) + '</p>' : (g.schedule ? '<p><b>البرنامج:</b> ' + esc(g.schedule) + '</p>' : ''))
     + '<p><b>المدرب الرئيسي:</b> ' + esc(g.coach || '—')
@@ -6786,9 +6860,7 @@ function groupCard_(g) {
    والترتيب مقصود: شريط «غير مفرز» يعلو البطاقات، لأن فيه أطفالًا بلا فوج
    ينتظرون قرارًا؛ وما تحته جدول منظّم للطباعة. */
 pageGroups = function () {
-  const list = managerGroups_();
-  const bands = (state.groups || []).filter(g => g && g.source === 'derived');
-  const all = list.concat(bands);
+  const all = managerGroups_();
 
   return '<div class="toolbar"><span class="page-description">عرّف الأفواج بفئاتها وأيامها وتوقيتها وطاقمها — وينتشر التعديل على بطاقات المنخرطين فورًا.</span>'
     + '<div class="toolbar-group">' + printBtn('print-groups', 'طباعة قائمة الأفواج A4')
@@ -6803,8 +6875,8 @@ pageGroups = function () {
     + '<div class="table-scroll"><table><thead><tr>'
     + '<th>الفوج</th><th>الفئة</th><th>الأيام والتوقيت</th><th>الطاقم التدريبي</th><th>المسبح</th><th>العدد</th>'
     + '</tr></thead><tbody>'
-    + (list.length
-      ? list.map(g => '<tr><td><b>' + esc(g.name) + '</b></td>'
+    + (all.length
+      ? all.map(g => '<tr><td><b>' + esc(g.name) + '</b></td>'
         + '<td>' + esc(categoryLabel_(g.category) || '—') + '</td>'
         + '<td>' + esc(groupScheduleLine_(g)) + '</td>'
         + '<td>' + esc(groupCoachesLine_(g)) + '</td>'
@@ -7544,8 +7616,15 @@ function printOfficialForms(list){
    المطبوع تحته، من قيمة واحدة، فيستحيل أن يدلّ الرمز على غير الرقم الذي بجانبه.
    ========================================================== */
 function luxuryCard(p, kind){
-  const coach = kind === 'coach';
-  const roleLabel = coach ? 'مدرب' : 'سباح';
+  /* The card wears the rank of the person holding it.
+     A swimmer keeps the club's blue; a coach takes the red accent; and every
+     administrative rank -- owner, manager, admin, president -- takes the black
+     one. The base layout, the photograph, and above all the QR are untouched:
+     the rank changes the colours and the word on the badge, nothing else. */
+  const roleKind = cardKindForRole_(kind);
+  const coach = roleKind === 'coach';
+  const admin = roleKind === 'admin';
+  const roleLabel = admin ? 'مسؤول' : (coach ? 'مدرب' : 'سباح');
   const name = p.coach_name || p.name || '';
   const fr = p.first_name_fr ? (p.first_name_fr + ' ' + (p.last_name_fr || '')).trim() : '';
   const no = clubDigits(p.membership_no || p.id || '');
@@ -7563,7 +7642,9 @@ function luxuryCard(p, kind){
      asked to wrap, because on a fifty-four millimetre card two lines of eleven
      points is a name that reaches the picture. */
   const longName = name.trim().length > 20 ? ' is-long' : '';
-  const rows = coach
+  const rows = admin
+    ? [['الصفة', p.role_title || 'مسؤول النادي'], ['الفوج', p.group_name || 'الإدارة']]
+    : coach
     ? [['التخصص', p.specialty || 'مدرب سباحة'], ['سنوات الخبرة', clubDigits((p.experience || '—') + ' سنة')],
        ['الفوج', p.group_name || 'الطاقم الفني']]
     : [['الفوج', p.group_name || '—'], ['فصيلة الدم', p.blood_group || '—']];
@@ -7572,7 +7653,7 @@ function luxuryCard(p, kind){
      on eighty-six millimetres is the card saying nothing else. */
   rows.push(['الموسم الرياضي', clubDigits(CLUB.season)]);
   return '' +
-  '<article class="lux-card ' + (coach ? 'is-coach' : 'is-swimmer') + '" data-no="' + esc(no) + '">' +
+  '<article class="lux-card is-' + roleKind + '" data-no="' + esc(no) + '">' +
     '<div class="lux-side">' +
       '<span class="lux-stars">' + STAR + STAR + STAR + '</span>' +
       '<img class="lux-logo" src="' + esc(assetUrl('assets/logo.png')) + '" alt="">' +
@@ -8555,15 +8636,13 @@ action=async function(a,el){
     });
     return;
   }
-  if(a==='delete-group'){
-    const g=(state.groups||[]).find(x=>x.id===el.dataset.group);
-    confirmDialog('حذف الفوج «' + ((g&&g.name)||'') + '»؟ لن تتأثر بيانات سباحيه.','حذف', () => {
-      state.groups=(state.groups||[]).filter(x=>x.id!==el.dataset.group);
-      logDecision('حذف فوج','group',el.dataset.group,{name:g&&g.name});
-      save(); render(); showToast('تم حذف الفوج.');
-    });
-    return;
-  }
+  /* حذف الفوج: مقصود ألّا يُعالَج هنا.
+
+     كان لهذه الطبقة معالج `delete-group` قديم يحذف من `state.groups` وحدها
+     ولا يكتب على الخادم. ولأنها تُلبَّس بعد طبقة الأفواج، كانت تسبقها: المسير
+     يضغط «حذف» على صفحة الأفواج، فيُحذف الفوج من الشاشة، ثم تعود القائمة من
+     الخادم في القراءة التالية -- فيظنّ أن الحذف لا يعمل. والحذف الحقيقي، مع
+     نقل المنخرطين إلى «غير مفرز»، في `part-groups.js`. */
   if(a==='mark-all-present'){
     const list=state.swimmers||[];
     if(!list.length){showToast('لا يوجد سباحون لتسجيل حضورهم.','error');return}
@@ -9128,12 +9207,25 @@ boot = async function () {
 (function () {
   'use strict';
 
+  /* الأدوار التي يضعها صاحب النادي. والمسير يضع منها ما دون الإدارة العليا
+     فقط -- يُحسب له ذلك في `panel`، ويُفرض في الخادم. */
   const ROLES = [
-    ['admin', 'مدير'], ['president', 'رئيس النادي'], ['coach', 'مدرب'],
-    ['member', 'عضو'], ['parent', 'ولي'], ['swimmer_adult', 'سباح بالغ'],
-    ['swimmer_minor', 'سباح صغير']
+    ['manager', 'مسير'], ['admin', 'مدير'], ['president', 'رئيس النادي'],
+    ['coach', 'مدرب'], ['member', 'عضو'], ['parent', 'ولي'],
+    ['swimmer_adult', 'سباح بالغ'], ['swimmer_minor', 'سباح صغير']
   ];
   const label = role => (ROLES.filter(r => r[0] === role)[0] || [role, role])[1];
+
+  /* الأدوار العليا: من يحملها لا يضع له مسير كلمة مرور، ولا يغيّر صلاحيته.
+     والقائمة تطابق `PRIVILEGED_ROLES` في الخادم حرفًا بحرف -- والنسخة هنا
+     للعرض فقط، والفرض في الخادم. */
+  const PRIVILEGED = ['manager', 'admin', 'president'];
+  const isPrivileged = role => PRIVILEGED.indexOf(role) !== -1;
+
+  /* هل الخادم هو خادم Neon؟ إعادة تعيين كلمة المرور تحتاج تجزئةً يكتبها
+     الخادم، وهذا لا يملكه محوّل Firebase. فالإجراء يظهر حيث يعمل فقط. */
+  const apiIsMine = () => typeof window.SADARA_LOCAL_API === 'boolean'
+    && window.SADARA_LOCAL_API === true;
 
   /* What the check found, and a way to act on it.
 
@@ -9223,22 +9315,39 @@ boot = async function () {
     if (!Array.isArray(list)) return '';
     const q = String(state.accountsQuery || '').trim();
     const shown = q ? list.filter(a => matchesText(accountHaystack(a), q)) : list;
+    /* من ينظر إلى الصفحة، وما يملك فيها. والمالك يُعرَف بعنوانه (`owner:true`)،
+       لا بالدور `admin` الذي يحمله في الصفّ. */
+    const viewer = state.user || {};
+    const iAmOwner = viewer.owner === true;
     const rows = shown.map(a => {
       const mine = String(a.id) === String(me);
-      const who = a.owner
+      const owner = a.owner === true;
+      /* صفّ لا يُمسّ: صفّي، أو صاحب النادي، أو حساب مسير/مدير ينظر إليه مسير. */
+      const locked = mine || owner || (!iAmOwner && isPrivileged(a.role));
+      const who = owner
         ? '<small class="owner-mark" title="صاحب كل الصلاحيات">★ المالك</small>' : '';
-      const options = mine
+      const pending = a.must_change === true
+        ? '<small class="pass-pending" title="دخل بكلمة مؤقتة ولم يغيّرها بعد">كلمة مؤقتة</small>' : '';
+      const options = locked
         ? '<span class="role-fixed">' + esc(label(a.role)) + '</span>'
         : '<select data-role-for="' + esc(a.id) + '" aria-label="صلاحية ' + esc(a.name || a.email) + '">'
-          + ROLES.map(r => '<option value="' + r[0] + '"'
+          + ROLES.filter(r => iAmOwner || !isPrivileged(r[0])).map(r => '<option value="' + r[0] + '"'
             + (r[0] === a.role ? ' selected' : '') + '>' + r[1] + '</option>').join('')
           + '</select>';
+      /* كلمة مرور مؤقتة جديدة: يكتبها الخادم ويُعيدها مرة واحدة. ولا يظهر
+         الزرّ على محوّل Firebase، لأن كلمة مرور غيره هناك تحتاج دالّة سحابية. */
+      const reset = (!locked && apiIsMine())
+        ? '<button class="check-btn" data-action="reset-account-password" data-id="' + esc(a.id)
+          + '" data-name="' + esc(a.name || a.email || '') + '" data-email="' + esc(a.email || '')
+          + '">كلمة مرور جديدة</button>'
+        : '';
       return '<div class="requirement-row account-row">'
         + '<div class="account-who"><b>' + esc(a.name || a.email || 'حساب') + '</b>'
-        + '<span>' + esc(a.email || '') + who + '</span></div>'
+        + '<span>' + esc(a.email || '') + who + pending + '</span></div>'
         + options
-        + '<button class="check-btn ok" data-action="save-account-role" data-id="'
-        + esc(a.id) + '">حفظ</button>'
+        + reset
+        + (locked ? '' : '<button class="check-btn ok" data-action="save-account-role" data-id="'
+          + esc(a.id) + '">حفظ</button>')
         + '</div>';
     }).join('');
     /* The count is said out loud, and says what was asked for as well as what was
@@ -9253,9 +9362,10 @@ boot = async function () {
       : '<p class="hint">لا توجد حسابات.</p>';
     return '<section class="panel settings" id="accounts-panel">'
       + '<div class="panel-head"><div>'
-      + '<h3>صلاحيات الحسابات</h3>'
-      + '<p>من يستطيع الدخول، وما يستطيع أن يفعل. صفك لا يُغيَّر — '
-      + 'استعمل حساباً آخر للتجريب.</p>'
+      + '<h3>الحسابات وكلمات المرور</h3>'
+      + '<p>من يستطيع الدخول، وما يستطيع أن يفعل. كلمة المرور المؤقتة فريدة لكل حساب، '
+      + 'تُعرض مرة واحدة، ويُلزَم صاحبها بتغييرها عند أول دخول. '
+      + 'وصفّك وصفّ المسيرين والمدير العام محميّة.</p>'
       + '</div><div class="toolbar-group">'
       + '<button class="btn btn-outline" data-action="check-duplicate-accounts">فحص الحسابات المكررة</button>'
       + '<button class="btn btn-outline" data-action="reload-accounts">تحديث</button></div></div>'
@@ -9266,6 +9376,16 @@ boot = async function () {
       + '<div id="accounts-list">' + (rows || empty) + '</div>'
       + '<div id="duplicate-accounts" hidden></div>'
       + '</section>';
+  };
+
+  /* صفحة مستقلة للحسابات: المسير يحتاج إلى كلمة مرور مؤقتة لمدرب أو سباح،
+     ولا يحتاج بقية الإعدادات (الرسوم، المسابح). فالباب يُفتح على قدر الحاجة. */
+  const corePageViewAccounts = pageView;
+  pageView = function (p) {
+    if (p === 'accounts') {
+      return '<div class="page-root" id="page-root">' + panel(state.accounts, state.user && state.user.id) + '</div>';
+    }
+    return corePageViewAccounts.apply(this, arguments);
   };
 
   const coreAccountsSettings = pageSettings;
@@ -9312,13 +9432,42 @@ boot = async function () {
     } catch (_) { state.duplicateAccounts = { groups: [], checked: 0 }; }
   }
 
+  /* الحسابات تُحمَّل لمن يملك إدارتها: المدير العام (admin هنا)، الرئيس،
+     والمسير. والمسير يحتاجها لإعادة تعيين كلمة مرور مدرب أو سباح. */
+  const ACCOUNT_ROLES = ['admin', 'president', 'manager'];
+  const seesAccounts = () => !!state.user && ACCOUNT_ROLES.indexOf(state.user.role) !== -1;
+
   const coreSyncAccounts = syncApi;
   syncApi = async function () {
     await coreSyncAccounts();
-    if (state.user && ['admin', 'president'].indexOf(state.user.role) !== -1) {
+    if (seesAccounts()) {
       await loadAccounts();
     }
   };
+
+  /* نافذة الكلمة المؤقتة: تُعرض مرة واحدة ولا تُحفظ في أي مكان.
+
+     الكلمة لا تُكتب في `state` ولا تُحفظ في التخزين المحلي: من أغلق النافذة
+     ولم ينسخها، أعاد الإجراء. وهذا أخفّ ضررًا من كلمة مرور تبقى في الجهاز
+     لمن يدخل بعده. */
+  function tempPasswordModal(email, password) {
+    document.getElementById('temp-password-modal')?.remove();
+    document.body.insertAdjacentHTML('beforeend',
+      '<div class="modal-backdrop" id="temp-password-modal" role="dialog" aria-modal="true"'
+      + ' aria-label="كلمة مرور مؤقتة">'
+      + '<div class="modal auth-modal temp-pass">'
+      + '<div class="modal-heading"><span class="logo">🔑</span>'
+      + '<h2>كلمة مرور مؤقتة</h2>'
+      + '<p>لحساب <b dir="ltr">' + esc(email || '') + '</b>. تُعرض مرة واحدة، '
+      + 'ولا يمكن استرجاعها بعد الإغلاق.</p></div>'
+      + '<div class="temp-pass-box" id="temp-password-value" dir="ltr">' + esc(password || '') + '</div>'
+      + '<button class="btn btn-primary full" data-action="copy-temp-password">نسخ الكلمة</button>'
+      + '<button class="btn btn-outline full" data-action="close-temp-password">نسختها — إغلاق</button>'
+      + '<p class="hint">سلّمها لصاحبها. عند أول دخول تُطلب منه كلمة خاصة به، '
+      + 'ولا يستطيع تصفّح المنصة قبل أن يضعها.</p>'
+      + '</div></div>');
+    bind();
+  }
 
   const coreActionAccounts = action;
   action = async function (a, el) {
@@ -9358,9 +9507,54 @@ boot = async function () {
     }
     if(a==='reload-accounts'){
       await loadAccounts();
-      if (state.page !== 'settings') { state.page = 'settings'; save(); }
+      if (state.page !== 'settings' && state.page !== 'accounts') { state.page = 'accounts'; save(); }
       render();
       showToast('حُدِّثت قائمة الحسابات.');
+      return;
+    }
+    /* ---- كلمة مرور مؤقتة جديدة لمدرب أو سباح ---- */
+    if(a==='reset-account-password'){
+      const id = el.dataset.id;
+      const who = el.dataset.name || el.dataset.email || 'هذا الحساب';
+      if (!confirm('إعادة تعيين كلمة مرور «' + who + '»؟\n\n'
+        + 'ستتوقّف كلمته الحالية عن العمل فورًا، ويُعطى كلمة مؤقتة جديدة '
+        + 'تُعرض لك مرة واحدة. وعند أول دخول يُلزَم بتغييرها.')) return;
+      const res = await api('/api/accounts/reset-password', 'POST', { id })
+        .catch(e => ({ error: (e && e.message) || 'تعذّرت إعادة تعيين كلمة المرور.' }));
+      if (!res || res.error || !res.password) {
+        showToast((res && res.error) || 'تعذّرت إعادة تعيين كلمة المرور.', 'error');
+        return;
+      }
+      const row = (state.accounts || []).find(x => String(x.id) === String(id));
+      if (row) row.must_change = true;
+      save();
+      render();
+      tempPasswordModal(res.email || el.dataset.email, res.password);
+      return;
+    }
+    if(a==='copy-temp-password'){
+      const box = document.getElementById('temp-password-value');
+      const text = box ? box.textContent : '';
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('نُسخت الكلمة. الصقها في رسالة إلى صاحبها.');
+      } catch (_) {
+        /* متصفّح بلا حافظة: نُعلّم النصّ ليُنسخ بيد. */
+        if (box && window.getSelection) {
+          const range = document.createRange();
+          range.selectNodeContents(box);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+          showToast('النصّ محدَّد — انسخه بيدك.', 'error');
+        } else {
+          showToast('تعذّر النسخ التلقائي.', 'error');
+        }
+      }
+      return;
+    }
+    if(a==='close-temp-password'){
+      document.getElementById('temp-password-modal')?.remove();
       return;
     }
     if(a==='save-account-role'){
@@ -9383,7 +9577,7 @@ boot = async function () {
   const coreBootAccounts = boot;
   boot = async function () {
     await coreBootAccounts();
-    if (state.user && ['admin', 'president'].indexOf(state.user.role) !== -1) await loadAccounts();
+    if (seesAccounts()) await loadAccounts();
   };
 })();
 
@@ -10207,8 +10401,12 @@ const ROLE_META_ = {
 };
 
 /* الأدوار التي تدخل بشريط جانبي. والمالك يعلو على دور الحساب، كما في الخادم:
-   `roles.js` يقرأ config/owners قبل عمود role، وهذا يقرأ `user.owner` قبله. */
-const MANAGER_ROLE_KEYS_ = ['owner', 'admin', 'president'];
+   `roles.js` يقرأ config/owners قبل عمود role، وهذا يقرأ `user.owner` قبله.
+
+   و`manager` صار إداريًا كاملًا -- يدير الأفواج والسباحين والمدربين -- بعد أن
+   كان «ماسحًا» في القاعدة الأولى. والحسابات العليا تبقى محميّة في الخادم:
+   لا يغيّر المسير صلاحية مسير ولا كلمة مروره. */
+const MANAGER_ROLE_KEYS_ = ['owner', 'admin', 'president', 'manager'];
 const STAFF_ROLE_KEYS_   = ['owner', 'admin', 'president', 'manager', 'coach'];
 
 function roleKey_() {
@@ -10238,11 +10436,11 @@ const SIDE_LAYOUT_ = [
   {
     group: 'الأعضاء',
     items: [
-      { key: 'users',         label: 'السباحون',          icon: '♙', roles: ['owner', 'admin', 'president'] },
-      { key: 'applications',  label: 'طلبات التسجيل',     icon: '◈', roles: ['owner', 'admin', 'president'] },
-      { key: 'subscriptions', label: 'الاشتراكات',        icon: '◈', roles: ['owner', 'admin', 'president'] },
-      { key: 'card',          label: 'بطاقات الانخراط',   icon: '▣', roles: ['owner', 'admin', 'president', 'coach'] },
-      { key: 'groups',        label: 'الأفواج والمدربون', icon: '♟', roles: ['owner', 'admin', 'president'] }
+      { key: 'users',         label: 'السباحون',          icon: '♙', roles: ['owner', 'admin', 'president', 'manager'] },
+      { key: 'applications',  label: 'طلبات التسجيل',     icon: '◈', roles: ['owner', 'admin', 'president', 'manager'] },
+      { key: 'subscriptions', label: 'الاشتراكات',        icon: '◈', roles: ['owner', 'admin', 'president', 'manager'] },
+      { key: 'card',          label: 'بطاقات الانخراط',   icon: '▣', roles: ['owner', 'admin', 'president', 'manager', 'coach'] },
+      { key: 'groups',        label: 'الأفواج والمدربون', icon: '♟', roles: ['owner', 'admin', 'president', 'manager'] }
     ]
   },
   {
@@ -10254,7 +10452,8 @@ const SIDE_LAYOUT_ = [
   {
     group: 'النظام',
     items: [
-      { key: 'audit', label: 'سجل التدقيق', icon: '⚑', roles: ['owner', 'admin', 'president'] }
+      { key: 'accounts', label: 'الحسابات وكلمات المرور', icon: '⚿', roles: ['owner', 'admin', 'president', 'manager'] },
+      { key: 'audit', label: 'سجل التدقيق', icon: '⚑', roles: ['owner', 'admin', 'president', 'manager'] }
     ]
   }
 ];
@@ -10271,6 +10470,9 @@ function sideGroupsFor_(role) {
 function allowedPagesFor_(role) {
   const out = [];
   sideGroupsFor_(role).forEach(g => g.items.forEach(it => out.push(it.key)));
+  /* الملف الشخصي لكل من دخل: منه تُغيَّر كلمة المرور، ولا يجوز أن يكون
+     مدفونًا خلف صفحة لا يملكها. */
+  out.push('profile');
   if (MANAGER_ROLE_KEYS_.indexOf(role) !== -1) out.push('settings');
   return out;
 }
@@ -10279,6 +10481,7 @@ function pageLabelFor_(role, page) {
   let label = 'نظرة عامة';
   SIDE_LAYOUT_.forEach(g => g.items.forEach(it => { if (it.key === page) label = it.label; }));
   if (page === 'settings') label = 'الإعدادات';
+  if (page === 'profile') label = 'ملفي وكلمة المرور';
   return label;
 }
 
@@ -10300,8 +10503,9 @@ function sideAsideHtml_(role, page, user) {
   ).join('');
 
   const bottom = (MANAGER_ROLE_KEYS_.indexOf(role) !== -1
-    ? '<a data-page="settings"><i>⚙</i>الإعدادات</a>'
+    ? '<a class="' + (page === 'settings' ? 'active' : '') + '" data-page="settings"><i>⚙</i>الإعدادات</a>'
     : '')
+    + '<a class="' + (page === 'profile' ? 'active' : '') + '" data-page="profile"><i>🔑</i>ملفي وكلمة المرور</a>'
     + '<a data-action="logout"><i>↪</i>تسجيل الخروج</a>';
 
   return '<aside class="sidebar role-' + esc(role) + ' tone-' + esc(meta.tone) + '">'
@@ -10392,6 +10596,74 @@ dashboard = function () {
     + body
     + '</main></div>';
 };
+
+/* ============================================================================
+   شريط الميدان — part-mobile.js
+
+   On a phone the sidebar folds to a column of icons at the edge of the screen,
+   and the three things a coach actually does at the pool -- scan a card, open
+   the attendance sheet, change a password -- are a thumb's width away from each
+   other and one mis-tap apart. And the sidebar scrolls away with the page.
+
+   So on a narrow screen the three are lifted out into a bar fixed to the bottom
+   of the viewport, where a thumb already is, each one at least 48 pixels tall.
+   It is drawn only for the accounts that may press them, and only on a phone:
+   on a desk the sidebar is already there and a second copy would be noise.
+
+   The bar lives outside the rendered page, so a redraw does not take it away
+   and does not stack a second one on top of the first.
+   ========================================================================= */
+(function () {
+  'use strict';
+
+  const STAFF = ['owner', 'admin', 'president', 'manager', 'coach'];
+
+  function mayMount() {
+    if (!state.user) return false;
+    const role = state.user.owner === true ? 'owner' : String(state.user.role || '');
+    return STAFF.indexOf(role) !== -1;
+  }
+
+  function mount() {
+    const existing = document.getElementById('field-bar');
+    if (!mayMount()) { if (existing) existing.remove(); return; }
+
+    const page = String(state.page || '');
+    const link = (key, icon, text) =>
+      '<a data-page="' + key + '"' + (page === key ? ' class="active"' : '') + '>'
+      + '<i>' + icon + '</i>' + text + '</a>';
+
+    const html = '<nav class="field-bar" id="field-bar" aria-label="إجراءات سريعة">'
+      + link('scan', '▣', 'المسح')
+      + link('attendance', '✓', 'الحضور')
+      + link('profile', '🔑', 'كلمة المرور')
+      + '</nav>';
+
+    if (existing) existing.remove();
+    document.body.insertAdjacentHTML('beforeend', html);
+
+    /* bind() reaches the rendered page; the bar is outside it, so it carries its
+       own two lines rather than being wired from a distance. */
+    const bar = document.getElementById('field-bar');
+    if (bar) {
+      bar.querySelectorAll('[data-page]').forEach(a => {
+        a.onclick = () => { state.page = a.dataset.page; save(); render(); };
+      });
+    }
+  }
+
+  const coreRenderMobile = render;
+  render = function () {
+    const out = coreRenderMobile.apply(this, arguments);
+    try { mount(); } catch (_) { /* a bar is not worth a broken page */ }
+    return out;
+  };
+
+  /* أول رسم بعد الدخول يمرّ بـ render، وهذا يغطّي إعادة التحميل أيضًا. */
+  if (typeof window !== 'undefined' && document.readyState !== 'loading') {
+    try { mount(); } catch (_) {}
+  }
+})();
 
 /* ---------- final layer ---------- */
 

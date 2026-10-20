@@ -35,8 +35,12 @@ const ROLE_META_ = {
 };
 
 /* الأدوار التي تدخل بشريط جانبي. والمالك يعلو على دور الحساب، كما في الخادم:
-   `roles.js` يقرأ config/owners قبل عمود role، وهذا يقرأ `user.owner` قبله. */
-const MANAGER_ROLE_KEYS_ = ['owner', 'admin', 'president'];
+   `roles.js` يقرأ config/owners قبل عمود role، وهذا يقرأ `user.owner` قبله.
+
+   و`manager` صار إداريًا كاملًا -- يدير الأفواج والسباحين والمدربين -- بعد أن
+   كان «ماسحًا» في القاعدة الأولى. والحسابات العليا تبقى محميّة في الخادم:
+   لا يغيّر المسير صلاحية مسير ولا كلمة مروره. */
+const MANAGER_ROLE_KEYS_ = ['owner', 'admin', 'president', 'manager'];
 const STAFF_ROLE_KEYS_   = ['owner', 'admin', 'president', 'manager', 'coach'];
 
 function roleKey_() {
@@ -66,11 +70,11 @@ const SIDE_LAYOUT_ = [
   {
     group: 'الأعضاء',
     items: [
-      { key: 'users',         label: 'السباحون',          icon: '♙', roles: ['owner', 'admin', 'president'] },
-      { key: 'applications',  label: 'طلبات التسجيل',     icon: '◈', roles: ['owner', 'admin', 'president'] },
-      { key: 'subscriptions', label: 'الاشتراكات',        icon: '◈', roles: ['owner', 'admin', 'president'] },
-      { key: 'card',          label: 'بطاقات الانخراط',   icon: '▣', roles: ['owner', 'admin', 'president', 'coach'] },
-      { key: 'groups',        label: 'الأفواج والمدربون', icon: '♟', roles: ['owner', 'admin', 'president'] }
+      { key: 'users',         label: 'السباحون',          icon: '♙', roles: ['owner', 'admin', 'president', 'manager'] },
+      { key: 'applications',  label: 'طلبات التسجيل',     icon: '◈', roles: ['owner', 'admin', 'president', 'manager'] },
+      { key: 'subscriptions', label: 'الاشتراكات',        icon: '◈', roles: ['owner', 'admin', 'president', 'manager'] },
+      { key: 'card',          label: 'بطاقات الانخراط',   icon: '▣', roles: ['owner', 'admin', 'president', 'manager', 'coach'] },
+      { key: 'groups',        label: 'الأفواج والمدربون', icon: '♟', roles: ['owner', 'admin', 'president', 'manager'] }
     ]
   },
   {
@@ -82,7 +86,8 @@ const SIDE_LAYOUT_ = [
   {
     group: 'النظام',
     items: [
-      { key: 'audit', label: 'سجل التدقيق', icon: '⚑', roles: ['owner', 'admin', 'president'] }
+      { key: 'accounts', label: 'الحسابات وكلمات المرور', icon: '⚿', roles: ['owner', 'admin', 'president', 'manager'] },
+      { key: 'audit', label: 'سجل التدقيق', icon: '⚑', roles: ['owner', 'admin', 'president', 'manager'] }
     ]
   }
 ];
@@ -99,6 +104,9 @@ function sideGroupsFor_(role) {
 function allowedPagesFor_(role) {
   const out = [];
   sideGroupsFor_(role).forEach(g => g.items.forEach(it => out.push(it.key)));
+  /* الملف الشخصي لكل من دخل: منه تُغيَّر كلمة المرور، ولا يجوز أن يكون
+     مدفونًا خلف صفحة لا يملكها. */
+  out.push('profile');
   if (MANAGER_ROLE_KEYS_.indexOf(role) !== -1) out.push('settings');
   return out;
 }
@@ -107,6 +115,7 @@ function pageLabelFor_(role, page) {
   let label = 'نظرة عامة';
   SIDE_LAYOUT_.forEach(g => g.items.forEach(it => { if (it.key === page) label = it.label; }));
   if (page === 'settings') label = 'الإعدادات';
+  if (page === 'profile') label = 'ملفي وكلمة المرور';
   return label;
 }
 
@@ -128,8 +137,9 @@ function sideAsideHtml_(role, page, user) {
   ).join('');
 
   const bottom = (MANAGER_ROLE_KEYS_.indexOf(role) !== -1
-    ? '<a data-page="settings"><i>⚙</i>الإعدادات</a>'
+    ? '<a class="' + (page === 'settings' ? 'active' : '') + '" data-page="settings"><i>⚙</i>الإعدادات</a>'
     : '')
+    + '<a class="' + (page === 'profile' ? 'active' : '') + '" data-page="profile"><i>🔑</i>ملفي وكلمة المرور</a>'
     + '<a data-action="logout"><i>↪</i>تسجيل الخروج</a>';
 
   return '<aside class="sidebar role-' + esc(role) + ' tone-' + esc(meta.tone) + '">'

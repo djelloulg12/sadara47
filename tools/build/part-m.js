@@ -118,8 +118,15 @@ function printOfficialForms(list){
    المطبوع تحته، من قيمة واحدة، فيستحيل أن يدلّ الرمز على غير الرقم الذي بجانبه.
    ========================================================== */
 function luxuryCard(p, kind){
-  const coach = kind === 'coach';
-  const roleLabel = coach ? 'مدرب' : 'سباح';
+  /* The card wears the rank of the person holding it.
+     A swimmer keeps the club's blue; a coach takes the red accent; and every
+     administrative rank -- owner, manager, admin, president -- takes the black
+     one. The base layout, the photograph, and above all the QR are untouched:
+     the rank changes the colours and the word on the badge, nothing else. */
+  const roleKind = cardKindForRole_(kind);
+  const coach = roleKind === 'coach';
+  const admin = roleKind === 'admin';
+  const roleLabel = admin ? 'مسؤول' : (coach ? 'مدرب' : 'سباح');
   const name = p.coach_name || p.name || '';
   const fr = p.first_name_fr ? (p.first_name_fr + ' ' + (p.last_name_fr || '')).trim() : '';
   const no = clubDigits(p.membership_no || p.id || '');
@@ -137,7 +144,9 @@ function luxuryCard(p, kind){
      asked to wrap, because on a fifty-four millimetre card two lines of eleven
      points is a name that reaches the picture. */
   const longName = name.trim().length > 20 ? ' is-long' : '';
-  const rows = coach
+  const rows = admin
+    ? [['الصفة', p.role_title || 'مسؤول النادي'], ['الفوج', p.group_name || 'الإدارة']]
+    : coach
     ? [['التخصص', p.specialty || 'مدرب سباحة'], ['سنوات الخبرة', clubDigits((p.experience || '—') + ' سنة')],
        ['الفوج', p.group_name || 'الطاقم الفني']]
     : [['الفوج', p.group_name || '—'], ['فصيلة الدم', p.blood_group || '—']];
@@ -146,7 +155,7 @@ function luxuryCard(p, kind){
      on eighty-six millimetres is the card saying nothing else. */
   rows.push(['الموسم الرياضي', clubDigits(CLUB.season)]);
   return '' +
-  '<article class="lux-card ' + (coach ? 'is-coach' : 'is-swimmer') + '" data-no="' + esc(no) + '">' +
+  '<article class="lux-card is-' + roleKind + '" data-no="' + esc(no) + '">' +
     '<div class="lux-side">' +
       '<span class="lux-stars">' + STAR + STAR + STAR + '</span>' +
       '<img class="lux-logo" src="' + esc(assetUrl('assets/logo.png')) + '" alt="">' +
