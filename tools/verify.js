@@ -39,6 +39,7 @@ const SUITES = [
   ['deploy', 'deploy.test.js', 'the platform deploys as one service: pg locked, secrets from the environment, the Neon entry point'],
   ['keep-awake', 'keep-awake.test.js', 'the ping keeps the service up inside Render\'s free-hour cap, and refuses without its token'],
   ['usage', 'usage.test.js', 'the window is derived from real activity and cannot spend a month of hours on one rare event'],
+  ['fix-groups', 'fix-groups.test.js', 'the group fixer unifies names without forcing a child into a group they never trained in'],
   ['table-labels', 'table-labels.test.js', 'the phone card is named from its column, on both render paths'],
   ['column-tool', 'column-tool.test.js', 'the column tool opens, hides, remembers per person, locks the name'],
   ['resilience', 'resilience.test.js', 'a page that fails to draw shows a panel with a way back, and stale data says so'],

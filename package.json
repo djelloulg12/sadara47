@@ -8,6 +8,7 @@
     "start": "node tools/neon/server/server.js",
     "serve:neon": "node tools/neon/server/server.js",
     "usage": "node tools/neon/usage.js",
+    "fix:groups": "node tools/neon/fix-groups.js",
     "build": "python tools/build/build-app.py",
     "check": "node tools/verify.js",
     "check:print": "python tools/check-form-placement.py",

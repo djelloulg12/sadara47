@@ -1,4 +1,4 @@
-/* الاستخدام الحقيقي للمنصة: نافذة النبضة تُشتقّ من السلوك، لا من التخمين.
+﻿/* الاستخدام الحقيقي للمنصة: نافذة النبضة تُشتقّ من السلوك، لا من التخمين.
    ----------------------------------------------------------------------------
    Render يمنح 750 ساعة شهريًا ويُوقف كل خدمة مجانية إن استُهلكت. فنافذة النبضة
    قرار يُبنى على سؤال: متى يستعمل النادي المنصة فعلًا؟
@@ -135,6 +135,41 @@ async function main() {
       console.log('→ العامل أضيق: أبقِه.');
     }
   }
+
+  console.log('');
+  console.log('=== الاستهلاك الفعلي مع النبض الواعي بالنشاط ===');
+  /* النبض لا يُنفق شيئًا في الساعة المزدحمة: كل نبضة فيها تُتخطّى لأن هناك
+     نشاطًا قبلها بأقل من 14 دقيقة. والساعة تُكلّف فقط إذا مرّ فيها فراغ أطول
+     من 14 دقيقة -- أي إذا كان الخادم سيبدو نائمًا فعلًا.
+
+     فنقيس: لكل ساعة، هل فيها فجوة بين حدثين (أو من بدايتها) تزيد على 14 دقيقة؟
+     وحتى في الساعة الفارغة تمامًا، الرصيد يُنفق فعلًا لكنه أنفع: النبض يُبقي
+     الخدمة مستيقظة لزائر لم يُسجَّل له حدث بعد. فالأرقام هنا حدّ أدنى للاستهلاك
+     الحقيقي، لا ادّعاء بأنه صفر. */
+  const QUIET = 14 * 60 * 1000;
+  const busyHours = new Set();
+  const hourFirstLast = {};
+  for (const ts of stamps) {
+    const dz = new Date(new Date(ts).getTime() + DZ_OFFSET_HOURS * 3600 * 1000);
+    const h = dz.getUTCHours();
+    (hourFirstLast[h] = hourFirstLast[h] || []).push(new Date(ts).getTime());
+  }
+  for (const h of Object.keys(hourFirstLast)) {
+    const ts = hourFirstLast[h].sort((a, b) => a - b);
+    let busy = false;
+    for (let i = 1; i < ts.length; i++) if (ts[i] - ts[i - 1] <= QUIET) busy = true;
+    if (busy) busyHours.add(Number(h));
+  }
+  const inWindow = [];
+  for (let h = fromUtc + DZ_OFFSET_HOURS; h <= toUtc + DZ_OFFSET_HOURS; h++) inWindow.push(h % 24);
+  const quietInWindow = inWindow.filter(h => !busyHours.has(h));
+  const busyInWindow = inWindow.filter(h => busyHours.has(h));
+  console.log('ساعات النافذة:', inWindow.length, '· منها مزدحمة (نبضها يُتخطّى):', busyInWindow.length,
+    '· ساكنة (تُنفق):', quietInWindow.length);
+  console.log('  المزدحمة:', busyInWindow.map(h => h + ':00').join(', ') || 'لا شيء');
+  console.log('  الساكنة:', quietInWindow.map(h => h + ':00').join(', ') || 'لا شيء');
+  console.log('  الاستهلاك المتوقّع شهريًا ≈ ' + quietInWindow.length * 31 + 'h (سقف ' + CAP_HOURS + 'h)');
+  console.log('  أي نحو ' + Math.round((1 - quietInWindow.length * 31 / CAP_HOURS) * 100) + '% من السقف موفَّر.');
 
   console.log('');
   if (monthly > CAP_HOURS) {

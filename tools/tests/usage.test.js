@@ -21,6 +21,7 @@ const errors = [];
 const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 const usage = read('tools/neon/usage.js');
 const workflow = read('.github/workflows/keep-awake.yml');
+const server = read('tools/neon/server/server.js');
 
 /* ---- ١. السقف معلن ورقم الشهر صحيح ---- */
 
@@ -99,6 +100,40 @@ const workflow = read('.github/workflows/keep-awake.yml');
   }
 }
 
+/* ---- ٥. الاستهلاك الحقيقي: النبض يتخطّى في الساعة المزدحمة ---- */
+
+{
+  /* الحساب هنا ليس ترفًا: النافذة (17 ساعة × 31 = 527) هي السقف الأعلى.
+     لكن النبض الواعي بالنشاط لا يُنفق في ساعة فيها استعمال، فالأداة يجب أن
+     تُظهر الفرق. أداة تُبلّغ عن 527 بينما الفعلي 248 تجعل القرار خطأ. */
+  if (!/const QUIET = 14 \* 60 \* 1000;/.test(usage)) {
+    errors.push('the tool does not model the quiet threshold, so it reports the '
+      + 'window ceiling as if every hour in it cost the same');
+  }
+  /* والعتبة نفسها يجب أن تطابق ما في الخادم: 14 دقيقة، أقلّ من نوم Render بـ15. */
+  const wm = server.match(/WAKE_QUIET_MS\s*=\s*Number\([^)]*\)\s*\|\|\s*(\d+)\s*\*\s*60\s*\*\s*1000/);
+  const um = usage.match(/const QUIET = (\d+) \* 60 \* 1000;/);
+  if (wm && um && wm[1] !== um[1]) {
+    errors.push('the tool models a ' + um[1] + '-minute quiet threshold while the '
+      + 'server uses ' + wm[1] + ': it would report a saving the server does not make');
+  }
+  if (!/busyHours/.test(usage)) {
+    errors.push('the tool does not work out which hours are busy, so it cannot say '
+      + 'how much of the cap the activity-aware pulse actually spends');
+  }
+  /* والأهمّ: الرقم يجب أن يُحسب من الأحداث، لا أن يُكتب. */
+  if (/quietInWindow\s*=\s*\[[^\]]*\d/.test(usage)) {
+    errors.push('the count of quiet hours is hardcoded, so the tool would report a '
+      + 'saving that the data does not support');
+  }
+  /* والفاصل بين حدثين هو ما يعنيه "نشاط حديث": إن كان الفرق أقل من العتبة لم
+     ينم الخادم أصلًا، فلا حاجة إلى نبضة. */
+  if (!/ts\[i\]\s*-\s*ts\[i\s*-\s*1\]\s*<=\s*QUIET/.test(usage)) {
+    errors.push('the tool does not compare gaps between events against the quiet '
+      + 'threshold, so its "busy" hours are not the ones the server stays awake for');
+  }
+}
+
 console.log('');
 if (errors.length) {
   console.log('USAGE PROBLEMS (' + errors.length + '):');
@@ -106,6 +141,7 @@ if (errors.length) {
   process.exit(1);
 }
 console.log('The usage tool derives the window from real activity, discounts rare '
-  + 'hours so one event cannot spend a month of hours, and compares its suggestion '
-  + 'against the running window instead of silently widening it.');
+  + 'hours so one event cannot spend a month of hours, works out how much the '
+  + 'activity-aware pulse actually spends, and compares its suggestion against the '
+  + 'running window instead of silently widening it.');
 process.exit(0);

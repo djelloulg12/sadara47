@@ -136,6 +136,73 @@ const renderYaml = read('render.yaml');
   }
 }
 
+/* ---- ٥. النبضة تُقاس بالنشاط: تتخطّى حين يكون الخادم مستيقظًا من الاستعمال ---- */
+
+{
+  /* الحالة التي يمنعها هذا الفحص: نبضة تردّ دائمًا بلا نظر إلى النشاط.
+     تكلفتها 527 ساعة شهريًا حتى والساعة فارغة، والرصيد يُدفع بلا مقابل.
+     والصواب أن تقرأ آخر نشاط وتقول `skipped` إن كان حديثًا. */
+  const start = server.indexOf("ROUTES['GET /api/wake']");
+  const rest = start === -1 ? '' : server.slice(start + 10);
+  const next = rest.indexOf("ROUTES['");
+  const block = next === -1 ? rest : rest.slice(0, next);
+
+  if (!/lastRequestAt_/.test(server)) {
+    errors.push('the server never records incoming requests, so the wake route cannot '
+      + 'know whether the service is already awake from real use, and every pulse '
+      + 'spends an hour of the free cap for nothing');
+  }
+  if (!/skipped/.test(block)) {
+    errors.push('the wake route never reports a skipped pulse, so a busy hour costs '
+      + 'as much as an idle one: the cap is spent on hours nobody was away for');
+  }
+  /* ولا يكفي أن تُذكر الكلمة: يجب أن تُعاد عندما يكون هناك نشاط حديث، وإلا
+     كان الردّ ثابتًا لا يقرأ النشاط أصلًا. */
+  if (!/quietFor\s*<\s*WAKE_QUIET_MS[\s\S]{0,400}?skipped:\s*true/.test(block)) {
+    errors.push('the wake route does not skip the pulse when there was recent '
+      + 'activity, so it answers the same way whether the service is busy or idle '
+      + 'and the saving never happens');
+  }
+  /* والعتبة أقلّ من مهلة نوم Render (15 دقيقة)، وإلا فاتت النبضةُ النوم. */
+  const qm = server.match(/WAKE_QUIET_MS\s*=\s*Number\([^)]*\)\s*\|\|\s*(\d+)\s*\*\s*60\s*\*\s*1000/);
+  if (!qm) {
+    errors.push('the quiet threshold is not expressed in minutes, so it cannot be '
+      + "checked against Render's 15-minute sleep timeout");
+  } else if (Number(qm[1]) >= 15) {
+    errors.push('the quiet threshold is ' + qm[1] + ' minutes, but Render sleeps after '
+      + '15 without traffic: a pulse that waits that long finds the service asleep');
+  }
+  /* والنشاط لا يُحتسب من `/api/*` وحده: زائر يفتح الصفحة يجلب HTML وJS وCSS
+     بلا أن يلمس مسارًا منها، فلو غاب احتساب الملفات الثابتة لظنّت النبضة أن
+     الصفحة المفتوحة سكون. */
+  const createStart = server.indexOf('http.createServer');
+  const createBlock = createStart === -1 ? '' : server.slice(createStart, createStart + 1400);
+  if (!/lastRequestAt_/.test(createBlock)) {
+    errors.push('serving a static file does not count as activity, so a visitor '
+      + 'reading a page that makes no /api call looks like an idle server');
+  }
+  /* والنبضة نفسها لا تُحتسب نشاطًا، وإلا أبقَت نفسها حيّة وأبطلت معنى التخطّي. */
+  if (!/pathname\s*!==\s*'\/api\/wake'/.test(server)) {
+    errors.push('the wake route counts itself as activity, so each pulse keeps the '
+      + 'next one skipped and the skip means nothing');
+  }
+}
+
+/* ---- ٦. الـworkflow يفهم `skipped` ويميّزه عن الفشل ---- */
+
+{
+  if (!/skipped/.test(workflow)) {
+    errors.push('the workflow does not read the skipped flag, so it cannot tell a '
+      + 'pulse that spent nothing from one that woke a sleeping service');
+  }
+  /* الأهم: التخطّي نجاح لا فشل. عملٌ يخرج بـ`exit 1` على `skipped` يُظهر كل
+     ساعة مزدحمة كعطل، فيُطفأ التنبيه أو يُهمَل. */
+  if (/grep -q[^\n]*skipped[\s\S]{0,200}?exit 1/.test(workflow)) {
+    errors.push('the workflow treats a skipped pulse as a failure, so every busy '
+      + 'hour shows up as a red run until nobody reads the alerts');
+  }
+}
+
 console.log('');
 if (errors.length) {
   console.log('KEEP-AWAKE PROBLEMS (' + errors.length + '):');

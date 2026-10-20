@@ -1,4 +1,4 @@
-/* خادم الصدارة على Neon: بديل المحوّل Firebase، بنفس واجهة /api/.
+﻿/* خادم الصدارة على Neon: بديل المحوّل Firebase، بنفس واجهة /api/.
    ----------------------------------------------------------------------------
    لماذا هذا الملف موجود:
    المنصة كانت ملفات ثابتة تتكلّم مع Firebase مباشرة من متصفّح العائلة. والآن
@@ -236,26 +236,50 @@ ROUTES['GET /api/registration'] = async (req, res) => {
   sendJSON(res, { open: data.open !== false, note: data.note || '', readable: true });
 };
 
-/* ---------------- إبقاء الخدمة مستيقظة ----------------
+/* ---------------- إبقاء الخدمة مستيقظة، عند الحاجة وحدها ----------------
    Render المجاني يُنيم الخدمة بعد 15 دقيقة بلا طلب وارد، فتستيقظ بعد ~دقيقة
    عند أول زيارة. وهذا مزعج لعائلة تفتح المنصة في الصباح.
 
-   الحل: نبضة خارجية كل 14 دقيقة. لكن نبضة مفتوحة للعالم تُستنزف: أي عابر
-   يضرب العنوان فيستهلك من ساعات Render الـ750، فتُوقَف الخدمة قبل نهاية الشهر.
+   والنبضة التي تردّ دائمًا تُبقي الخدمة مستيقظة، لكنها تدفع الثمن كاملًا:
+   17 ساعة يوميًّا من رصيد 750 ساعة شهريًّا، حتى والساعة التي لا يفتح فيها
+   أحد شيئًا. والصواب أن تُقاس الحاجة بالنشاط: إن كان طلبٌ ورد قبل أقل من
+   14 دقيقة فالخدمة مستيقظة من تلقاء نفسها، والنبضة لا تفعل شيئًا.
 
-   ولذلك شرطان:
+   فيصير الحساب على النشاط لا على الساعة: ساعة فيها استعمال لا تحتاج نبضة،
+   وساعة فارغة لا تبقى مستيقظة. وهذا يوفّر من الرصيد بقدر ما يقلّ الاستعمال.
+
+   وشرطان:
      - رمز سرّي في العنوان (`SADARA_WAKE_TOKEN`). بلا رمز: 404، وكأن المسار
        غير موجود -- لا نكشف أنه يوجد شيء هنا.
      - لا لمس لقاعدة Neon. النبضة تقول «الخادم حيّ» فقط. لو قرأت من القاعدة
-       لأيقظت Neon كل 14 دقيقة (وهو ينام بعد 5) واستهلكت حساب الاستعلامات
-       بلا سبب: النبضة ليست استعمالًا، بل منع نوم. */
+       لأيقظت Neon كل 14 دقيقة بلا سبب. */
+
+/* آخر طلب وارد من غير النبضة. يُقرأ في الذاكرة وحدها: لا يهمّ أن يضيع عند
+   إعادة التشغيل، فإعادة التشغيل نفسها نشاط يمنع النوم بعده. */
+let lastRequestAt_ = 0;
+/* 14 دقيقة: أقلّ من مهلة نوم Render (15 دقيقة) بدقيقة، فتفوت النبضةُ النومَ
+   دائمًا. وقابلة للتغيير عند الاختبار وحده (`SADARA_WAKE_QUIET_MS`). */
+const WAKE_QUIET_MS = Number(process.env.SADARA_WAKE_QUIET_MS) || 14 * 60 * 1000;
+
 ROUTES['GET /api/wake'] = async (req, res, body, url) => {
   const expected = process.env.SADARA_WAKE_TOKEN || '';
   const given = url.searchParams.get('token') || '';
   if (!expected || given !== expected) {
     return sendJSON(res, { error: 'مسار غير معروف' }, 404);
   }
-  sendJSON(res, { ok: true, awake: true, at: new Date().toISOString() });
+  const now = Date.now();
+  const quietFor = lastRequestAt_ ? now - lastRequestAt_ : Infinity;
+  if (quietFor < WAKE_QUIET_MS) {
+    /* هناك نشاط حديث: الخدمة مستيقظة أصلًا، والنبضة لا معنى لها الآن. */
+    return sendJSON(res, {
+      ok: true, awake: true, skipped: true, at: new Date().toISOString(),
+      last_activity_seconds: Math.round(quietFor / 1000)
+    });
+  }
+  sendJSON(res, {
+    ok: true, awake: true, skipped: false, at: new Date().toISOString(),
+    last_activity_seconds: lastRequestAt_ ? Math.round(quietFor / 1000) : null
+  });
 };
 
 /* ---------------- السباحون ---------------- */
@@ -1333,6 +1357,9 @@ ROUTES['DELETE /api/users/:uid'] = async (req, res, body, url) => {
 
 async function handleAPI(req, res, url) {
   const key = req.method + ' ' + url.pathname;
+  /* النبضة ليست استعمالًا: لا تُحتسب نشاطًا، وإلا صارت النبضة تُبقي نفسها
+     حيّة وتُبطل معنى «لا نبض إن كان هناك نشاط». */
+  if (url.pathname !== '/api/wake') lastRequestAt_ = Date.now();
   /* المسارات الثابتة تُبحث أولًا، ثم ذوات المعامل. `DELETE /api/users/:uid`
      يحمل معرّف الحساب في العنوان نفسه، كما كان في المحوّل. */
   const handler = ROUTES[key]
@@ -1352,6 +1379,15 @@ async function handleAPI(req, res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   if (url.pathname.startsWith('/api/')) return handleAPI(req, res, url);
+
+  /* طلب صفحة نشاطٌ كذلك، وليس `/api/*` وحده.
+     ----------------------------------------------------------------------------
+     الزائر يفتح العنوان فيطلب `index.html` و`app.js` و`style.css`: ثلاثة
+     طلبات لا يمرّ فيها شيء على `/api/`. ولو حسبنا النشاط هناك وحده، لظنّت
+     النبضة أن الخفّة سكونٌ فضربت بينما أحدٌ يقرأ الصفحة -- أو (وهو الأسوأ)
+     حسبت السكون نشاطًا فنامت الخدمة على زائر. فالملفات الثابتة تُحتسب نشاطًا
+     كذلك. */
+  lastRequestAt_ = Date.now();
 
   /* الملفات الثابتة: نفس مجلد النشر. */
   let rel = decodeURIComponent(url.pathname);
