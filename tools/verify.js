@@ -32,6 +32,7 @@ const SUITES = [
   ['page-layout', 'page-layout.test.js', 'every page, every role, measured in a real browser at a real window'],
   ['group-button', 'group-button.test.js', 'the group button: one field, the roles the server accepts, a refusal is a refusal'],
   ['groups', 'groups.test.js', 'one group list, the id travels with the name, the filter bar, the A4 group sheet'],
+  ['scanner', 'scanner.test.js', 'who may scan, the card is matched before it is written, every mark carries who made it'],
   ['notice-layout', 'notice-layout.test.js', 'the announcement in the shut door, measured on a phone and a desk'],
   ['smoke', 'smoke.js', 'every page, every control, every role'],
   ['adapter', 'adapter.test.js', 'Firestore adapter authorisation and limits']

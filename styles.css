@@ -1475,3 +1475,52 @@ select{height:auto!important;min-height:38px;line-height:1.6;padding:.45rem .8re
   .roster-table .mark-cell,.roster-table .note-cell{background:#fff!important}
   .roster-sign,.roster-table tr{page-break-inside:avoid;break-inside:avoid}
 }
+/* ================= ماسح الحضور: الكاميرا، والقائمة تحت الشاشة ================= */
+
+.scan-panel .panel-head{align-items:flex-start;gap:10px;flex-wrap:wrap}
+.scan-stage{position:relative;margin:12px 0;border-radius:14px;overflow:hidden;background:#04121f;
+  aspect-ratio:3 / 4;max-height:62vh;display:flex;align-items:center;justify-content:center}
+.scan-stage[hidden]{display:none}
+.scan-video{width:100%;height:100%;object-fit:cover;display:block}
+.scan-frame{position:absolute;inset:12%;border:2px dashed rgba(255,255,255,.75);border-radius:14px;
+  box-shadow:0 0 0 9999px rgba(2,10,20,.35)}
+.scan-hint{margin:4px 0 10px;font-size:11.5px;color:var(--muted)}
+.scan-manual{display:block;font-size:12px;color:var(--muted)}
+.scan-row{display:flex;gap:8px;margin-top:6px;max-width:520px}
+.scan-row input{flex:1;min-width:0;font:inherit;font-size:14px;padding:9px 12px;border:1px solid var(--line);
+  border-radius:10px;letter-spacing:.04em}
+.scan-row input:focus{outline:2px solid #12a0a855;border-color:#12a0a8}
+
+.scan-log .empty-cell{margin:6px 0 0;color:var(--muted)}
+.scan-result{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;
+  padding:10px 12px;margin:8px 0 0;border-radius:12px;border:1px solid var(--line);background:#f8fbff}
+.scan-result.ok{border-color:#b7e3c6;background:#f2fdf5}
+.scan-result.refused{border-color:#f0c2c2;background:#fff5f5}
+.scan-result.unknown{border-color:#f0dcb4;background:#fffaf0}
+.scan-result-main{min-width:0}
+.scan-result-main b{display:block;font-size:13px}
+.scan-result-main small{color:var(--muted);font-size:10.5px}
+.scan-result-side{text-align:left;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.scan-result-side .status{white-space:nowrap}
+.scan-result-side small{color:var(--muted);font-size:10.5px}
+.scan-result-note{margin:0;font-size:10.5px;color:var(--muted);max-width:34ch;text-align:left}
+
+@media (max-width:640px){
+  .scan-stage{max-height:52vh}
+  .scan-row{max-width:none}
+  .scan-result{flex-direction:column;align-items:stretch}
+  .scan-result-side{align-items:flex-start;text-align:right}
+  .scan-result-note{text-align:right;max-width:none}
+}
+/* ================= وسم من سجّل الحضور ================= */
+
+.recorder-cell{white-space:nowrap}
+.recorder-tag{display:inline-flex;gap:4px;align-items:baseline;font-size:11px}
+.recorder-tag b{font-weight:600}
+.recorder-tag i{font-style:normal;color:var(--muted);font-size:10px}
+.recorder-none{color:var(--muted)}
+
+@media print{
+  .recorder-tag,.recorder-tag b,.recorder-tag i,.recorder-none{font-size:8.5pt;color:#000}
+  .roster-table .col-recorder{width:16mm}
+}

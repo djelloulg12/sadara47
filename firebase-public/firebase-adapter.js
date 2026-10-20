@@ -105,6 +105,21 @@
     };
   };
 
+  /* من يسجّل الحضور، ومن لا يسجّله.
+
+     الشاشة تقبل التبديل بين الإدارة والمدرب، وهذا هو ما يقبله الخادم
+     أيضًا. أما غيرهما -- سباح أو ولي -- فلا: له صفحة حضور يقرؤها، وليس
+     له أن يكتب على سجلّ غيره. والخادم هو من يقرّر، لا الشاشة. */
+  const SCANNER_ROLES = ['admin', 'president', 'manager', 'coach'];
+
+  const attendanceRecorder = profile => ({
+    uid: profile.id || '',
+    name: profile.name || 'عضو النادي',
+    role: profile.role || '',
+    /* الصفة كما تُقرأ: مهنة الذي مسح، لا اسم الدور في قاعدة البيانات. */
+    title: profile.role === 'coach' ? 'مدرب' : 'مسير'
+  });
+
   /* ---------------- which session a mark belongs to ----------------
 
      A week back and no further. A week is how long a forgotten sheet stays a
@@ -229,6 +244,19 @@
     if (!user) return { error: 'يرجى تسجيل الدخول', status: 401 };
     const profile = await userView(user);
     if (!profile || !['admin', 'president'].includes(profile.role)) return { error: message, status: 403 };
+    return { profile };
+  };
+  /* من يسجّل الحضور: الإدارة والمدرب.
+
+     يقرأ الحضورَ كثيرون، ويكتبه اثنان. وهذه القائمة هي التي يقرؤها كل
+     مسار كتابة للحضور -- الطلب الواحد وحفظُ الدفعة -- فلا يمرّ أحدهما
+     ويُرَدّ الآخر باختلاف قائمة. */
+  const scannerView = async (message) => {
+    const user = await currentUser();
+    if (!user) return { error: 'يرجى تسجيل الدخول', status: 401 };
+    const profile = await userView(user);
+    if (!profile || SCANNER_ROLES.indexOf(profile.role) === -1)
+      return { error: message || 'تسجيل الحضور بالمسح خاص بالمسيرين والمدربين فقط.', status: 403 };
     return { profile };
   };
   /* The only roles the rules and the page both understand. */
@@ -1699,11 +1727,13 @@
          what was let through. A read, and only a read. */
       if (path === '/api/attendance' && method === 'GET') return jsonResponse(await rows('attendance'));
       if (path === '/api/attendance' && method === 'POST') {
-        const user = await currentUser();
-        if (!user) return jsonResponse({ error: 'يرجى تسجيل الدخول قبل تسجيل الحضور' }, 401);
-        const profile = await userView(user);
-        if (!profile || !['admin', 'president', 'coach'].includes(profile.role))
-          return jsonResponse({ error: 'تسجيل الحضور من صلاحية المدرب أو الإدارة فقط' }, 403);
+        /* الحضور يكتبه المسير أو المدرب، بالاسم الذي قاله جدول الأدوار لا
+           بما تقوله الشاشة. كان الشرط يذكر ثلاثة أدوار والمنصة تعرف أربعة:
+           `manager` كان يمرّ من الشاشة ويرتدّ هنا، فيملأ المسير النموذج
+           ويُخبر «من صلاحية المدرب أو الإدارة فقط» وهو إدارة. */
+        const gate = await scannerView();
+        if (gate.error) return jsonResponse({ error: gate.error }, gate.status);
+        const profile = gate.profile;
         const memberId = body.member_id || body.swimmer_id || '';
         if (!memberId) return jsonResponse({ error: 'يجب تحديد السباح' }, 400);
         /* The session, asked for, and the moment of writing, which are not the
@@ -1712,11 +1742,27 @@
         if (session.error) return jsonResponse({ error: session.error }, 400);
         const day = session.day;
         const status = body.status || 'present';
+        /* من سجّل، بجانب ما سُجّل.
+
+           الاسم والصفة يُكتبان في الوثيقة وقت الكتابة، لأن سؤال «من سجّل
+           هذا الحضور؟» سؤال عن لحظة مضت. وحسابٌ يُقرأ لاحقًا يغيّر صلاحيته
+           أو يُحذف، فيصبح السجل كله منسوبًا إلى من لم يمسح شيئًا. */
+        const recorder = attendanceRecorder(profile);
         await db.collection('attendance').doc('att_' + day + '_' + String(memberId).replace(/[^\w-]/g, '_')).set({
           member_id: memberId, session_date: day, status,
-          marked_by: user.uid, marked_at: firebase.firestore.FieldValue.serverTimestamp()
+          marked_by: profile.id,
+          marked_by_name: recorder.name,
+          marked_by_role: recorder.role,
+          recorded_by_uid: recorder.uid,
+          recorded_by_name: recorder.name,
+          recorded_by_role: recorder.role,
+          marked_at: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-        return jsonResponse({ ok: true, message: 'تم تسجيل الحضور بنجاح' }, 201);
+        return jsonResponse({
+          ok: true,
+          message: 'تم تسجيل الحضور بنجاح',
+          recorded_by: recorder
+        }, 201);
       }
 
       /* ---------------- applications ---------------- */

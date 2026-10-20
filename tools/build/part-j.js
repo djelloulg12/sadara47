@@ -130,7 +130,7 @@ pageView=function(p){
   if(p==='profile')return '<div class="page-root" id="page-root">'+profilePage()+'</div>';
   return corePageView3(p);
 };
-pageTitle=function(p){return ({home:'نظرة عامة',applications:'طلبات التسجيل',subscriptions:'إدارة الاشتراكات',users:'إدارة السباحين',schedule:'البرنامج الأسبوعي',attendance:'سجل الحضور',notices:'الإعلانات والتنبيهات',card:'بطاقات الانخراط',groups:'الأفواج والمدربون',settings:'الإعدادات',profile:'ملفي'}[p]||'نظرة عامة');};
+pageTitle=function(p){return ({home:'نظرة عامة',applications:'طلبات التسجيل',subscriptions:'إدارة الاشتراكات',users:'إدارة السباحين',schedule:'البرنامج الأسبوعي',attendance:'سجل الحضور',notices:'الإعلانات والتنبيهات',card:'بطاقات الانخراط',groups:'الأفواج والمدربون',scan:'ماسح الحضور',settings:'الإعدادات',profile:'ملفي'}[p]||'نظرة عامة');};
 
 /* --- صفحة الملف الشخصي في لوحات الأدوار --- */
 const coreRoleDashboard=roleDashboard;

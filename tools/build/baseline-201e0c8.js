@@ -1550,7 +1550,7 @@ function dayMark(day,id){
 
   if(typeof rec==='string')return {status:rec,at:''};
 
-  return {status:rec.status||'present',at:rec.at||''};
+  return {status:rec.status||'present',at:rec.at||'',recorder:rec.recorder||'',recorderRole:rec.recorderRole||''};
 
 }
 
@@ -1570,7 +1570,27 @@ function attendanceOf(id){
 
   if(!m)return null;
 
-  return {status:m.status,at:m.at,date:attendanceDay()};
+  return {status:m.status,at:m.at,date:attendanceDay(),recorder:m.recorder||'',recorderRole:m.recorderRole||''};
+
+}
+
+/* وسم من سجّل الحضور: «فلان (مدرب)». يُقرأ من العلامة نفسها، ولا يُخترع:
+
+   علامة بلا اسم ماسح -- قديمة، أو كتبها أحد قبل هذه الميزة -- تُعرض «—»
+
+   بدل أن تُنسب إلى من يفتح الصفحة. */
+
+function recorderTag(a){
+
+  const name=String((a&&a.recorder)||'').trim();
+
+  if(!name)return '<span class="recorder-none">—</span>';
+
+  const role=String((a&&a.recorderRole)||'');
+
+  const title=role==='coach'?'مدرب':(role?'مسير':'');
+
+  return '<span class="recorder-tag"><b>'+esc(name)+'</b>'+(title?' <i>('+esc(title)+')</i>':'')+'</span>';
 
 }
 
@@ -2091,15 +2111,21 @@ function pageAttendance(){
 
     +'<section class="panel table-panel"><div class="panel-head"><div><h3>حضور '+esc(attendanceSessionLabel())+'</h3><p>'+clubDigits(shown.length)+' سباح · اضغط على الحالة لتغييرها</p></div></div>'
 
-    +'<div class="table-scroll"><table><thead><tr><th>السباح</th><th>الفوج</th><th>وقت الدخول</th><th>الحالة</th><th>تغيير الحالة</th></tr></thead><tbody>'
+    +'<div class="table-scroll"><table><thead><tr><th>السباح</th><th>الفوج</th><th>وقت الدخول</th><th>سجّله</th><th>الحالة</th><th>تغيير الحالة</th></tr></thead><tbody>'
 
     +(shown.length?shown.map(s=>{const a=attendanceOf(s.id);const cur=a?a.status:'';return '<tr><td><span class="table-avatar">'+esc((s.name||'?')[0])+'</span><b>'+esc(s.name||'')+'</b></td>'
 
-      +'<td>'+esc(s.group||'—')+'</td><td dir="ltr">'+(a&&a.at?esc(String(a.at).slice(11,16)||'—'):'—')+'</td>'
+      +'<td>'+esc(s.group||'—')+'</td><td dir="ltr">'+(a&&a.at?esc(String(a.at).slice(11,19)||'—'):'—')+'</td>'
+
+      /* من سجّل الحضور وصفته: يُقرآن من الوثيقة، فسجلّ الأمس يبقى منسوبًا
+
+         إلى من مسح أمس لا إلى من يفتح الصفحة اليوم. */
+
+      +'<td class="recorder-cell">'+recorderTag(a)+'</td>'
 
       +'<td><span class="status '+((a&&a.status==='present')?'success':(a&&a.status==='late')?'late':(a&&a.status==='absent')?'absent':'pending')+'">'+esc(a?ATTENDANCE_LABELS[a.status]||a.status:'لم يُسجّل')+'</span></td>'
 
-      +'<td>'+opts.map(o=>'<button class="check-btn'+(cur===o?' active':'')+'" data-action="mark-attendance" data-id="'+esc(s.id)+'" data-status="'+o+'">'+esc(ATTENDANCE_LABELS[o])+'</button> ').join('')+'</td></tr>';}).join(''):emptyRow(5,'لا يوجد سباحون في هذه المجموعة.'))
+      +'<td>'+opts.map(o=>'<button class="check-btn'+(cur===o?' active':'')+'" data-action="mark-attendance" data-id="'+esc(s.id)+'" data-status="'+o+'">'+esc(ATTENDANCE_LABELS[o])+'</button> ').join('')+'</td></tr>';}).join(''):emptyRow(6,'لا يوجد سباحون في هذه المجموعة.'))
 
     +'</tbody></table></div></section>';
 
@@ -3849,9 +3875,21 @@ async function syncApi(){
 
       const date=r.session_date||r.date||(stamped&&stamped[1])||todayISO();
 
-      (bucket[key]=bucket[key]||[]).push({status,at,date});
+      /* من سجّل الحضور وصفته. الحقلان يُقرآن كما وصلَا من الخادم: اسمان
 
-      (byDay[date]=byDay[date]||{})[key]={status,at};
+         مكتوبان في الوثيقة وقت الكتابة، لا يُشتقّان هنا من حساب من يقرأ
+
+         الصفحة الآن -- وإلا لَظهر كل سجل حضور كأن صاحبه سجّله من يفتح
+
+         الشاشة هذا المساء. */
+
+      const recorder=String(r.recorded_by_name||r.marked_by_name||'');
+
+      const recorderRole=String(r.recorded_by_role||r.marked_by_role||'');
+
+      (bucket[key]=bucket[key]||[]).push({status,at,date,recorder,recorderRole});
+
+      (byDay[date]=byDay[date]||{})[key]={status,at,recorder,recorderRole};
 
     });
 

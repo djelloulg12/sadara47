@@ -242,11 +242,29 @@ syncApi = async function () {
 /* قائمة الفوج كما تُطبع: ورقة A4 يقف عليها المدرب في المسبح.
    أعمدة الحصص الأربع فارغة لتُعلَّم بالقلم: الحضور في قاعدة البيانات
    مرتبط بتاريخ وحصة، ولا شيء فيه يقول أي حصة من حصص اليوم هذه. وورقة
-   تُعلَّم بخط اليد صحيحة؛ ورقة تُخمّن أرقامها كاذبة. */
+   تُعلَّم بخط اليد صحيحة؛ ورقة تُخمّن أرقامها كاذبة.
+
+   وعمود «سجّله» يُطبع حين يكون في الحضور الرقمي علامةٌ لهذا اليوم تحمل
+   اسم من مسح: يُدوَّن في الورقة من سجّل، فلا تُطبع ورقةٌ تنسُب الحضور
+   إلى المجهول. وإن لم تُوجد علامة رقمية يبقى فارغًا كأعمدة الحصص. */
 const GROUP_ROSTER_SESSIONS = ['حصة 1', 'حصة 2', 'حصة 3', 'حصة 4'];
+
+/* من سجّل لكل سباح في هذا اليوم، كما هو محفوظ. لا يُشتقّ هنا. */
+function groupRosterRecorders_() {
+  const out = {};
+  try {
+    (state.swimmers || []).forEach(s => {
+      const a = attendanceOf(s.id);
+      if (a && a.recorder) out[String(s.id)] = a;
+    });
+  } catch (_) { /* a roster is a paper, not a place to fail */ }
+  return out;
+}
 
 function groupRosterDoc_(g) {
   const list = swimmersOf(g.name);
+  const recorders = groupRosterRecorders_();
+  const anyRecorder = Object.keys(recorders).length > 0;
   const box = document.createElement('section');
   box.className = 'roster group-roster';
   box.setAttribute('data-roster-group', String(g.id || ''));
@@ -256,14 +274,16 @@ function groupRosterDoc_(g) {
     + '<table class="print-table roster-table"><thead><tr>'
     + '<th class="col-i">#</th><th>الاسم واللقب</th><th>رقم الانخراط</th>'
     + GROUP_ROSTER_SESSIONS.map(s => '<th class="col-mark">' + esc(s) + '</th>').join('')
+    + '<th class="col-recorder">سجّله</th>'
     + '<th class="col-note">ملاحظات المدرب</th></tr></thead><tbody>'
     + (list.length
       ? list.map((s, i) => '<tr><td class="col-i">' + clubDigits(i + 1) + '</td>'
         + '<td><b>' + esc(s.name || '') + '</b></td>'
         + '<td dir="ltr">' + esc(clubDigits(s.id || '')) + '</td>'
         + GROUP_ROSTER_SESSIONS.map(() => '<td class="mark-cell"></td>').join('')
+        + '<td class="recorder-cell">' + (anyRecorder ? recorderTag(recorders[String(s.id)] || null) : '') + '</td>'
         + '<td class="note-cell"></td></tr>').join('')
-      : emptyRow(3 + GROUP_ROSTER_SESSIONS.length + 1, 'لا يوجد سباحون في هذا الفوج.'))
+      : emptyRow(3 + GROUP_ROSTER_SESSIONS.length + 2, 'لا يوجد سباحون في هذا الفوج.'))
     + '</tbody></table>'
     + '<div class="roster-sign">'
     + '<div class="sign-slot"><span>توقيع المدرب</span><i></i></div>'

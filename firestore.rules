@@ -30,6 +30,13 @@ service cloud.firestore {
     function coach() { return signedIn() && role() == 'coach'; }
     function staff() { return manager() || coach(); }
 
+    /* من يسجّل الحضور بالمسح: المدرب، ومن له حقّ الإدارة -- و`manager`
+       معهم، لأن الدور موجود على المنصة (اختيار الأفواج، وطباعة البطاقات)
+       والـخادم يقبله في `scannerView`. وبدون هذا السطر يُقبل الدور من
+       الخادم ويُردّ من هنا عند الكتابة: نموذجٌ يُملأ ثم يُقرأ رفضًا.
+       ولا يُوسَّع بهذا غير الحضور: كل حقّ آخر يبقى على `manager()`. */
+    function scanner() { return staff() || (signedIn() && role() == 'manager'); }
+
     /* Is this member's card mine?
 
        Three links, because the link was written at three different times:
@@ -206,8 +213,8 @@ service cloud.firestore {
        and only those, through the same key the roster uses, so a mark about
        anybody else is still refused. */
     match /attendance/{id} {
-      allow read: if staff() || (signedIn() && swimmerDocIsMine(resource.data.member_id));
-      allow create, update: if staff();
+      allow read: if scanner() || (signedIn() && swimmerDocIsMine(resource.data.member_id));
+      allow create, update: if scanner();
       allow delete: if manager();
     }
 
