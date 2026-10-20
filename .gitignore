@@ -46,3 +46,4 @@ tools/tests/out/
 tools/intercept-roots.pem
 .firebase/
 tools/neon/.render-secrets
+tools/neon/.backups/
