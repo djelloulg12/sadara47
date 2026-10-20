@@ -236,6 +236,28 @@ ROUTES['GET /api/registration'] = async (req, res) => {
   sendJSON(res, { open: data.open !== false, note: data.note || '', readable: true });
 };
 
+/* ---------------- إبقاء الخدمة مستيقظة ----------------
+   Render المجاني يُنيم الخدمة بعد 15 دقيقة بلا طلب وارد، فتستيقظ بعد ~دقيقة
+   عند أول زيارة. وهذا مزعج لعائلة تفتح المنصة في الصباح.
+
+   الحل: نبضة خارجية كل 14 دقيقة. لكن نبضة مفتوحة للعالم تُستنزف: أي عابر
+   يضرب العنوان فيستهلك من ساعات Render الـ750، فتُوقَف الخدمة قبل نهاية الشهر.
+
+   ولذلك شرطان:
+     - رمز سرّي في العنوان (`SADARA_WAKE_TOKEN`). بلا رمز: 404، وكأن المسار
+       غير موجود -- لا نكشف أنه يوجد شيء هنا.
+     - لا لمس لقاعدة Neon. النبضة تقول «الخادم حيّ» فقط. لو قرأت من القاعدة
+       لأيقظت Neon كل 14 دقيقة (وهو ينام بعد 5) واستهلكت حساب الاستعلامات
+       بلا سبب: النبضة ليست استعمالًا، بل منع نوم. */
+ROUTES['GET /api/wake'] = async (req, res, body, url) => {
+  const expected = process.env.SADARA_WAKE_TOKEN || '';
+  const given = url.searchParams.get('token') || '';
+  if (!expected || given !== expected) {
+    return sendJSON(res, { error: 'مسار غير معروف' }, 404);
+  }
+  sendJSON(res, { ok: true, awake: true, at: new Date().toISOString() });
+};
+
 /* ---------------- السباحون ---------------- */
 ROUTES['GET /api/swimmers'] = async (req, res) => {
   const user = await currentUser(req);

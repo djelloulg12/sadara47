@@ -24,3 +24,7 @@ services:
         sync: false
       - key: SADARA_SESSION_SECRET
         sync: false
+      # رمز النبضة التي تمنع نوم الخدمة (keep-awake.yml). بلا رمز يرفض
+      # /api/wake كل طلب، فلا يستنزف عابر ساعات Render الـ750.
+      - key: SADARA_WAKE_TOKEN
+        sync: false
