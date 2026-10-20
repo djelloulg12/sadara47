@@ -604,6 +604,169 @@
     out.problems.push('the table-label stage did not run: ' + ((e && e.message) || e));
   }
 
+  /* ------------------------------------------------------------------
+     تخصيص الأعمدة: القائمة تفتح، والعلامة تُخفي، والاختيار يُحفظ لصاحبه.
+
+     الزرّ ظاهر في الشيفرة، والقائمة تُبنى، والاختيار يُكتب في التخزين المحلي
+     -- وكلّها يمكن أن تكون ولا تفعل شيئًا: زرّ يُضاف بعد أن يكون `bind` قد
+     مرّ لا يحمل معالجًا، وعلامة مقلوبة تُحفظ فلا تُخفي، وتفضيل يُحفظ باسم
+     المتصفح فيتبع من يدخل بعده.
+
+     فيُضغط الزرّ الحقيقي، وتُلمس العلامة الحقيقية، ويُقرأ الـDOM الحقيقي.
+  ------------------------------------------------------------------ */
+  function driveColumnTool() {
+    var report = { problems: [], steps: [] };
+    try {
+      var swimmers = [];
+      var FAM = ['بن طَرَفَة', 'قندوز', 'بوصيلة', 'جبريط'];
+      for (var i = 0; i < 6; i++) {
+        var no = 'E202610' + ('000' + (i + 1)).slice(-4);
+        swimmers.push({
+          id: no, membership_no: no, name: 'سباح ' + FAM[i % FAM.length],
+          group: i % 2 ? 'المبتدئون' : 'المتوسطون', phone: '06610000' + i,
+          status: 'نشط', blood_group: 'O+', joined: '2026-10-0' + (1 + i % 9),
+          photo: PHOTO, level: 'المستوى 1'
+        });
+      }
+
+      function draw(role, email) {
+        var s = seedFor('users', role);
+        s.user = { id: 1, name: 'المسيّر', role: role, email: email };
+        s.swimmers = swimmers;
+        try { localStorage.setItem('sadara-state', JSON.stringify(s)); } catch (e) {}
+        var mount = document.getElementById('app');
+        if (mount) mount.innerHTML = '';
+        try { state = Object.assign(state || {}, s); } catch (e) {}
+        state.page = 'users';
+        render();
+        return document.querySelector('#app table');
+      }
+
+      /* A preference left by an earlier run of this very check would make it ask
+         its first question about the wrong state: «is the phone hidden before
+         anything was unticked?» is only a sensible question on a list nobody has
+         configured yet. So the two accounts this check uses are cleared first --
+         the check is about the tool, not about what is already in the browser. */
+      function forgetChoices() {
+        try {
+          var doomed = [];
+          for (var k = 0; k < localStorage.length; k++) {
+            var key = localStorage.key(k);
+            if (key && key.indexOf('sadara-cols:') === 0
+                && (key.indexOf('mgr@sadara.dz') !== -1 || key.indexOf('other@sadara.dz') !== -1)) {
+              doomed.push(key);
+            }
+          }
+          for (var d = 0; d < doomed.length; d++) localStorage.removeItem(doomed[d]);
+        } catch (e) {}
+      }
+
+      function headerIndex(table, label) {
+        var head = table.tHead || table.querySelector('thead');
+        var heads = head.rows[head.rows.length - 1].cells;
+        for (var h = 0; h < heads.length; h++) {
+          if ((heads[h].textContent || '').replace(/\s+/g, ' ').trim() === label) return h;
+        }
+        return -1;
+      }
+      function cellHidden(table, colIndex) {
+        var cell = table.tBodies[0].rows[0].cells[colIndex];
+        if (!cell) return null;
+        return { marked: cell.hasAttribute('data-col-hidden'),
+                 styled: getComputedStyle(cell).display === 'none' };
+      }
+
+      /* 1. the button, for a manager and not for a coach */
+      forgetChoices();
+      var table = draw('manager', 'mgr@sadara.dz');
+      if (!table) { report.problems.push('the swimmers table did not render, so the column tool could not be driven'); return report; }
+      var btn = document.querySelector('#app [data-action="toggle-columns"]');
+      report.steps.push('button for manager: ' + (btn ? 'present' : 'MISSING'));
+      if (!btn) report.problems.push('the manager has no «تخصيص الأعمدة» button on the swimmers list');
+
+      draw('coach', 'coach@sadara.dz');
+      var coachBtn = document.querySelector('#app [data-action="toggle-columns"]');
+      report.steps.push('button for coach: ' + (coachBtn ? 'present' : 'absent'));
+      if (coachBtn) report.problems.push('a coach is offered the column tool');
+
+      /* 2. it opens a menu with a tick per column */
+      table = draw('manager', 'mgr@sadara.dz');
+      btn = document.querySelector('#app [data-action="toggle-columns"]');
+      btn.click();
+      var menu = document.querySelector('#app [data-col-menu]');
+      report.steps.push('menu after press: ' + (menu && !menu.hidden ? 'open' : 'MISSING or hidden'));
+      if (!menu || menu.hidden) {
+        report.problems.push('pressing «تخصيص الأعمدة» opens no menu -- the button is added after '
+          + 'bind has run, so it may carry no handler');
+        return report;
+      }
+      var boxes = menu.querySelectorAll('input[type="checkbox"]');
+      report.steps.push('ticks in the menu: ' + boxes.length);
+      if (boxes.length < 3) report.problems.push('the menu carries ' + boxes.length + ' columns to tick');
+
+      /* 3. the locked columns */
+      var nameBox = menu.querySelector('[data-col-toggle="السباح"]');
+      var groupBox = menu.querySelector('[data-col-toggle="الفوج"]');
+      if (!nameBox || !nameBox.disabled) report.problems.push('«السباح» is not locked, so the name can be hidden');
+      if (!groupBox || !groupBox.disabled) report.problems.push('«الفوج» is not locked, so the group can be hidden');
+      report.steps.push('locked: السباح=' + (nameBox && nameBox.disabled) + ' الفوج=' + (groupBox && groupBox.disabled));
+
+      /* 4. untick a real column: it goes from the table and the phone card */
+      var phoneIndex = headerIndex(table, 'الهاتف');
+      report.steps.push('الهاتف column index: ' + phoneIndex);
+      if (phoneIndex === -1) { report.problems.push('no «الهاتف» column on the swimmers table'); return report; }
+      var before = cellHidden(table, phoneIndex);
+      if (!before || before.styled) report.problems.push('«الهاتف» is hidden before anything was unticked');
+
+      var phoneBox = menu.querySelector('[data-col-toggle="الهاتف"]');
+      phoneBox.checked = false;
+      action('set-column', phoneBox);
+      table = document.querySelector('#app table');
+      var after = cellHidden(table, phoneIndex);
+      report.steps.push('الهاتف after untick: marked=' + (after && after.marked) + ' hidden=' + (after && after.styled));
+      if (!after || !after.styled) {
+        report.problems.push('unticking «الهاتف» left it on the table -- a tick that hides nothing '
+          + 'is the fault this stage exists for (the choice may be stored the wrong way round)');
+      }
+
+      /* 5. the choice is kept for this account, away from another */
+      var keptKey = null;
+      try {
+        for (var k = 0; k < localStorage.length; k++) {
+          var key = localStorage.key(k);
+          if (key && key.indexOf('sadara-cols:') === 0 && key.indexOf('mgr@sadara.dz') !== -1) keptKey = key;
+        }
+      } catch (e) {}
+      report.steps.push('stored under: ' + keptKey);
+      if (!keptKey) report.problems.push('the choice is not kept for the manager who made it');
+
+      table = draw('manager', 'mgr@sadara.dz');
+      var again = cellHidden(table, headerIndex(table, 'الهاتف'));
+      report.steps.push('kept across a redraw: hidden=' + (again && again.styled));
+      if (!again || !again.styled) report.problems.push('the column comes back on the next render');
+
+      var other = draw('manager', 'other@sadara.dz');
+      var forOther = cellHidden(other, headerIndex(other, 'الهاتف'));
+      report.steps.push('for another account: hidden=' + (forOther && forOther.styled));
+      if (forOther && forOther.styled) {
+        report.problems.push('a column one manager hid is hidden for another account -- the preference '
+          + 'is kept per browser, not per person');
+      }
+    } catch (e) {
+      report.problems.push('the column tool could not be driven at all: ' + ((e && e.message) || e));
+    }
+    return report;
+  }
+
+  try {
+    out.columnTool = driveColumnTool();
+    for (var ci = 0; ci < out.columnTool.problems.length; ci++) {
+      out.problems.push('the column tool: ' + out.columnTool.problems[ci]);
+    }
+  } catch (e) {
+    out.problems.push('the column-tool stage did not run: ' + ((e && e.message) || e));
+  }
+
   out.measured = measured;
   out.verdict = out.problems.length ? 'PROBLEMS' : 'CLEAN';
 
