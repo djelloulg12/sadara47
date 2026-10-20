@@ -534,6 +534,76 @@
     out.problems.push('the group sheet stage did not run: ' + ((e && e.message) || e));
   }
 
+  /* ------------------------------------------------------------------
+     الجدول على الهاتف: هل تقول كل خلية من أي عمود جاءت؟
+
+     الورقة تحوّل صفّ الجدول على الهاتف إلى مكدّس من الكتل، وتضع اسم العمود
+     أمام كل كتلة بقاعدة `content:attr(data-label)`. القاعدة موجودة، ووسم
+     `data-label` لم يكن على خلية واحدة في المنصة كلها، فكان الأب على هاتفه
+     يرى عمودًا من قيم عارية -- «المتوسطون»، «06610000»، «O+» -- ولا شيء
+     يقول له أيّها الفوج وأيّها الهاتف وأيّها فصيلة الدم.
+
+     يُقاس في المتصفح لأن ما لا يُقاس يُدَّعى: قاعدة `::before` تشير إلى سمة
+     غائبة تبدو في الشيفرة كأنها تعمل. لا يُقاس الحجم هنا -- لا محرّك عرض
+     للهاتف في هذا المشي -- بل يُقاس أن الوسم موجود وغير فارغ على كل خلية
+     تحت رأس مسمّى، وهو الشرط الذي بدونه لا يظهر اسم العمود أبدًا.
+  ------------------------------------------------------------------ */
+  function driveTableLabels() {
+    var report = { problems: [], tables: [] };
+    try {
+      var seed = seedFor('card', 'admin');
+      try { localStorage.setItem('sadara-state', JSON.stringify(seed)); } catch (e) {}
+      var mount = document.getElementById('app');
+      if (mount) mount.innerHTML = '';
+      try { state = Object.assign(state || {}, seed); } catch (e) {}
+
+      var pages = ['applications', 'attendance', 'settings', 'users'];
+      for (var pi = 0; pi < pages.length; pi++) {
+        var page = pages[pi];
+        if (mount) mount.innerHTML = '';
+        state.page = page;
+        try { render(); } catch (e) { continue; }
+        var tables = document.querySelectorAll('#app table');
+        for (var ti = 0; ti < tables.length; ti++) {
+          var table = tables[ti];
+          var head = table.tHead || table.querySelector('thead');
+          var body = table.tBodies.length ? table.tBodies[0] : table.querySelector('tbody');
+          if (!head || !head.rows.length || !body) continue;
+          var heads = head.rows[head.rows.length - 1].cells;
+          var row = body.rows[0];
+          if (!row) continue;
+          var cells = row.cells;
+          var named = 0, blank = 0;
+          for (var c = 0; c < cells.length; c++) {
+            var headText = (heads[c] && (heads[c].textContent || '')).replace(/\s+/g, ' ').trim();
+            if (!headText) continue; /* a decision column is labelled by its buttons */
+            var label = cells[c].getAttribute('data-label');
+            if (label && label.length) named++;
+            else blank++;
+          }
+          report.tables.push({ page: page, named: named, blank: blank });
+          if (blank) {
+            report.problems.push('a table on «' + page + '» has ' + blank
+              + ' cell(s) in one row with a named column above them and no data-label, '
+              + 'so on a phone the value stands with no saying which column it is');
+          }
+        }
+      }
+    } catch (e) {
+      report.problems.push('the table labels could not be inspected at all: ' + ((e && e.message) || e));
+    }
+    return report;
+  }
+
+  try {
+    out.tableLabels = driveTableLabels();
+    for (var li = 0; li < out.tableLabels.problems.length; li++) {
+      out.problems.push('tables on a phone: ' + out.tableLabels.problems[li]);
+    }
+  } catch (e) {
+    out.problems.push('the table-label stage did not run: ' + ((e && e.message) || e));
+  }
+
   out.measured = measured;
   out.verdict = out.problems.length ? 'PROBLEMS' : 'CLEAN';
 

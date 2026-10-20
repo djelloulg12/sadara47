@@ -36,7 +36,7 @@ const SUITES = [
   ['schema-neon', 'schema-neon.test.js', 'the Neon schema covers every collection and field, and destroys nothing'],
   ['password-gate', 'password-gate.test.js', 'the forced-password wall cannot be dismissed, and rises only where the flag is written'],
   ['notice-layout', 'notice-layout.test.js', 'the announcement in the shut door, measured on a phone and a desk'],
-  ['smoke', 'smoke.js', 'every page, every control, every role'],
+  ['table-labels', 'table-labels.test.js', 'the phone card is named from its column, on both render paths'],  ['smoke', 'smoke.js', 'every page, every control, every role'],
   ['adapter', 'adapter.test.js', 'Firestore adapter authorisation and limits']
 ];
 
