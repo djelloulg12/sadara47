@@ -1,21 +1,26 @@
+# نشر المنصة على Render — خدمة واحدة مجانية.
+# ----------------------------------------------------------------------------
+# الخدمة تشغّل Docker image من هذا المستودع: Node يقدّم الموقع والـ API معًا.
+# Render يمرّر PORT تلقائيًا، والخادم يقرأه (process.env.PORT).
+#
+# المتغيرات السرّية لا تُكتب هنا. تُضبط في لوحة Render مرة واحدة:
+#   DATABASE_URL            رابط اتصال Neon (postgres://...?sslmode=require)
+#   SADARA_SESSION_SECRET   نص عشوائي 64 حرفًا — بدونه تُبطَل الجلسات عند كل نشر
+#   NODE_ENV                production
+#
+# القيم اختيارية: تُنشئ حسابات Firebase المبدئية، وليست لازمة على Neon.
 services:
   - type: web
-    name: sadara-swimming-platform
+    name: sadara-platform
     runtime: docker
+    dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /
     autoDeployTrigger: commit
     envVars:
-      - key: SADARA_ADMIN_EMAIL
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
         sync: false
-      - key: SADARA_ADMIN_PASSWORD
+      - key: SADARA_SESSION_SECRET
         sync: false
-      - key: SADARA_PRESIDENT_EMAIL
-        sync: false
-      - key: SADARA_PRESIDENT_PASSWORD
-        sync: false
-      - key: SADARA_COACH_EMAIL
-        sync: false
-      - key: SADARA_COACH_PASSWORD
-        sync: false
-

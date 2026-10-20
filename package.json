@@ -5,6 +5,8 @@
   "description": "منصة النادي الرياضي الصدارة — فوج السباحة",
   "scripts": {
     "serve": "python server.py",
+    "start": "node tools/neon/server/server.js",
+    "serve:neon": "node tools/neon/server/server.js",
     "build": "python tools/build/build-app.py",
     "check": "node tools/verify.js",
     "check:print": "python tools/check-form-placement.py",
@@ -26,6 +28,7 @@
     "jsdom": "^25.0.0"
   },
   "dependencies": {
-    "firebase-admin": "^14.5.0"
+    "firebase-admin": "^14.5.0",
+    "pg": "^8.13.1"
   }
 }

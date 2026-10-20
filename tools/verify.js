@@ -36,6 +36,7 @@ const SUITES = [
   ['schema-neon', 'schema-neon.test.js', 'the Neon schema covers every collection and field, and destroys nothing'],
   ['password-gate', 'password-gate.test.js', 'the forced-password wall cannot be dismissed, and rises only where the flag is written'],
   ['notice-layout', 'notice-layout.test.js', 'the announcement in the shut door, measured on a phone and a desk'],
+  ['deploy', 'deploy.test.js', 'the platform deploys as one service: pg locked, secrets from the environment, the Neon entry point'],
   ['table-labels', 'table-labels.test.js', 'the phone card is named from its column, on both render paths'],
   ['column-tool', 'column-tool.test.js', 'the column tool opens, hides, remembers per person, locks the name'],
   ['resilience', 'resilience.test.js', 'a page that fails to draw shows a panel with a way back, and stale data says so'],
