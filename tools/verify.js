@@ -33,6 +33,8 @@ const SUITES = [
   ['group-button', 'group-button.test.js', 'the group button: one field, the roles the server accepts, a refusal is a refusal'],
   ['groups', 'groups.test.js', 'one group list, the id travels with the name, the filter bar, the A4 group sheet'],
   ['scanner', 'scanner.test.js', 'who may scan, the card is matched before it is written, every mark carries who made it'],
+  ['schema-neon', 'schema-neon.test.js', 'the Neon schema covers every collection and field, and destroys nothing'],
+  ['password-gate', 'password-gate.test.js', 'the forced-password wall cannot be dismissed, and rises only where the flag is written'],
   ['notice-layout', 'notice-layout.test.js', 'the announcement in the shut door, measured on a phone and a desk'],
   ['smoke', 'smoke.js', 'every page, every control, every role'],
   ['adapter', 'adapter.test.js', 'Firestore adapter authorisation and limits']

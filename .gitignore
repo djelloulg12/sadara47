@@ -9,6 +9,10 @@ dist/
 *.pem
 *.key
 
+# The key that signs login sessions on the Neon server. Regenerating it would
+# sign every family out; committing it would let anyone forge a session.
+.session-secret
+
 # Local database (never publish member data)
 sadara.db
 sadara-local.db
@@ -20,6 +24,9 @@ __pycache__/
 # Personal data and private club documents
 المرفقات/
 Card Number.docx
+
+# Firebase Auth export (password hashes — never publish)
+auth_export.json
 
 # Local notes and account listings (may contain credentials)
 منصة النادي الرياضي الصدارة.txt
