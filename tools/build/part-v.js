@@ -1,4 +1,4 @@
-/* ==========================================================
+﻿/* ==========================================================
    تخزين الصور خارج localStorage + عدّاد الزوار
    الصور كانت تُحفظ كنص داخل localStorage، وهذا يملأ الحصة
    بسرعة ويُضعف الأداء. IndexedDB يحفظها بلا حصّة.
@@ -152,62 +152,16 @@ render = function () {
   }
 };
 
-/* عدّاد زيارات خفيف: رقم فقط، بلا تعريف للزائر */
-let visitCounted = false;
-async function countVisit() {
-  if (visitCounted || state.user) return;
-  if (sessionStorage.getItem('sadara-visited')) return;
-  visitCounted = true;
-  sessionStorage.setItem('sadara-visited', '1');
-  try {
-    const res = await fetch('/api/visit', {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ page: location.pathname, ref: document.referrer ? 'link' : 'direct' })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      state.visits = data.visits || 0;
-    }
-  } catch (_) { /* counting is best effort */ }
-}
 
-/* ---------- عداد الزوار في لوحة الإدارة ---------- */
-let visitTotals = { visits: 0, today: 0, week: 0 };
-async function loadVisitTotals() {
-  if (visitTotals.visits) return;
-  try {
-    const res = await fetch('/api/visits', { credentials: 'same-origin' });
-    if (res.ok) visitTotals = Object.assign(visitTotals, await res.json());
-  } catch (_) { /* this backend has no counter */ }
-}
-function visitStampHtml() {
-  if (!visitTotals.visits) return '';
-  return '<p class="visit-stamp">الزيارات: <b>' + esc(visitTotals.visits) + '</b>'
-    + ' \u00b7 اليوم <b>' + esc(visitTotals.today || 0) + '</b>'
-    + ' \u00b7 \u0622\u062e\u0631 7 \u0623\u064a\u0627\u0645 <b>' + esc(visitTotals.week || 0) + '</b></p>';
-}
-const corePageViewVisits = pageView;
-pageView = function (p) {
-  const html = corePageViewVisits(p);
-  if (p !== 'home' || !state.user) return html;
-  if (!visitTotals.visits) loadVisitTotals();
-  if (html.indexOf('visit-stamp') >= 0) return html;
-  // the welcome paragraph is the one place every admin sees first
-  return html.includes('class="welcome"')
-    ? html.replace('class="welcome"', 'class="welcome visit-stamp-host"')
-    : html;
-};
-const coreRenderVisits = render;
-render = function () {
-  coreRenderVisits();
-  const host = document.querySelector('.visit-stamp-host');
-  if (!host || host.querySelector('.visit-stamp')) return;
-  const stamp = visitStampHtml();
-  if (stamp) host.insertAdjacentHTML('beforeend', stamp);
-  else loadVisitTotals().then(() => {
-    const again = document.querySelector('.visit-stamp-host');
-    const late = visitStampHtml();
-    if (again && late && !again.querySelector('.visit-stamp')) again.insertAdjacentHTML('beforeend', late);
-  });
-};
+/* عدّاد الزيارات أُزيل من هنا.
+   ----------------------------------------------------------------------------
+   كان يقرأ `/api/visit` و`/api/visits`، وهما مساران من عهد Firestore لم
+   يُنقلا إلى خادم Neon. فكان كل فتح للصفحة الرئيسية يطلب مسارًا غير موجود
+   (404)، وطبقةُ الصمود تعدّ كل ردّ غير ناجح فشلًا في المزامنة -- فتظهر لافتة
+   «قد تكون البيانات قديمة» على بيانات لم يفشل فيها شيء، ويزداد سجلّ الطرفية
+   ضجيجًا لا يقود إلى عطل.
+
+   والرقم نفسه لم يظهر يومًا: `visitTotals.visits` يبقى صفرًا فيُعيد
+   `visitStampHtml` نصًّا فارغًا. فالصدق أن يُحذف ما لا يعمل، لا أن يُصمَت.
+   وإذا أراد النادي عدّادًا حقيقيًا فمكانه جدول في Neon ومساران في الخادم، لا
+   طلبٌ يُرسَل إلى العدم في كل زيارة. */
