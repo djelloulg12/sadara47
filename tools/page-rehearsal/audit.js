@@ -332,12 +332,12 @@
         });
       };
 
-      var addBtn = document.querySelector('[data-action="add-group"]');
+      var addBtn = document.querySelector('[data-action="new-group"]');
       if (!addBtn) {
         report.problems.push('the groups page offers no «إضافة فوج» button');
       } else {
-        action('add-group', addBtn);
-        var nameBox = document.getElementById('gr-name');
+        action('new-group', addBtn);
+        var nameBox = document.getElementById('g-name');
         report.opened = !!nameBox;
         if (!nameBox) {
           report.problems.push('«إضافة فوج» opened no form with a name in it');

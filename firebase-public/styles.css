@@ -1475,6 +1475,57 @@ select{height:auto!important;min-height:38px;line-height:1.6;padding:.45rem .8re
   .roster-table .mark-cell,.roster-table .note-cell{background:#fff!important}
   .roster-sign,.roster-table tr{page-break-inside:avoid;break-inside:avoid}
 }
+
+/* ============ لوحة الأفواج: الفئة والأيام والتوقيت والسعة والطاقم ============
+   البطاقة القديمة كانت أربعة سطور؛ وهذه تُظهر ما يقرأه المدير قبل أن يفتح
+   النموذج: الفئة، والأيام، والتوقيت، والمسبح، والسعة. */
+
+.group-badges{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 10px}
+.group-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;
+  background:#eef5ff;color:#1d4e89;font-size:10.5px;border:1px solid #d5e6fb;white-space:nowrap}
+.group-badge.time{background:#f1fbf4;color:#166534;border-color:#cdeed7}
+.group-badge.pool{background:#eef9ff;color:#155e75;border-color:#cbeaf6}
+.group-helpers{color:var(--muted)}
+.group-cap{color:var(--muted);font-weight:500}
+.group-over{color:#a3341f;font-weight:700}
+.group-notes{margin-top:6px;color:var(--muted);font-size:10.5px;font-style:italic}
+.group-grid .is-derived{opacity:.94;border-style:dashed}
+.row-warn td{background:#fff8f1!important}
+
+/* شريط «غير مفرز»: قائمة انتظار التوزيع. أوّل ما تقع عليه العين. */
+.unassigned-banner{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:12px 16px;
+  border-radius:12px;background:#fff8f1;border:1px solid #f0c9a8;color:#7a3f10}
+.unassigned-banner .unassigned-icon{font-size:22px;line-height:1}
+.unassigned-banner b{display:block;font-size:13px;color:#8a4b12}
+.unassigned-banner p{margin:3px 0 0;font-size:11px;color:#9a5f28}
+.unassigned-banner .btn{margin-inline-start:auto;white-space:nowrap}
+
+/* محرّر الفوج: حوار واسع، وشبكة أيام، وتحذيرات قبل الحفظ. */
+.group-modal{max-width:640px;width:100%}
+.group-form{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-top:6px}
+.group-form .field{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--muted)}
+.group-form .field.wide{grid-column:1 / -1}
+.group-form input,.group-form select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;
+  font:inherit;font-size:13px;background:#fff;color:inherit}
+.group-form input:focus,.group-form select:focus{outline:2px solid #bcd6f5;border-color:#9cc0ea}
+.day-grid{display:flex;flex-wrap:wrap;gap:6px}
+.day-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid var(--line);
+  border-radius:999px;background:#f8fbff;cursor:pointer;font-size:11.5px;user-select:none}
+.day-chip input{accent-color:var(--navy)}
+.day-chip:has(input:checked){background:#eaf4ff;border-color:#9cc0ea;color:var(--navy)}
+.group-warn{margin-top:12px}
+.group-warn.has-warn{padding:10px 14px;border-radius:10px;background:#fff8f1;border:1px solid #f0c9a8;color:#8a4b12}
+.group-warn b{font-size:12px}
+.group-warn ul{margin:6px 0 0;padding-inline-start:18px;font-size:11.5px}
+.group-form-actions{display:flex;gap:8px;margin-top:16px;align-items:center}
+.group-form-actions .no{margin-inline-start:auto}
+
+@media (max-width:640px){
+  .group-form{grid-template-columns:1fr}
+  .group-grid{grid-template-columns:1fr}
+  .unassigned-banner{flex-wrap:wrap}
+  .unassigned-banner .btn{margin-inline-start:0}
+}
 /* ================= ماسح الحضور: الكاميرا، والقائمة تحت الشاشة ================= */
 
 .scan-panel .panel-head{align-items:flex-start;gap:10px;flex-wrap:wrap}

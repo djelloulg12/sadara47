@@ -492,14 +492,14 @@ scenario('the add-group form still saves a group', async () => {
   w.__t.state.page = 'groups';
   w.render();
 
-  const add = w.document.querySelector('[data-action="add-group"]');
+  const add = w.document.querySelector('[data-action="new-group"]');
   if (!add) { errors.push('the groups page no longer offers «إضافة فوج»'); return; }
-  await w.__t.action('add-group', add);
+  await w.__t.action('new-group', add);
 
-  const nameBox = w.document.getElementById('gr-name');
+  const nameBox = w.document.getElementById('g-name');
   if (!nameBox) { errors.push('«إضافة فوج» opened no form to type a name into'); return; }
   nameBox.value = 'فوج الأشبال';
-  const coach = w.document.getElementById('gr-coach');
+  const coach = w.document.getElementById('g-coach');
   if (coach) coach.value = 'سليم';
 
   const before = (w.__t.state.groups || []).length;
@@ -516,7 +516,7 @@ scenario('the add-group form still saves a group', async () => {
   }
   /* And the form is asked for a name, still: an empty name must not create a
      group, or every stray press of حفظ leaves one behind. */
-  await w.__t.action('add-group', w.document.querySelector('[data-action="add-group"]'));
+  await w.__t.action('new-group', w.document.querySelector('[data-action="new-group"]'));
   const empty = (w.__t.state.groups || []).length;
   await w.__t.action('save-group', { dataset: {} });
   if ((w.__t.state.groups || []).length !== empty) {

@@ -815,19 +815,128 @@ ROUTES['PUT /api/facilities'] = async (req, res, body) => {
 
 
 /* ============================== الأفواج ==============================
-   قائمة واحدة في `config/groups`، حتى ترسم صفحة الأفواج واستمارة السباح
-   القائمة نفسها. و`readable` يسافر مع القراءة: قراءة فاشلة ليست قائمة فارغة. */
+   `config/groups` هو المصدر الحاكم الواحد للأفواج، وليس عرضًا للقراءة.
+
+   ولماذا كان هذا القسم يحتاج إعادة كتابة
+   ---------------------------------------
+   القائمة كانت تُكتب وتُقرأ، ولا شيء يربطها بالسباحين. فتغيير اسم فوج في
+   صفحة الأفواج لا يمسّ `group_name` على الطفل، ويبقى الطفل في فوج اسمه لم
+   يعد موجودًا. وهذا هو الخلل نفسه الذي عاد مرّتين: الفوج الرسمي يقول
+   «المبتدئون» والسباح يحمل «مبتدئ»، فيُفتح الفوج على ثلاثة أطفال و54 مفقودًا.
+
+   وهذا القسم يجعله مستحيلًا: كل حفظ يُطبّق على السباحين في **معاملة واحدة**،
+   فإما أن تتغيّر القائمة والسباحون معًا، أو لا يتغيّر شيء.
+
+   وما يفعله الحفظ، بالترتيب:
+     ١. يتحقّق من كل فوج: اسم غير مكرّر، وفئة معروفة، أيام وتوقيت صالحان،
+        وسعة موجبة. ويجمع تحذيرات (تعارض مسبح، تجاوز سعة) ولا يمنع بها.
+     ٢. يشتقّ لكل اسم قديم على السباحين مقابلَه الجديد **بالمعنى**، فلا يبقى
+        سباح على صيغة لم تعد في القائمة.
+     ٣. يكتب `group_name` و`group_id` على كل سباح تغيّر فوجه.
+     ٤. من كان في فوج حُذف يُنقل إلى «غير مفرز» — ولا يُحذف سباح أبدًا.
+
+   والفوج «غير مفرز» فوجٌ نظاميّ: له معرّف ثابت، ولا يُحذف، ويُضاف إلى أي
+   قائمة يقرأها النادي حتى تظهر قائمة انتظار التوزيع.
+*/
+const UNASSIGNED = { id: 'grp-unassigned', name: 'غير مفرز' };
+
+/* فئات التفويج: مفتاح إنجليزي ثابت للخادم، وتسمية عربية للعرض.
+   المفتاح ثابت لأن التسمية العربية قد تُصقل لاحقًا؛ ولو كان المفتاح عربيًّا
+   لتغيّرت البيانات بمجرّد تحسين كلمة. */
+const GROUP_CATEGORIES = {
+  minnows: 'الأصاغر والبراعم',
+  juniors: 'الصغار',
+  adults: 'الأكابر والكهول',
+  women: 'الفئة النسوية',
+  elite: 'فرق النخبة والمنافسة',
+  fitness: 'اللياقة وتحسين الأداء'
+};
+
+const WEEKDAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+
+/* الفوج كما يراه النادي: كل حقول الحفظ، بمصادر موثوقة. */
+function normalizeGroup(item, index) {
+  const name = String((item && item.name) || '').trim().slice(0, 80);
+  if (!name) return null;
+  const category = String((item && item.category) || '').trim();
+  const days = Array.isArray(item && item.days)
+    ? item.days.map(d => String(d).trim()).filter(d => WEEKDAYS.includes(d))
+    : String((item && item.days) || '').split(/[،,]/).map(d => d.trim()).filter(d => WEEKDAYS.includes(d));
+  const hhmm = v => (/^\d{1,2}:\d{2}$/.test(String(v || '').trim()) ? String(v).trim() : '');
+  const capacity = Number(item && item.capacity);
+  return {
+    id: String((item && item.id) || '').replace(/[^\w-]/g, '_') || ('grp-' + (index + 1)),
+    name: name,
+    category: Object.prototype.hasOwnProperty.call(GROUP_CATEGORIES, category) ? category : '',
+    days: [...new Set(days)],
+    start: hhmm(item && item.start),
+    end: hhmm(item && item.end),
+    capacity: Number.isFinite(capacity) && capacity > 0 ? Math.min(500, Math.round(capacity)) : 0,
+    coach: String((item && item.coach) || '').trim().slice(0, 120),
+    /* مساعد واحد على الأقل يُقبل مفردًا، والقائمة تُنظَّف من الفراغ والتكرار. */
+    assistants: [...new Set(
+      (Array.isArray(item && item.assistants)
+        ? item.assistants
+        : String((item && item.assistants) || '').split(/[،,]/))
+        .map(a => String(a).trim()).filter(Boolean))
+    ].slice(0, 8),
+    pool: String((item && item.pool) || '').trim().slice(0, 120),
+    notes: String((item && item.notes) || '').trim().slice(0, 300)
+  };
+}
+
+/* جذر الاسم: بلا «ال» التعريف وبلا واو/ياء الجمع. هو أساس المقارنة بالمعنى. */
+const nameRoot = s => String(s || '').replace(/^ال/, '').replace(/(ون|ين)$/, '').trim();
+
+/* أي فوج يحمله سباح اليوم، وما فوجه في القائمة الجديدة؟
+   ----------------------------------------------------------------------------
+   المطابقة بالمعرّف أولًا، ثم بالاسم، ثم بالجذر. والترتيب ليس تفصيلًا:
+
+   المعرّف هو الرابط الحقيقي بين السباح وفوجه. ولو طابقنا بالاسم وحده، لكانت
+   إعادة تسمية فوج («فوج 1» → «أكابر - تدريب متقدم»: مطلب صريح في الخطة)
+   تُفقد كل أعضائه دفعة واحدة، لأن الاسمين لا يتشابهان في حرف -- وقد حدث هذا
+   فعلًا في الاختبار، فنُقل 57 سباحًا إلى «غير مفرز» وهم في فوجهم.
+
+   فيُقرأ المعرّف أولًا: من كان في `grp-1` وبقي `grp-1` في القائمة، فوجه لم
+   يتغيّر وإن تغيّر اسمه. والاسم والجذر يخدمان البيانات القديمة التي بلا معرّف
+   -- وهي حال السباحين المستوردين قبل أن يُكتب `group_id`.
+
+   ومن لا يجد له فوجًا بكل هذه الطرق فوجه حُذف: يُنقل إلى «غير مفرز»، ولا
+   يُخترع له فوج ولا يُترك في اسم لم يعد في القائمة. */
+function rehome(swimmer, byId, byName, byRoot, keepUnassigned) {
+  const id = String(swimmer.group_id || '').trim();
+  if (id && byId.has(id)) return byId.get(id);
+
+  const n = String(swimmer.group_name || '').trim();
+  if (!n) return keepUnassigned ? UNASSIGNED : null;
+  if (byName.has(n)) return byName.get(n);
+
+  const root = nameRoot(n);
+  if (root && byRoot.has(root)) return byRoot.get(root);
+
+  return keepUnassigned ? UNASSIGNED : null;
+}
+
 ROUTES['GET /api/groups'] = async (req, res) => {
   const user = await currentUser(req);
   if (!user) return sendJSON(res, { error: 'يرجى تسجيل الدخول' }, 401);
   try {
     const data = (await readRaw('config', "firestore_path='config/groups'", [])) || {};
     const stored = Array.isArray(data.groups) ? data.groups : null;
+    /* عدد المنتمين لكل فوج يُحسب من السباحين، لا يُخزَّن في القائمة: عددٌ
+       مخزَّن يتقادم بأول تعديل لم يُحفظ من هنا. */
+    const counted = await D.all("select group_id, count(*)::int as n from sadara.swimmers group by group_id");
+    const byId = {};
+    counted.forEach(r => { byId[String(r.group_id || '')] = r.n; });
+    /* و«غير مفرز» يظهر دائمًا: القائمة العامة يجب أن تُظهر من ينتظر التوزيع،
+       وإلا صار الانتظار خفيًّا. */
+    const list = stored ? stored.map(g => Object.assign({}, g, { members: byId[g.id] || 0 })) : null;
+    let unassigned = byId[UNASSIGNED.id] || 0;
     sendJSON(res, {
-      groups: stored ? stored.map(g => ({
-        id: String(g.id || ''), name: String(g.name || ''),
-        coach: String(g.coach || ''), schedule: String(g.schedule || '')
-      })) : null,
+      groups: list,
+      categories: GROUP_CATEGORIES,
+      weekdays: WEEKDAYS,
+      unassigned: { id: UNASSIGNED.id, name: UNASSIGNED.name, members: unassigned },
       readable: true
     });
   } catch (e) {
@@ -844,31 +953,107 @@ ROUTES['PUT /api/groups'] = async (req, res, body) => {
   const raw = Array.isArray(body.groups) ? body.groups : [];
   const seen = {};
   const list = [];
+  const warnings = [];
   for (const item of raw) {
-    if (!item) continue;
-    const name = String(item.name || '').trim().slice(0, 80);
-    if (!name) continue;
+    const g = normalizeGroup(item, list.length);
+    if (!g) continue;
     /* فوج واحد لكل اسم: بطاقتان باسم واحد عدّان لفوج واحد. يُردّ ولا يُدمج
        صامتًا، حتى يكون على الصفحة ما تُبلّغه. */
-    if (seen[name]) {
-      return sendJSON(res, { error: 'اسم الفوج "' + name + '" مكرّر. لكل فوج اسم واحد.' }, 400);
+    if (seen[g.name]) {
+      return sendJSON(res, { error: 'اسم الفوج "' + g.name + '" مكرّر. لكل فوج اسم واحد.' }, 400);
     }
-    seen[name] = true;
-    list.push({
-      id: String(item.id || '').replace(/[^\w-]/g, '_') || ('grp-' + (list.length + 1)),
-      name: name,
-      coach: String(item.coach || '').slice(0, 120),
-      schedule: String(item.schedule || '').slice(0, 120)
-    });
+    if (g.id === UNASSIGNED.id || g.name === UNASSIGNED.name) {
+      return sendJSON(res, { error: '«غير مفرز» اسم نظاميّ محجوز: لا يُعرَّف فوجًا ولا يُحذف.' }, 400);
+    }
+    seen[g.name] = true;
+    list.push(g);
   }
-  await mergeRaw('config', 'config/groups', {
-    groups: list, updated_by: gate.user.id, updated_at: new Date().toISOString()
+
+  /* التحذيرات بعد اكتمال القائمة: تعارض الحوض والمدرب والسعة. تحذير لا منع:
+     النادي يعرف مسبحه، والمنصة ليست وصيًّا عليه. */
+  const overlapping = (a, b) => a.start && a.end && b.start && b.end
+    && a.days.some(d => b.days.includes(d)) && a.start < b.end && b.start < a.end;
+  const counted = await D.all("select group_id, count(*)::int as n from sadara.swimmers group by group_id");
+  const byId = {};
+  counted.forEach(r => { byId[String(r.group_id || '')] = r.n; });
+  for (const g of list) {
+    const members = byId[g.id] || 0;
+    if (g.capacity && members > g.capacity) {
+      warnings.push('«' + g.name + '» يحمل ' + members + ' منخرطًا وسعته ' + g.capacity + '.');
+    }
+    for (const other of list) {
+      if (other === g) continue;
+      if (g.coach && other.coach && g.coach === other.coach && overlapping(g, other)) {
+        warnings.push('المدرب ' + g.coach + ' في «' + g.name + '» و«' + other.name + '» في وقت متقاطع.');
+      }
+      if (g.pool && other.pool && g.pool === other.pool && g.name < other.name && overlapping(g, other)) {
+        warnings.push('«' + g.pool + '» محجوز لـ«' + g.name + '» و«' + other.name + '» في وقت متقاطع.');
+      }
+    }
+  }
+
+  /* ---- التطبيق: القائمة والسباحون في معاملة واحدة ---- */
+  const result = await withTx(async client => {
+    await client.query(
+      `insert into sadara.config (firestore_path, raw) values ('config/groups', $1::jsonb)
+         on conflict (firestore_path) do update set raw = excluded.raw`,
+      [JSON.stringify({
+        groups: list, updated_by: gate.user.id, updated_at: new Date().toISOString()
+      })]);
+
+    /* خريطة المعرّف والاسم والجذر من القائمة الجديدة.
+       والاسم المكرّر جذريًّا لا يبتلع الآخر: الأول يفوز، والباقي يُطابَق
+       بالحرف أو بالمعرّف. */
+    const byId = new Map(list.map(g => [g.id, g]));
+    const byName = new Map(list.map(g => [g.name, g]));
+    const byRoot = new Map();
+    for (const g of list) {
+      const r = nameRoot(g.name);
+      if (r && !byRoot.has(r)) byRoot.set(r, g);
+    }
+
+    /* وكل سباح: فوجه الجديد، أو «غير مفرز» إن حُذف فوجه.
+       والتحديث يقع أيضًا إن تغيّر **الاسم** وإن بقي المعرّف: هذا ما يجعل
+       إعادة تسمية الفوج تصل إلى بطاقة الطفل فورًا (مطلب «تحديث بطاقات جميع
+       المنخرطين فورًا بالبيانات الجديدة»). */
+    const swimmers = (await client.query(
+      'select firestore_path, group_name, group_id from sadara.swimmers')).rows;
+    let moved = 0;
+    let parked = 0;
+    for (const s of swimmers) {
+      const target = rehome(s, byId, byName, byRoot, true);
+      if (!target) continue;
+      const sameName = String(s.group_name || '').trim() === target.name;
+      const sameId = String(s.group_id || '').trim() === target.id;
+      if (sameName && sameId) continue;
+      if (target.id === UNASSIGNED.id) parked++;
+      await client.query(
+        `update sadara.swimmers
+            set group_name = $1, group_id = $2,
+                raw = jsonb_set(jsonb_set(raw, '{group_name}', to_jsonb($1::text), true),
+                                '{group_id}', to_jsonb($2::text), true),
+                updated_at = now()
+          where firestore_path = $3`,
+        [target.name, target.id, s.firestore_path]);
+      moved++;
+    }
+
+    await client.query(
+      `insert into sadara.audit_logs (firestore_path, raw) values ($1, $2::jsonb)
+         on conflict (firestore_path) do update set raw = excluded.raw`,
+      ['audit_logs/' + newId(), JSON.stringify({
+        action: 'groups_saved', entity_type: 'config', entity_id: 'groups',
+        details: { count: list.length, moved: moved, parked: parked },
+        actor: gate.user.id, created_at: new Date().toISOString()
+      })]);
+
+    return { moved, parked };
   });
-  await mergeRaw('audit_logs', 'audit_logs/' + newId(), {
-    action: 'groups_saved', entity_type: 'config', entity_id: 'groups',
-    details: { count: list.length }, user_id: gate.user.id, created_at: new Date().toISOString()
+
+  sendJSON(res, {
+    ok: true, groups: list, warnings: warnings,
+    updated_swimmers: result.moved, parked: result.parked
   });
-  sendJSON(res, { ok: true, groups: list });
 };
 
 /* ============================ سجلّ التدقيق ============================ */
