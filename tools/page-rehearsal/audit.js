@@ -575,7 +575,7 @@
           var cells = row.cells;
           var named = 0, blank = 0;
           for (var c = 0; c < cells.length; c++) {
-            var headText = (heads[c] && (heads[c].textContent || '')).replace(/\s+/g, ' ').trim();
+            var headText = (heads[c] ? (heads[c].textContent || '') : '').replace(/\s+/g, ' ').trim();
             if (!headText) continue; /* a decision column is labelled by its buttons */
             var label = cells[c].getAttribute('data-label');
             if (label && label.length) named++;
@@ -765,6 +765,174 @@
     }
   } catch (e) {
     out.problems.push('the column-tool stage did not run: ' + ((e && e.message) || e));
+  }
+
+  /* ------------------------------------------------------------------
+     الصمود: الحاجز يمسك الخطأ، والهيكل يظهر أثناء الجلب، والشريط يقول الحقيقة.
+
+     A boundary that is written but never catches is a boundary nobody has. So a
+     record is made to throw the way a missing field does -- a getter that fails
+     on the one swimmer nobody filled in completely -- and what is asked is
+     whether the application is still there: a panel, a sentence that says the
+     data is safe, and two ways back. Not a white screen.
+
+     Then a fetch is held open, and the list must show a skeleton rather than its
+     empty message -- "لا يوجد سباحون" told for two seconds while the data is on
+     its way is a lie a club will believe.
+  ------------------------------------------------------------------ */
+  function driveResilience() {
+    var report = { problems: [], steps: [] };
+    try {
+      var seed = seedFor('users', 'admin');
+      try { localStorage.setItem('sadara-state', JSON.stringify(seed)); } catch (e) {}
+      var mount = document.getElementById('app');
+      if (mount) mount.innerHTML = '';
+      try { state = Object.assign(state || {}, seed); } catch (e) {}
+      state.page = 'users';
+
+      /* ---- 1. a throw out of render must leave a panel, not a white screen ----
+
+         `esc` is a `const` and is not on window, so the probe cannot patch it
+         from outside the module. A record whose `name` getter throws reaches
+         every builder that reads a name, which is the same surface a missing
+         field lands on -- and it is the honest shape of the fault: one record
+         the club did not finish filling in. */
+      var poison = { id: 'poison', membership_no: 'poison', group: 'المبتدئون', status: 'نشط' };
+      Object.defineProperty(poison, 'name', {
+        get: function () { throw new Error('probe: a field was read that was not there'); }
+      });
+      state.swimmers = [poison];
+      var escaped = false;
+      try { render(); } catch (e) { escaped = true; }
+
+      var panelText = (document.getElementById('app') || {}).textContent || '';
+      var hasPanel = /تعذّر عرض هذه الصفحة/.test(panelText);
+      var hasRetry = !!document.querySelector('[data-action="recover-render"]');
+      report.steps.push('boundary on a record that throws: escapedToCaller=' + escaped
+        + ' panel=' + hasPanel + ' retry=' + hasRetry);
+      if (escaped) {
+        report.problems.push('a record with a field that throws escaped out of render() -- the '
+          + 'application white-screens, which is the fault this stage exists for');
+      }
+      if (!hasPanel) report.problems.push('a throw out of render() left no panel on the screen');
+      if (!hasRetry) report.problems.push('the error panel offers no way back');
+
+      /* the panel must say the data is safe: a red screen about a field reads as
+         a red screen about the club's records unless it says otherwise */
+      if (hasPanel && !/بياناتك لم تُمسّ/.test(panelText)) {
+        report.problems.push('the error panel does not tell the manager their data is safe');
+      }
+
+      /* ---- 2. the way back works ---- */
+      state.swimmers = seed.swimmers; /* the field was fixed, as it would be */
+      var retry = document.querySelector('[data-action="recover-render"]');
+      if (retry) {
+        retry.click();
+        var after = (document.getElementById('app') || {}).textContent || '';
+        report.steps.push('after «إعادة المحاولة»: recovered=' + !/تعذّر عرض هذه الصفحة/.test(after));
+        if (/تعذّر عرض هذه الصفحة/.test(after)) {
+          report.problems.push('pressing «إعادة المحاولة» did not draw the page again');
+        }
+      }
+
+      /* ---- 3. the skeleton, while a fetch is in flight ----
+
+         The fetch is held, not failed: that is a slow line, which is the common
+         case and the one that shows the empty message for two seconds. */
+      var held = null;
+      var innerFetch = window.fetch;
+      window.fetch = function () { return new Promise(function (res) { held = res; }); };
+      try {
+        state.swimmers = [];
+        var p = syncApi();
+        if (p && p.catch) p.catch(function () {});
+        render();
+        var rows = document.querySelectorAll('#app .table-scroll tr.skeleton-row');
+        report.steps.push('skeleton rows while a fetch is in flight: ' + rows.length);
+        if (!rows.length) {
+          report.problems.push('a list with a fetch in flight shows its empty message instead of a '
+            + 'skeleton, so a slow line looks like a club with no members');
+        }
+        if (held) held({ ok: false, status: 503, json: function () { return Promise.resolve({}); } });
+      } catch (e) {
+        report.problems.push('the skeleton could not be inspected: ' + ((e && e.message) || e));
+      }
+      window.fetch = innerFetch;
+
+      /* ---- 4. the stale banner, after a sync that failed ----
+
+         The club works without wifi. What must not happen is the screen claiming
+         to be current when it is not. */
+      var innerFetch2 = window.fetch;
+      window.fetch = function () {
+        return Promise.resolve({ ok: false, status: 503, json: function () { return Promise.resolve({}); } });
+      };
+      /* The observer must sit on top of the stub, or it is looking underneath the
+         thing it is meant to observe -- which is what it does in the real
+         application, where nothing else wraps fetch. */
+      if (typeof watchRequests_ === 'function') watchRequests_();
+      try {
+        var q = syncApi();
+        if (q && q.catch) q.catch(function () {});
+      } catch (e) {}
+      /* What is asked: after a sync that failed, does the screen say so? The
+         club works without wifi; what must not happen is the screen claiming to
+         be current when it is not. */
+      window.__sadaraBannerProbe = function () {
+        render();
+        var text = (document.body.textContent || '');
+        var shown = /تعذّر تحديث البيانات|لا يوجد اتصال بالإنترنت/.test(text);
+        report.steps.push('stale banner after a failed sync: ' + shown);
+        if (!shown) {
+          report.problems.push('a sync that failed leaves no notice, so a manager cannot tell that '
+            + 'what is on the screen may be out of date');
+        }
+        return report;
+      };
+      /* The failure is reported on a later turn. So the report is written on that
+         turn too -- one `setTimeout` after the rejection has been handled, which
+         is the earliest moment the banner can exist. */
+      setTimeout(function () {
+        window.fetch = innerFetch2;
+        if (typeof window.__sadaraFinishBanner === 'function') window.__sadaraFinishBanner();
+      }, 120);
+      return { deferred: true };
+    } catch (e) {
+      report.problems.push('the resilience stage could not be driven at all: ' + ((e && e.message) || e));
+      return report;
+    }
+  }
+
+  try {
+    out.resilience = driveResilience();
+    if (out.resilience && out.resilience.deferred) {
+      /* The banner is written a turn after the failed sync, so the report cannot
+         be written in this turn. It is written when the probe says the turn has
+         passed -- and if the probe never runs, the report says so rather than
+         silently passing a check that never happened. */
+      out.resilience = null;
+      window.__sadaraFinishBanner = function () {
+        var r = (typeof window.__sadaraBannerProbe === 'function')
+          ? window.__sadaraBannerProbe()
+          : { problems: ['the deferred banner check never ran'], steps: [] };
+        for (var i = 0; i < r.problems.length; i++) out.problems.push('resilience: ' + r.problems[i]);
+        out.resilience = r;
+        out.measured = measured;
+        out.verdict = out.problems.length ? 'PROBLEMS' : 'CLEAN';
+        var pre2 = document.createElement('pre');
+        pre2.id = 'page-audit-report';
+        pre2.style.cssText = 'position:fixed;left:-9999px;top:0';
+        pre2.textContent = JSON.stringify(out, null, 1);
+        document.body.appendChild(pre2);
+        document.body.setAttribute('data-page-verdict', out.verdict);
+      };
+      return;
+    }
+    for (var ri2 = 0; ri2 < out.resilience.problems.length; ri2++) {
+      out.problems.push('resilience: ' + out.resilience.problems[ri2]);
+    }
+  } catch (e) {
+    out.problems.push('the resilience stage did not run: ' + ((e && e.message) || e));
   }
 
   out.measured = measured;

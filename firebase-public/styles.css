@@ -1569,3 +1569,48 @@ select{height:auto!important;min-height:38px;line-height:1.6;padding:.45rem .8re
      the list does not want it printed back on */
   .table-scroll [data-col-hidden]{display:none!important}
 }
+
+/* ================= الصمود: حاجز الخطأ، شريط الاتصال، وهيكل التحميل ================= */
+
+/* The panel that stands where a page failed to draw. It is deliberately calm:
+   the data is not lost, and the words say so, because a red screen about a
+   missing field reads as a red screen about the club's records. */
+.boundary-panel{max-width:640px;margin:12vh auto;padding:34px 30px;text-align:center}
+.boundary-icon{font-size:44px;line-height:1;margin-bottom:10px}
+.boundary-panel h3{margin:0 0 10px;color:var(--navy);font-size:20px}
+.boundary-panel p{margin:0 0 10px;color:var(--muted);line-height:1.9;font-size:14px}
+.boundary-detail{background:#f6f8fc;border:1px solid var(--line);border-radius:10px;
+  padding:10px 12px;font-size:12px;color:#5b6b80;word-break:break-word;text-align:left}
+.boundary-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:16px}
+
+/* The line that says what is on the screen may be out of date. It sits above the
+   page, not in a corner: a notice in a corner is a notice nobody reads. */
+.offline-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:#fff7e6;border:1px solid #f3d9a4;color:#7a5b12;
+  border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:13px;font-weight:600}
+.offline-banner .btn{margin-inline-start:auto;padding:7px 14px;font-size:12px}
+.offline-dot{width:9px;height:9px;border-radius:50%;background:#e0a325;flex-shrink:0;
+  box-shadow:0 0 0 0 #e0a32566;animation:offline-pulse 1.8s ease-out infinite}
+@keyframes offline-pulse{0%{box-shadow:0 0 0 0 #e0a32566}70%{box-shadow:0 0 0 8px #e0a32500}100%{box-shadow:0 0 0 0 #e0a32500}}
+@media (prefers-reduced-motion:reduce){.offline-dot{animation:none}}
+
+/* The skeleton: a row of grey bars where the data will be. It is deliberately
+   not a spinner in the middle of the page -- a spinner says "wait", a skeleton
+   says "this is where the list goes", which is what a person actually wants to
+   know. */
+.table-scroll table.is-loading tbody tr.skeleton-row td{padding:.55rem .6rem}
+.skeleton-bar{display:block;height:12px;border-radius:6px;
+  background:linear-gradient(90deg,#eef2f7 25%,#e2e9f1 37%,#eef2f7 63%);
+  background-size:400% 100%;animation:skeleton-sweep 1.4s ease-in-out infinite}
+.skeleton-row td:nth-child(1) .skeleton-bar{width:70%}
+.skeleton-row td:nth-child(2) .skeleton-bar{width:45%}
+.skeleton-row td:nth-child(3) .skeleton-bar{width:55%}
+.skeleton-row td:nth-child(4) .skeleton-bar{width:35%}
+.skeleton-row td:nth-child(n+5) .skeleton-bar{width:50%}
+@keyframes skeleton-sweep{0%{background-position:100% 0}100%{background-position:0 0}}
+@media (prefers-reduced-motion:reduce){.skeleton-bar{animation:none;background:#eef2f7}}
+
+@media (max-width:820px){
+  .boundary-panel{margin:6vh auto;padding:24px 18px}
+  .offline-banner .btn{margin-inline-start:0;width:100%}
+}
