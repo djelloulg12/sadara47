@@ -1665,3 +1665,47 @@ select{height:auto!important;min-height:38px;line-height:1.6;padding:.45rem .8re
   .boundary-panel{margin:6vh auto;padding:24px 18px}
   .offline-banner .btn{margin-inline-start:0;width:100%}
 }
+
+/* ================= الشريط الجانبي بحسب نوع الحساب =================
+   اللون يقول الدور قبل أن يُقرأ الاسم: صاحب النادي ذهبيّ على كحليّ، والمدير
+   أزرق، والمسير أخضر مزرق، والمدرب نيليّ. والشرطة الملوّنة على حافة العنصر
+   النشط هي الفرق الذي يُرى بلمحة بين شاشتين مفتوحتين على حسابين. */
+.sidebar .side-user{background:#ffffff10}
+.sidebar .side-nav{gap:4px}
+.side-group{margin:13px 0 3px;padding:0 14px;font-size:9.5px;font-weight:800;letter-spacing:.5px;color:#7f95b3}
+.side-group:first-child{margin-top:2px}
+.role-chip{display:inline-block;width:max-content;margin:-9px 13px 15px;padding:3px 10px;border-radius:999px;
+  font-size:10px;font-weight:800;background:#ffffff14;border:1px solid #ffffff22;color:#cfe0f5}
+.role-badge{display:inline-flex;align-items:center;padding:5px 12px;border-radius:999px;font-size:11px;font-weight:800;
+  background:#eef4ff;color:#12488f;border:1px solid #d6e4fb;margin-inline-end:4px;white-space:nowrap}
+
+.sidebar.tone-owner{background:linear-gradient(180deg,#061530,#0b2447)}
+.sidebar.tone-owner .side-nav a:hover,.sidebar.tone-owner .side-bottom a:hover,.sidebar.tone-owner .side-nav a.active{
+  background:#173d6c;color:#fff;box-shadow:inset 3px 0 0 var(--gold)}
+.sidebar.tone-owner .role-chip{background:#f6b84a20;border-color:#f6b84a55;color:#ffd98a}
+.role-badge.tone-owner{background:#fdf3dd;border-color:#f3d79a;color:#8a5a00}
+
+.sidebar.tone-admin{background:linear-gradient(180deg,#071a35,#0d2d55)}
+.sidebar.tone-admin .side-nav a:hover,.sidebar.tone-admin .side-bottom a:hover,.sidebar.tone-admin .side-nav a.active{
+  background:#18467b;color:#fff;box-shadow:inset 3px 0 0 #4f9dff}
+
+.sidebar.tone-manager{background:linear-gradient(180deg,#06302b,#0a4a41)}
+.sidebar.tone-manager .side-user{background:#ffffff12}
+.sidebar.tone-manager .side-nav a:hover,.sidebar.tone-manager .side-bottom a:hover,.sidebar.tone-manager .side-nav a.active{
+  background:#0f6156;color:#fff;box-shadow:inset 3px 0 0 #38d6b4}
+.sidebar.tone-manager .side-group{color:#7fc7b6}
+.role-badge.tone-manager{background:#e6f7f2;border-color:#bfe9dd;color:#0b6b5c}
+
+.sidebar.tone-coach{background:linear-gradient(180deg,#141a4a,#1d2a6b)}
+.sidebar.tone-coach .side-nav a:hover,.sidebar.tone-coach .side-bottom a:hover,.sidebar.tone-coach .side-nav a.active{
+  background:#2a3a8f;color:#fff;box-shadow:inset 3px 0 0 #7aa2ff}
+.sidebar.tone-coach .side-group{color:#96a6dd}
+.role-badge.tone-coach{background:#eaeeff;border-color:#cfd8fb;color:#2b3a8f}
+
+/* الشريط المطويّ إلى أيقونات لا يحمل عنوان مجموعة ولا شارة دور. */
+@media(max-width:650px){.side-group,.role-chip{display:none}.role-badge{display:none}}
+
+/* صفحة يُطلب فيها ما ليس للحساب: تُقال صراحةً، ولا تُحوَّل الصفحة صامتة. */
+.access-denied{max-width:560px;margin:40px auto;padding:34px 30px;text-align:center;border-top:4px solid var(--gold)}
+.access-denied h2{margin:0 0 10px;font-size:20px;color:var(--navy)}
+.access-denied p{margin:0 0 22px;color:var(--muted);font-size:13px;line-height:1.9}

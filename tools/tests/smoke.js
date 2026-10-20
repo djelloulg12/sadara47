@@ -163,8 +163,8 @@ scenario('admin: search and filter controls are wired', () => {
   }
 });
 
-scenario('role dashboards: navigation works for coach, swimmers, parent, member', () => {
-  for (const role of ['coach', 'swimmer_adult', 'swimmer_minor', 'parent', 'member']) {
+scenario('role dashboards: navigation works for swimmers, parent, member', () => {
+  for (const role of ['swimmer_adult', 'swimmer_minor', 'parent', 'member']) {
     const user = { id: 9, name: 'أمين ب', role, email: 'x@y.dz', member_no: role.startsWith('swimmer') ? 'SDR-A1' : '', phone: '0661000001', group_name: role === 'coach' ? 'المبتدئون' : '' };
     const w = boot(seededState({ user }));
     setUser(w, user);
@@ -188,6 +188,76 @@ scenario('role dashboards: navigation works for coach, swimmers, parent, member'
         w.render();
       }
     }
+  }
+});
+
+/* الشريط الجانبي يقول الدور قبل أن يُقرأ الاسم.
+   ---------------------------------------------------------------------------
+   صاحب النادي والمدير يرون كل شيء؛ والمسير يرى الحضور والماسح والبرنامج
+   والإعلانات ولا يرى السباحين ولا الطلبات ولا الأفواج؛ والمدرب يرى عمله اليومي
+   وبطاقاته. والاختبار لا يسأل «هل اللون موجود؟» بل يسأل: هل يصل هذا الحساب إلى
+   ما لا يحقّ له؟ فصفحة محفوظة في `state.page` من حساب سابق يجب ألّا تُفتح. */
+scenario('the sidebar is coloured and filtered by the account', () => {
+  const CASES = [
+    { name: 'owner', user: { role: 'admin', owner: true }, tone: 'owner', label: 'صاحب النادي',
+      has: ['home','attendance','scan','users','applications','subscriptions','groups','audit'], hasNot: [] },
+    { name: 'admin', user: { role: 'admin' }, tone: 'admin', label: 'مدير المنصة',
+      has: ['home','attendance','scan','users','applications','subscriptions','card','groups','audit'], hasNot: [] },
+    { name: 'president', user: { role: 'president' }, tone: 'admin', label: 'رئيس الجمعية',
+      has: ['users','groups','audit'], hasNot: [] },
+    { name: 'manager', user: { role: 'manager' }, tone: 'manager', label: 'مسير النادي',
+      has: ['home','attendance','scan','schedule','notices'],
+      hasNot: ['users','applications','subscriptions','card','groups','audit'] },
+    { name: 'coach', user: { role: 'coach' }, tone: 'coach', label: 'مدرب',
+      has: ['home','attendance','scan','schedule','card','notices'],
+      hasNot: ['users','applications','subscriptions','groups','audit'] }
+  ];
+
+  for (const c of CASES) {
+    const user = Object.assign({ id: 7, name: 'حساب اختبار', email: c.name + '@x.dz', member_no: '' }, c.user);
+    const w = boot(seededState({ user }));
+    setUser(w, user);
+    setPage(w, 'home');
+    w.render();
+
+    const side = w.document.querySelector('.sidebar');
+    if (!side) { errors.push(`sidebar/${c.name}: no sidebar`); continue; }
+    if (!side.classList.contains('tone-' + c.tone)) {
+      errors.push(`sidebar/${c.name}: expected tone-${c.tone}, got «${side.className}»`);
+    }
+
+    const labelEl = side.querySelector('.side-user small');
+    const label = labelEl ? labelEl.textContent.trim() : '';
+    if (label !== c.label) errors.push(`sidebar/${c.name}: label «${label}» instead of «${c.label}»`);
+
+    const items = [...side.querySelectorAll('.side-nav [data-page]')].map(a => a.dataset.page);
+    for (const k of c.has) if (!items.includes(k)) errors.push(`sidebar/${c.name}: «${k}» missing (${items.join(',')})`);
+    for (const k of c.hasNot) if (items.includes(k)) errors.push(`sidebar/${c.name}: «${k}» is offered to an account that may not open it`);
+
+    const bottom = [...side.querySelectorAll('.side-bottom [data-page]')].map(a => a.dataset.page);
+    const wantsSettings = c.tone === 'owner' || c.tone === 'admin';
+    if (wantsSettings !== bottom.includes('settings')) {
+      errors.push(`sidebar/${c.name}: the settings link is ${wantsSettings ? 'missing' : 'offered'}`);
+    }
+
+    /* A page left in the stored state by an earlier account must not open. */
+    setPage(w, 'users');
+    w.render();
+    const reached = !!w.document.querySelector('#page-root table');
+    if ((c.tone === 'owner' || c.tone === 'admin') !== reached) {
+      errors.push(`sidebar/${c.name}: the swimmers page was ${reached ? 'opened' : 'withheld'} for the wrong account`);
+    }
+  }
+});
+
+scenario('member accounts keep their personal space, not the management sidebar', () => {
+  for (const role of ['swimmer_adult', 'swimmer_minor', 'parent', 'member']) {
+    const user = { id: 3, name: 'عضو', role, email: role + '@x.dz', member_no: 'SDR-A1' };
+    const w = boot(seededState({ user }));
+    setUser(w, user);
+    w.render();
+    if (w.document.querySelector('.sidebar')) errors.push(`${role}: given the management sidebar`);
+    if (!w.document.querySelector('.role-nav')) errors.push(`${role}: lost its personal navigation`);
   }
 });
 

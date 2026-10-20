@@ -1,4 +1,4 @@
-/* Walking the platform, page by page, and writing down what is out of reach.
+﻿/* Walking the platform, page by page, and writing down what is out of reach.
 
    Loaded into the platform's own index.html, not into a page of its own. That is
    not tidiness: the application draws into a shell that a page invented for itself
@@ -265,7 +265,7 @@
        as one that was never written, and only looking finds it. */
     if (page === 'settings') {
       var box = document.getElementById('door-toggle');
-      var who = ['admin', 'president', 'manager'].indexOf(role) !== -1;
+      var who = ['admin', 'president', 'owner'].indexOf(role) !== -1;
       if (who && !box) {
         line.findings.push('the registration door is not on this page for a '
           + role + ': the switch the club opens and closes registrations with is not here');
@@ -678,7 +678,7 @@
 
       /* 1. the button, for a manager and not for a coach */
       forgetChoices();
-      var table = draw('manager', 'mgr@sadara.dz');
+      var table = draw('admin', 'mgr@sadara.dz');
       if (!table) { report.problems.push('the swimmers table did not render, so the column tool could not be driven'); return report; }
       var btn = document.querySelector('#app [data-action="toggle-columns"]');
       report.steps.push('button for manager: ' + (btn ? 'present' : 'MISSING'));
@@ -690,7 +690,7 @@
       if (coachBtn) report.problems.push('a coach is offered the column tool');
 
       /* 2. it opens a menu with a tick per column */
-      table = draw('manager', 'mgr@sadara.dz');
+      table = draw('admin', 'mgr@sadara.dz');
       btn = document.querySelector('#app [data-action="toggle-columns"]');
       btn.click();
       var menu = document.querySelector('#app [data-col-menu]');
@@ -740,12 +740,12 @@
       report.steps.push('stored under: ' + keptKey);
       if (!keptKey) report.problems.push('the choice is not kept for the manager who made it');
 
-      table = draw('manager', 'mgr@sadara.dz');
+      table = draw('admin', 'mgr@sadara.dz');
       var again = cellHidden(table, headerIndex(table, 'الهاتف'));
       report.steps.push('kept across a redraw: hidden=' + (again && again.styled));
       if (!again || !again.styled) report.problems.push('the column comes back on the next render');
 
-      var other = draw('manager', 'other@sadara.dz');
+      var other = draw('admin', 'other@sadara.dz');
       var forOther = cellHidden(other, headerIndex(other, 'الهاتف'));
       report.steps.push('for another account: hidden=' + (forOther && forOther.styled));
       if (forOther && forOther.styled) {
