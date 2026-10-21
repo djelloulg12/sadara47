@@ -17,7 +17,10 @@ function appBirthDate(a){
 }
 function appWilaya(a){return a.wilaya||a.birth_place||'';}
 function regNo(a){return a.application_no||a.id||'';}
-function memberNoFor(a){return a.membership_no||(a.application_no?'SDR-'+String(a.application_no).slice(-4):'—');}
+function memberNoFor(a){
+  const no=String((a&&a.membership_no)||'').trim();
+  return /^[SCR][0-9]{4}[012][0-9]{4}$/.test(no) ? no : (no || '—');
+}
 
 /* ---------------- استمارة الإلحاق الرسمية (A4) ---------------- */
 function officialFormSheet(applicant, opts){
@@ -91,7 +94,8 @@ function officialFormSheet(applicant, opts){
     '<div class="f-bar"><span class="f-bar-note">الرياضة للأقل من 18 سنة تشترط تصريحا أباويًا لدى البلدية</span>'
     + '<span class="f-contact"><b>☎</b> ' + CLUB.phone + ' <b>✉</b> ' + CLUB.email + ' <b>f</b> nadiSadara47</span></div>';
 
-  return head + identity + sport + consent + notes;
+  /* البالغ لا تصريح أبوي له: هو وليّ على نفسه. */
+  return head + identity + sport + (minor ? consent : '') + notes;
 }
 
 function officialFormCSS(){

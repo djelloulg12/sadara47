@@ -1,4 +1,5 @@
-/* يُطبّق tools/neon/003-finish-schema.sql: إكمال مخطط `sadara` بما ينقص.
+/* يُطبّق ملفات الإكمال: 003 (الحضور والأفواج) ثم 004 (رقم التعريف الوطني)
+   ثم 005 (رقم الانخراط الموحّد).
    ----------------------------------------------------------------------------
    لا يحذف ولا يعدّل صفًّا. يطبع ما أضافه بالاسم، ويقارن عدد صفوف كل جدول
    قبل وبعد، فتُقرأ النتيجة بدل أن تُدّعى.
@@ -11,9 +12,13 @@ const fs = require('fs');
 const path = require('path');
 const url = require('../neon-env').dbUrl();
 const CHECK = process.argv.includes('--check');
+const FILES = ['003-finish-schema.sql', '004-nin.sql', '005-membership.sql'];
 
 (async () => {
-  const sql = fs.readFileSync(path.join(__dirname, '003-finish-schema.sql'), 'utf8');
+  const scripts = FILES.map(f => ({
+    name: f,
+    sql: fs.readFileSync(path.join(__dirname, f), 'utf8')
+  }));
   const pg = require('pg');
   const c = new pg.Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
   await c.connect();
@@ -29,7 +34,7 @@ const CHECK = process.argv.includes('--check');
   const tabs0 = await tabsBefore();
 
   if (CHECK) {
-    console.log('would apply tools/neon/003-finish-schema.sql');
+    console.log('would apply tools/neon/' + FILES.join(' and tools/neon/'));
     console.log('  current sadara.attendance columns:');
     const a = await c.query("select column_name from information_schema.columns where table_schema='sadara' and table_name='attendance' order by ordinal_position");
     console.log('    ' + a.rows.map(r => r.column_name).join(', '));
@@ -41,7 +46,10 @@ const CHECK = process.argv.includes('--check');
 
   await c.query('begin');
   try {
-    await c.query(sql);
+    for (const script of scripts) {
+      console.log('  applying tools/neon/' + script.name + ' ...');
+      await c.query(script.sql);
+    }
     await c.query('commit');
   } catch (e) {
     await c.query('rollback');

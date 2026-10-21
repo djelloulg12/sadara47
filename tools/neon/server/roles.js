@@ -58,12 +58,17 @@ function isStaff(user, owners) { return isManager(user, owners) || isCoach(user)
 function isScanner(user, owners) { return isStaff(user, owners) || (!!user && user.role === 'manager'); }
 
 /* السباح لي إن كُنت الوالد الذي قدّم الطلب، أو الطلب يخصّني، أو رقمي
-   هو رقمه. ثلاث روابط كما في القاعدة، ولا رابط رابع. */
+   هو رقمه، أو رقم وليّه هو رقم التعريف الوطني لحسابي.
+   والرابط الأخير هو مرجع العائلة: كل أبناء الولي الواحد يحملون رقمه، فيراهم
+   في لوحة واحدة. ويُقبل الرقم إذا كان ثمانية عشر رقمًا وحدها. */
 function swimmerIsMine(swimmer, user, ownerIsMine) {
   if (!swimmer || !user) return false;
   if (ownerIsMine === true) return true;
   if (swimmer.applicant_uid && swimmer.applicant_uid === user.id) return true;
   if (swimmer.membership_no && swimmer.membership_no === user.member_no) return true;
+  const nin = String(user.national_id || '').replace(/[^0-9]/g, '');
+  const child = String(swimmer.guardian_national_id || '').replace(/[^0-9]/g, '');
+  if (/^[0-9]{18}$/.test(nin) && nin === child) return true;
   return false;
 }
 

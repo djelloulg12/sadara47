@@ -464,8 +464,8 @@ tasks.push(() => {
 
   /* Typed either way, it reads as the club writes it. */
   for (const [what, entered, shown] of [
-    ['a national number typed in Latin', '198501011', '198501011'],
-    ['a national number typed in Arabic-Indic', typed('198501011'), '198501011'],
+    ['a national number typed in Latin', '198501011122334455', '198501011122334455'],
+    ['a national number typed in Arabic-Indic', typed('198501011122334455'), '198501011122334455'],
     ['a telephone typed in Arabic-Indic', typed('0661 00 00 01'), '0661 00 00 01']
   ]) {
     const into = what.indexOf('national') === 0 ? 'national_id' : 'phone';
@@ -518,7 +518,7 @@ tasks.push(() => {
   /* What goes out is the one form the database holds. */
   fill(w, 'adult');
   type('birth_date', typed('1998/03/07'));
-  type('national_id', typed('198501011'));
+  type('national_id', typed('198501011122334455'));
   type('phone', typed('0661000001'));
   passTheGate(w);
   field('reg-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
@@ -536,7 +536,7 @@ tasks.push(() => {
       const body = JSON.parse(post[0].body);
       const stored = {
         birth_date: '1998-03-07',
-        national_id: '198501011',
+        national_id: '198501011122334455',
         phone: '0661000001'
       };
       for (const [field2, want] of Object.entries(stored)) {
@@ -596,7 +596,7 @@ function answerForAGuardian(w, set, over) {
   set('guardian_birth_date', '1978/06/02');
   set('guardian_relation', 'الأب');
   set('guardian_phone', '0661000002');
-  set('guardian_national_id', '197809031');
+  set('guardian_national_id', '197809031122334455');
   set('guardian_national_id_expiry', '2031/06/02');
   set('guardian_card_issued', '2021/06/02');
   if (w.document.getElementById('guardian_consent')) {
@@ -607,11 +607,11 @@ function answerForAGuardian(w, set, over) {
 function fill(w, category) {
   const set = (id, v) => { const n = w.document.getElementById(id); n.value = v; };
   answerEverything(w, set);
-  /* The national identity card. Nine digits, and the day it runs out. Asked of
-     the two people who hold one and of nobody else: an adult, and the guardian
+  /* The national identity card. Eighteen digits, and the day it runs out. Asked
+     of the two people who hold one and of nobody else: an adult, and the guardian
      of a minor. */
   if (category === 'adult') {
-    set('national_id', '19850101'.slice(0, 8) + '1');
+    set('national_id', '198501011122334455');
     set('national_id_expiry', '2031/04/17');
   } else {
     answerForAGuardian(w, set, { birth_place: '' });
@@ -1549,15 +1549,15 @@ const card_fields = () => {
       return !!id('birth_place').value;
     }).then(() => { if (id('birth_place').value !== commune) return true; });
 
-    /* A card number that is not nine digits is refused before anything is sent. */
-    for (const [what, value] of [['eight digits', '19780903'], ['ten digits', '1978090311']]) {
+    /* A card number that is not eighteen digits is refused before anything is sent. */
+    for (const [what, value] of [['seventeen digits', '19780903112233445'], ['nineteen digits', '1978090311223344556']]) {
       const n = id('guardian_national_id');
       n.value = value;
       n.dispatchEvent(new w.Event('input', { bubbles: true }));
       id('form-msg').hidden = true;
       submit();
       return waitFor(w, () => say()).then(() => {
-        if (!/9/.test(say())) {
+        if (!/18/.test(say())) {
           errors.push('[card] a card number of ' + what + ' was not refused: ' + say());
         }
       });
@@ -1565,7 +1565,7 @@ const card_fields = () => {
   }).then(() => {
     /* And the right one, with an expiry and the issue date for the box the club's
        own form has. */
-    for (const [f, v] of [['guardian_national_id', '197809031'],
+    for (const [f, v] of [['guardian_national_id', '197809031122334455'],
                           ['guardian_national_id_expiry', '2031/06/02'],
                           ['guardian_card_issued', '2021/06/02']]) {
       const n = id(f); n.value = v; n.dispatchEvent(new w.Event('input', { bubbles: true }));
@@ -1577,7 +1577,7 @@ const card_fields = () => {
     const body = lastBody();
     if (!body) return;
     const wants = {
-      guardian_national_id: '197809031',
+      guardian_national_id: '197809031122334455',
       guardian_national_id_expiry: '2031-06-02',
       guardian_card_issued: '2021-06-02',
       birth_place: commune
@@ -1621,16 +1621,16 @@ const adult_card = () => {
     set('username', 'probe.adult');
     set('password', 'correct-horse');
     set('password_confirm', 'correct-horse');
-    set('national_id', '19850101');
+    set('national_id', '19850101112233445');
     id('form-msg').hidden = true;
     submit();
     return waitFor(w, () => say()).then(() => {
-      if (!/9/.test(say())) {
+      if (!/18/.test(say())) {
         errors.push('[card] an adult\'s card number was not checked: ' + say());
       }
     });
   }).then(() => {
-    set('national_id', '198501011');
+    set('national_id', '198501011122334455');
     set('national_id_expiry', '2031/04/17');
     submit();
     return waitFor(w, () => w.__calls.some(c => c.method === 'POST'))
@@ -1639,13 +1639,17 @@ const adult_card = () => {
     const posts = w.__calls.filter(c => c.method === 'POST' && /\/api\/applications$/.test(c.url));
     const body = posts.length ? JSON.parse(posts[posts.length - 1].body) : null;
     if (!body) return;
-    if (body.national_id !== '198501011') {
+    if (body.national_id !== '198501011122334455') {
       errors.push('[card] an adult\'s card number was sent as ' + JSON.stringify(body.national_id));
     }
     if (body.national_id_expiry !== '2031-04-17') {
       errors.push('[card] an adult\'s card expiry was sent as ' + JSON.stringify(body.national_id_expiry));
     }
-    if (body.guardian_national_id) errors.push('[card] an adult was sent with a guardian\'s card');
+    /* An adult is their own guardian: the family reference is their own number. */
+    if (body.guardian_national_id !== body.national_id) {
+      errors.push('[card] an adult was not sent as their own guardian: '
+        + JSON.stringify(body.guardian_national_id));
+    }
   });
 };
 

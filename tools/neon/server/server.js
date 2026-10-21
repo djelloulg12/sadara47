@@ -126,13 +126,14 @@ async function owners() {
 /* المستخدم كما تراه الصفحة: من صفّ `app_users` ومن مستند `sadara.users`. */
 async function loadUser(uid) {
   const row = await D.one(
-    `select id, email, display_name, role, phone, member_no, must_change,
+    `select id, email, display_name, role, phone, member_no, must_change, national_id,
             local_hash, local_salt, hash_params
        from public.app_users where id=$1`, [uid]);
   if (!row) return null;
   /* الملف التفصيلي من مستند المستخدم، إن وُجد. */
   const prof = await D.one('select raw from sadara.users where uid=$1', [uid]);
   const p = (prof && prof.raw) || {};
+  const nin = normalizeNIN(row.national_id) || normalizeNIN(p.national_id);
   return {
     id: row.id,
     email: row.email || '',
@@ -145,7 +146,8 @@ async function loadUser(uid) {
     group_name: p.group_name || '',
     status: p.request_status || '',
     rejection_reason: p.rejection_reason || '',
-    national_id: p.national_id || '',
+    national_id: nin,
+    national_id_missing: !nin,
     merged_into: p.merged_into || '',
     roles: Array.isArray(p.roles) ? p.roles : (row.role ? [row.role] : []),
     must_change: row.must_change !== false
@@ -170,7 +172,8 @@ function userView(user, ownerSet) {
     status: user.status,
     rejection_reason: user.rejection_reason,
     roles: user.roles,
-    national_id: user.national_id,
+    national_id: user.national_id || '',
+    national_id_missing: user.national_id_missing !== false,
     merged_into: user.merged_into,
     merged_name: '',
     must_change: user.must_change
@@ -191,20 +194,32 @@ const ROUTES = {};
 /* ---------------- الدخول ---------------- */
 
 ROUTES['POST /api/login'] = async (req, res, body) => {
-  const email = String(body.email || '').trim().toLowerCase();
+  /* المدخل واحد: البريد الإلكتروني أو رقم التعريف الوطني.
+     ------------------------------------------------------------------------
+     الولي الذي نسي بريده لا يُمنع من متابعة أبنائه؛ يكتب رقمه البيومتري
+     الثمانية عشر ومعه كلمة المرور. والرقم يُقبل بمسافات أو شرطات كما يُقرأ
+     من البطاقة. وإن لم يكن المدخل رقمًا بيومتريًا فهو بريد كما كان. */
+  const typed = String(body.email || body.identifier || body.national_id || body.nin || '').trim();
+  const nin = normalizeNIN(typed);
+  const email = typed.toLowerCase();
   const password = String(body.password || '');
-  if (!email || !password) return sendJSON(res, { error: 'يرجى إدخال البريد وكلمة المرور' }, 400);
-  if (auth.tooManyAttempts(email)) {
+  if (!typed || !password) {
+    return sendJSON(res, { error: 'يرجى إدخال البريد أو رقم التعريف الوطني وكلمة المرور' }, 400);
+  }
+  const attemptKey = nin || email;
+  if (auth.tooManyAttempts(attemptKey)) {
     return sendJSON(res, { error: 'محاولات كثيرة. أعد المحاولة بعد ربع ساعة.' }, 429);
   }
-  const row = await D.one('select id, local_hash, local_salt, hash_params from public.app_users where lower(email)=$1', [email]);
+  const row = nin
+    ? await D.one('select id, local_hash, local_salt, hash_params from public.app_users where national_id=$1', [nin])
+    : await D.one('select id, local_hash, local_salt, hash_params from public.app_users where lower(email)=$1', [email]);
   /* كلمة مرور خاطئة وحساب غير موجود: نفس الردّ، فلا يُعرف من له حساب. */
   const ok = row && auth.verifyPassword(password, row.local_hash, row.local_salt, row.hash_params);
   if (!ok) {
-    auth.noteFailure(email);
-    return sendJSON(res, { error: 'البريد أو كلمة المرور غير صحيحة' }, 401);
+    auth.noteFailure(attemptKey);
+    return sendJSON(res, { error: 'البريد أو رقم التعريف الوطني أو كلمة المرور غير صحيحة' }, 401);
   }
-  auth.clearAttempts(email);
+  auth.clearAttempts(attemptKey);
   const user = await loadUser(row.id);
   setSession(res, user);
   sendJSON(res, { user: userView(user, await owners()), gate: { gate: 'open' } });
@@ -225,6 +240,23 @@ ROUTES['GET /api/profile'] = async (req, res) => {
   const user = await currentUser(req);
   if (!user) return sendJSON(res, { error: 'يرجى تسجيل الدخول' }, 401);
   sendJSON(res, { profile: userView(user, await owners()) });
+};
+
+/* لوحة العائلة: الولي وأبناؤه وطلباتهم المعلّقة، برقم واحد. */
+ROUTES['GET /api/family'] = async (req, res) => {
+  const user = await currentUser(req);
+  if (!user) return sendJSON(res, { error: 'يرجى تسجيل الدخول' }, 401);
+  sendJSON(res, await familyView(user));
+};
+
+/* إكمال ملف الولي: صاحب الحساب يكتب رقمه مرة واحدة.
+   ولا يغيّر رقمًا مسجّلًا، ولا يربط سباحًا ليس من طلباته. */
+ROUTES['POST /api/accounts/national-id'] = async (req, res, body) => {
+  const user = await currentUser(req);
+  if (!user) return sendJSON(res, { error: 'يرجى تسجيل الدخول' }, 401);
+  const out = await setAccountNIN(user.id, body.national_id, { self: true, by: user.id });
+  if (out.error) return sendJSON(res, { error: out.error }, out.status);
+  sendJSON(res, out);
 };
 
 /* ---------------- باب التسجيل ---------------- */
@@ -289,9 +321,13 @@ ROUTES['GET /api/swimmers'] = async (req, res) => {
   const ownerSet = await owners();
   const rows = await D.all('select * from sadara.swimmers order by membership_no');
   const people = rows.map(r => Object.assign({ id: D.idOf(r.firestore_path) }, D.doc(r)));
+  /* من بلغ 18 سنة لا تُعرض له بيانات وليّ في أي مكان -- ولا للطاقم من باب
+     أولى. يبقى `guardian_national_id` لأنه رقمه هو (وليٌّ على نفسه)، ويُحذف
+     اسم الولي وهاتفه وصلته. */
+  const clean = people.map(withoutGuardian);
   /* المدير والمدرب يرون القائمة كاملة، والولي يرى أبناءه فقط. */
-  if (R.isStaff(user, ownerSet)) return sendJSON(res, people);
-  const mine = people.filter(s => R.swimmerIsMine(s, user, ownerSet.has(String(user.email || '').toLowerCase())));
+  if (R.isStaff(user, ownerSet)) return sendJSON(res, clean);
+  const mine = clean.filter(s => R.swimmerIsMine(s, user, ownerSet.has(String(user.email || '').toLowerCase())));
   sendJSON(res, mine);
 };
 
@@ -352,6 +388,125 @@ async function setPassword(uid, password, { mustChange, by }) {
       values ($1, $2) on conflict (firestore_path) do nothing`,
     ['audit_logs/password_' + uid + '_' + Date.now(),
       JSON.stringify({ action: 'password_set', by: by || '', target: uid, at: new Date().toISOString(), must_change: mustChange !== false })]);
+}
+
+/* ==================== رقم التعريف الوطني للولي ====================
+   الرقم البيومتري هو مرجع العائلة: حساب واحد للولي، وكل أبنائه حوله.
+   ----------------------------------------------------------------------------
+   ولا يُكتب الرقم في مكانين يتفرّقان: يُكتب في `app_users` (الفهرس الفريد)،
+   وفي `sadara.users.raw` (ما تقرؤه الصفحة)، وفي السباحين الذين قدّمهم الحساب
+   (`guardian_national_id`) حتى تظهر بطاقاتهم في لوحة العائلة فورًا. */
+
+async function findGuardianByNIN(nin) {
+  const key = normalizeNIN(nin);
+  if (!key) return null;
+  const row = await D.one(
+    'select id, email, display_name, role, phone, national_id from public.app_users where national_id=$1', [key]);
+  return row || null;
+}
+
+/* كتابة رقم الولي لحساب، وربط أبنائه القدامى به.
+   `self` يعني أن صاحب الحساب يكمّل ملفه: لا يغيّر رقمًا مسجّلًا، ولا يربط
+   سباحين ليسوا له. والمسير/المدير يعدّل عبر `PUT /api/accounts` بلا هذا القيد. */
+async function setAccountNIN(uid, rawNin, opts) {
+  opts = opts || {};
+  const nin = normalizeNIN(rawNin);
+  if (!nin) {
+    return { error: 'رقم التعريف الوطني يجب أن يكون 18 رقمًا بالضبط.', status: 400 };
+  }
+  const target = await D.one(
+    'select id, email, member_no, national_id from public.app_users where id=$1', [uid]);
+  if (!target) return { error: 'لا يوجد حساب بهذا المعرّف.', status: 404 };
+  /* الرقم القديم ذو التسعة أرقام ليس رقمًا بيومتريًا: يبقى في `raw` ولا يمنع
+     صاحبه من إكمال ملفه. الشرط يقع على رقم صالح مسجّل، لا على أي نصّ قديم. */
+  const current = normalizeNIN(target.national_id);
+  if (opts.self && current && current !== nin) {
+    return {
+      error: 'رقم التعريف الوطني مسجّل لهذا الحساب مسبقًا. تغييره من الإدارة.',
+      status: 403
+    };
+  }
+  const other = await D.one(
+    'select id, email from public.app_users where national_id=$1 and id<>$2', [nin, uid]);
+  if (other) {
+    return {
+      error: 'رقم التعريف الوطني مسجّل لحساب آخر. لا يمكن أن يحمله حسابان.',
+      status: 409
+    };
+  }
+
+  await D.run('update public.app_users set national_id=$1, updated_at=now() where id=$2', [nin, uid]);
+  /* `raw` يبقى كاملًا، ويُضاف إليه الحقل المطبوع. والصفّ قد لا يكون موجودًا
+     لحساب أُنشئ حديثًا، فلا يُنشأ صفّ ناقص من أجل حقل واحد. */
+  await D.run("update sadara.users set national_id=$1, raw = raw || $2::jsonb where uid=$3",
+    [nin, JSON.stringify({ national_id: nin }), uid]);
+
+  /* أبناء هذا الحساب: الطلبات التي قدّمها تحمل `applicant_uid`، والسباحون
+     المولودون منها يحملونه أيضًا. نملأ الفراغ فقط -- رقم موجود لا يُستبدل
+     بقرار من صاحب الحساب. */
+  let linked = 0;
+  if (opts.linkSwimmers !== false) {
+    const rows = await D.all('select firestore_path, raw from sadara.swimmers');
+    for (const row of rows) {
+      const s = row.raw || {};
+      const mine = String(s.applicant_uid || '') === String(uid)
+        || (target.member_no && String(s.membership_no || '') === String(target.member_no));
+      if (!mine || normalizeNIN(s.guardian_national_id)) continue;
+      await mergeRaw('swimmers', row.firestore_path, { guardian_national_id: nin });
+      await writeTyped('swimmers', row.firestore_path,
+        { guardian_national_id: nin, updated_at: new Date().toISOString() }, SWIMMER_COLUMNS);
+      linked++;
+    }
+    await D.run(
+      `update sadara.applications
+          set family_national_id=$1, guardian_account_uid=$2
+        where applicant_uid=$3 and (family_national_id is null or family_national_id='')`,
+      [nin, uid, uid]);
+  }
+
+  await mergeRaw('audit_logs', 'audit_logs/' + newId(), {
+    action: 'national_id_set',
+    by: (opts.by || uid),
+    target: uid,
+    at: new Date().toISOString(),
+    swimmers_linked: linked
+  });
+  return { ok: true, national_id: nin, swimmers_linked: linked };
+}
+
+/* ما تراه العائلة: الولي، وأبناؤه المسجّلون، وطلباتهم التي لم تُقبل بعد.
+   ولا يُعاد رقم أي عائلة أخرى: التصفية على رقم الحساب نفسه. */
+async function familyView(user) {
+  const nin = normalizeNIN(user && user.national_id);
+  const guardian = {
+    id: (user && user.id) || '',
+    name: (user && user.name) || '',
+    email: (user && user.email) || '',
+    phone: (user && user.phone) || '',
+    national_id: nin,
+    national_id_missing: !nin
+  };
+  if (!nin) return { complete: false, national_id: '', guardian, swimmers: [], pending: [] };
+
+  const rows = await D.all('select * from sadara.swimmers');
+  const swimmers = rows
+    .map(r => Object.assign({ id: D.idOf(r.firestore_path) }, D.doc(r)))
+    .filter(s => normalizeNIN(s.guardian_national_id) === nin)
+    .map(withoutGuardian);
+
+  const apps = await D.all("select * from sadara.applications where status='pending'");
+  const pending = apps
+    .map(r => Object.assign({ id: D.idOf(r.firestore_path) }, D.doc(r)))
+    .filter(a => normalizeNIN(a.guardian_national_id || a.family_national_id) === nin)
+    .map(withoutGuardianApplication);
+
+  return {
+    complete: true,
+    national_id: nin,
+    guardian,
+    swimmers,
+    pending
+  };
 }
 
 /* تغيير المرء كلمته بنفسه.
@@ -469,13 +624,14 @@ ROUTES['GET /api/accounts'] = async (req, res) => {
   if (!R.isManager(user, ownerSet)) {
     return sendJSON(res, { error: 'عرض الحسابات لرئيس النادي فقط' }, 403);
   }
-  const rows = await D.all('select id, email, display_name, role, must_change from public.app_users where email is not null');
+  const rows = await D.all('select id, email, display_name, role, must_change, national_id from public.app_users where email is not null');
   const profiles = await D.all('select uid, raw from sadara.users');
   const byUid = new Map(profiles.map(p => [p.uid, p.raw || {}]));
   const list = rows.map(r => {
     const p = byUid.get(r.id) || {};
     if (p.merged_into) return null;
     const email = r.email || '';
+    const nin = normalizeNIN(r.national_id) || normalizeNIN(p.national_id);
     return {
       id: r.id,
       name: p.name || r.display_name || '',
@@ -486,6 +642,8 @@ ROUTES['GET /api/accounts'] = async (req, res) => {
       registration_id: p.registration_id || '',
       role: r.role || 'member',
       roles: Array.isArray(p.roles) ? p.roles : (r.role ? [r.role] : []),
+      national_id: nin,
+      national_id_missing: !nin,
       must_change: r.must_change === true,
       owner: ownerSet.has(String(email).toLowerCase())
     };
@@ -502,9 +660,17 @@ ROUTES['PUT /api/accounts'] = async (req, res, body) => {
   }
   const uid = String(body.id || '');
   const role = String(body.role || '');
+  const hasNIN = Object.prototype.hasOwnProperty.call(body, 'national_id');
   if (!uid) return sendJSON(res, { error: 'معرّف الحساب مطلوب' }, 400);
-  if (R.ROLES.indexOf(role) === -1) return sendJSON(res, { error: 'سلمي غير معروف: ' + role }, 400);
-  if (uid === actor.id) return sendJSON(res, { error: 'لا يُغيّر صلاحتياتك بنفسك' }, 400);
+  if (!role && !hasNIN) {
+    return sendJSON(res, { error: 'لا يوجد ما يُحفظ: الصلاحية أو رقم التعريف الوطني مطلوب.' }, 400);
+  }
+  if (role && R.ROLES.indexOf(role) === -1) {
+    return sendJSON(res, { error: 'سلمي غير معروف: ' + role }, 400);
+  }
+  if (role && uid === actor.id) {
+    return sendJSON(res, { error: 'لا يُغيّر صلاحتياتك بنفسك' }, 400);
+  }
   const target = await D.one('select email, role from public.app_users where id=$1', [uid]);
   if (!target) return sendJSON(res, { error: 'لا يوجد حساب بهذا المعرّف.' }, 404);
   if (R.isOwner(target, ownerSet)) {
@@ -518,8 +684,30 @@ ROUTES['PUT /api/accounts'] = async (req, res, body) => {
   if (role === 'manager' && !R.isOwner(actor, ownerSet)) {
     return sendJSON(res, { error: 'تعيين المسيرين وعزلهم من صلاحيات صاحب النادي وحده.' }, 403);
   }
-  await D.run('update public.app_users set role=$1, updated_at=now() where id=$2', [role, uid]);
-  sendJSON(res, { ok: true, id: uid, role });
+
+  /* رقم الولي يُكتب قبل الصلاحية أو بعدها، وفي الحالتين يُفحص تفرّده.
+     فحسابان بالرقم نفسه يعنيان عائلة واحدة تُقرأ مرتين. */
+  let ninOut = null;
+  if (hasNIN) {
+    ninOut = await setAccountNIN(uid, body.national_id, { by: actor.id });
+    if (ninOut.error) return sendJSON(res, { error: ninOut.error }, ninOut.status);
+  }
+  let memberNoOut = null;
+  if (role) {
+    await D.run('update public.app_users set role=$1, updated_at=now() where id=$2', [role, uid]);
+    /* المسؤول والمدرب لهما صيغة رقم مستقلة: R تراكمي لا يُصفَّر، وC موسمي. */
+    if (['admin', 'president', 'manager', 'owner'].indexOf(role) !== -1) {
+      memberNoOut = await assignOfficialNumber(uid);
+    } else if (role === 'coach') {
+      memberNoOut = await assignCoachNumber(uid);
+    }
+  }
+  sendJSON(res, {
+    ok: true, id: uid,
+    role: role || target.role || '',
+    national_id: ninOut ? ninOut.national_id : undefined,
+    member_no: memberNoOut || undefined
+  });
 };
 
 
@@ -604,6 +792,163 @@ const DATE_FIELDS = new Set([
   'birth_date', 'guardian_birth_date', 'card_issue_date',
   'national_id_expiry', 'guardian_national_id_expiry', 'guardian_card_issued'
 ]);
+
+/* رقم التعريف الوطني للولي (NIN): ثمانية عشر رقمًا، لا غير.
+   ----------------------------------------------------------------------------
+   يُقبل مكتوبًا بالأرقام اللاتينية أو العربية، وبمسافات أو شرطات أو نقاط --
+   لأن الرقم نفسه قد يُقرأ من بطاقة أو يُقال في الهاتف. وما لا يكون ثمانية عشر
+   رقمًا يُرجع نصًّا فارغًا، فيُعرف أنه غير مكتمل بدل أن يُخزَّن نصف رقم.
+
+   والأرقام القديمة ذات التسعة أرقام لا تُحوَّل ولا تُرفض من الدخول: تبقى في
+   `raw` كما هي، ويُطلب من صاحبها تحديثها. الخلط بين رقم قديم ورقم بيومتري هو
+   ما يجعل عائلتين عائلة واحدة. */
+const normalizeNIN = value => {
+  const digits = latinDigits(String(value === undefined || value === null ? '' : value))
+    .replace(/[^0-9]/g, '');
+  return /^[0-9]{18}$/.test(digits) ? digits : '';
+};
+const isNinMissing = value => !normalizeNIN(value);
+
+/* ==================== رقم الانخراط الموحّد (10 خانات) ====================
+   [الصفة][سنة بداية الموسم][الفئة][الرقم التسلسلي]
+     S = سباح، C = مدرب، R = مسؤول
+     السنة: من سبتمبر إلى ديسمبر = السنة نفسها، ومن جانفي إلى أوت = السابقة
+     الفئة: 1 أكابر، 2 أصاغر، 0 مسؤولون
+   والمسؤولون وحدهم لا يُصفَّر تسلسلهم مع الموسم. */
+function seasonStartYear(date) {
+  const d = date ? new Date(date) : new Date();
+  if (isNaN(d.getTime())) return new Date().getFullYear();
+  return (d.getMonth() + 1) >= 9 ? d.getFullYear() : d.getFullYear() - 1;
+}
+
+/* `birth_date` يصل من pg كائن `Date` لا نصًّا. و`String(Date).slice(0,10)` يعطي
+   «Fri May 01»، و`new Date('Fri May 01')` يفسّره سنة 2001 -- فيصير الطفل بالغًا
+   ويُحذف اسم وليّه. فنقرأ التاريخ من مكوّناته المحلية، أو من نصّ ISO كامل. */
+function dateOnly_(value) {
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+  const text = String(value === undefined || value === null ? '' : value).trim();
+  if (!text) return null;
+  const plain = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (plain) return new Date(Number(plain[1]), Number(plain[2]) - 1, Number(plain[3]));
+  const parsed = new Date(text);
+  if (isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+}
+
+function ageOnDate(birth, when) {
+  const b = dateOnly_(birth);
+  if (!b) return null;
+  const w = when ? dateOnly_(when) : new Date();
+  if (!w || isNaN(w.getTime())) return null;
+  let age = w.getFullYear() - b.getFullYear();
+  const m = w.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && w.getDate() < b.getDate())) age--;
+  return age;
+}
+
+/* بيانات الولي الشخصية لا تُعرض لمن بلغ 18 سنة، لا في قائمة السباحين ولا في
+   لوحة العائلة ولا في الطلبات. والسنّ هنا هو سنّ اليوم، لا سنّ بداية الموسم:
+   من بلغ 18 في أكتوبر ليس قاصرًا حتى سبتمبر. ورقم وليّه يبقى لأنّه رقمه هو. */
+const ADULT_GUARDIAN_FIELDS = [
+  'guardian_first_name', 'guardian_last_name', 'guardian_relation',
+  'guardian_phone', 'guardian_birth_date', 'guardian_card_issued'
+];
+
+function isAdultPerson(s) {
+  const age = ageOnDate(s && s.birth_date);
+  return age !== null && age >= 18;
+}
+
+function withoutGuardian(s) {
+  if (!s || !isAdultPerson(s)) return s;
+  const copy = Object.assign({}, s, { is_adult: true });
+  ADULT_GUARDIAN_FIELDS.forEach(k => delete copy[k]);
+  return copy;
+}
+
+function withoutGuardianApplication(a) {
+  if (!a) return a;
+  const adult = String(a.category || '').toLowerCase() === 'adult' || isAdultPerson(a);
+  if (!adult) return a;
+  const copy = Object.assign({}, a, { is_adult: true });
+  ADULT_GUARDIAN_FIELDS.forEach(k => delete copy[k]);
+  return copy;
+}
+
+function membershipCategory(birthDate, category, season) {
+  if (String(category || '').toLowerCase() === 'adult') return '1';
+  if (String(category || '').toLowerCase() === 'minor') return '2';
+  const age = ageOnDate(birthDate, String(season) + '-09-01');
+  return age !== null && age >= 18 ? '1' : '2';
+}
+
+function memberNo(prefix, season, category, serial) {
+  return String(prefix) + String(season) + String(category)
+    + String(serial).padStart(4, '0').slice(-4);
+}
+
+async function usedSerials(prefix, season, category) {
+  const pattern = prefix + season + category + '%';
+  const rows = await D.all(
+    `select membership_no as no from sadara.swimmers where membership_no like $1
+     union all
+     select membership_no as no from sadara.applications where membership_no like $1
+     union all
+     select member_no as no from public.app_users where member_no like $1`, [pattern]);
+  return rows.map(r => Number(String(r.no || '').slice(-4)) || 0)
+    .filter(n => n > 0);
+}
+
+async function nextSwimmerNumber(birthDate, category, at) {
+  const season = seasonStartYear(at);
+  const cat = membershipCategory(birthDate, category, season);
+  const used = await usedSerials('S', season, cat);
+  return memberNo('S', season, cat, (Math.max(0, ...used) || 0) + 1);
+}
+
+async function nextCoachNumber(at) {
+  const season = seasonStartYear(at);
+  const used = await usedSerials('C', season, '1');
+  return memberNo('C', season, '1', (Math.max(0, ...used) || 0) + 1);
+}
+
+async function nextOfficialNumber() {
+  const season = seasonStartYear();
+  const rows = await D.all(
+    `select member_no as no from public.app_users where member_no like 'R%'
+     union all
+     select membership_no as no from sadara.applications where membership_no like 'R%'`);
+  const used = rows.map(r => Number(String(r.no || '').slice(-4)) || 0).filter(n => n > 0);
+  return memberNo('R', season, '0', (Math.max(0, ...used) || 0) + 1);
+}
+
+async function assignOfficialNumber(uid) {
+  const row = await D.one('select member_no from public.app_users where id=$1', [uid]);
+  if (row && /^R[0-9]{4}0[0-9]{4}$/.test(String(row.member_no || ''))) {
+    return row.member_no;
+  }
+  const no = await nextOfficialNumber();
+  await D.run('update public.app_users set member_no=$1, updated_at=now() where id=$2', [no, uid]);
+  await D.run('update sadara.users set raw = raw || $2::jsonb where uid=$1',
+    [uid, JSON.stringify({ member_no: no })]);
+  return no;
+}
+
+async function assignCoachNumber(uid) {
+  const row = await D.one('select member_no from public.app_users where id=$1', [uid]);
+  if (row && /^C[0-9]{4}1[0-9]{4}$/.test(String(row.member_no || ''))) {
+    return row.member_no;
+  }
+  const no = await nextCoachNumber();
+  await D.run('update public.app_users set member_no=$1, updated_at=now() where id=$2', [no, uid]);
+  await D.run('update sadara.users set raw = raw || $2::jsonb where uid=$1',
+    [uid, JSON.stringify({ member_no: no })]);
+  return no;
+}
+
 const poolName = value => String((value && value.name) || value || '').trim();
 
 const normaliseIncoming = body => {
@@ -913,7 +1258,7 @@ const UNASSIGNED = { id: 'grp-unassigned', name: 'غير مفرز' };
 const GROUP_CATEGORIES = {
   minnows: 'الأصاغر والبراعم',
   juniors: 'الصغار',
-  adults: 'الأكابر والكهول',
+  adults: 'الأكابر',
   women: 'الفئة النسوية',
   elite: 'فرق النخبة والمنافسة',
   fitness: 'اللياقة وتحسين الأداء'
@@ -1178,6 +1523,7 @@ ROUTES['PUT /api/coach-requirements'] = coachRequirementsWrite;
 const SWIMMER_COLUMNS = new Set([
   'membership_no', 'registration_id', 'name', 'first_name_ar', 'last_name_ar',
   'birth_date', 'gender', 'blood_group', 'level', 'phone', 'whatsapp', 'national_id',
+  'guardian_national_id', 'guardian_account_uid',
   'facility', 'group_name', 'group_id', 'address', 'email', 'photo', 'status', 'active',
   'updated_at', 'created_at'
 ]);
@@ -1202,19 +1548,31 @@ ROUTES['POST /api/swimmers'] = async (req, res, body) => {
   if (gate.error) return sendJSON(res, { error: gate.error }, gate.status);
   body = normaliseIncoming(body);
   const id = newId();
+  /* رقم الانخراط يُولَّد هنا لا في الصفحة: الصيغة الموحّدة (10 خانات) تُحسب
+     من الموسم والفئة، والتسلسل يُقرأ من القاعدة فلا يتكرر بين جهازين. */
+  const membership = /^S[0-9]{4}[12][0-9]{4}$/.test(String(body.membership_no || ''))
+    ? String(body.membership_no)
+    : await nextSwimmerNumber(body.birth_date, body.category);
+  const adultAge = ageOnDate(body.birth_date);
+  const adult = adultAge !== null && adultAge >= 18;
   const record = {
-    membership_no: body.membership_no || 'SDR-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
-    name: body.name || '', group_name: body.group_name || 'المبتدئون',
+    membership_no: membership,
+    name: body.name || '', group_name: body.group_name || 'غير مفرز',
     group_id: body.group_id || '',
-    phone: body.phone || '', status: body.status === 'نشط' ? 'active' : (body.status || 'active')
+    phone: body.phone || '', status: body.status === 'نشط' ? 'active' : (body.status || 'active'),
+    national_id: normalizeNIN(body.national_id),
+    guardian_national_id: adult ? normalizeNIN(body.national_id) : normalizeNIN(body.guardian_national_id),
+    birth_date: body.birth_date || ''
   };
   await mergeRaw('swimmers', 'swimmers/' + id, record);
   await writeTyped('swimmers', 'swimmers/' + id, {
     membership_no: record.membership_no, name: record.name, group_name: record.group_name,
     group_id: record.group_id, phone: record.phone, status: record.status,
+    national_id: record.national_id, guardian_national_id: record.guardian_national_id,
+    birth_date: record.birth_date || null,
     updated_at: new Date().toISOString()
   }, SWIMMER_COLUMNS);
-  sendJSON(res, { ok: true, id: id }, 201);
+  sendJSON(res, { ok: true, id: id, membership_no: membership }, 201);
 };
 
 ROUTES['PUT /api/swimmers'] = async (req, res, body) => {
@@ -1222,6 +1580,34 @@ ROUTES['PUT /api/swimmers'] = async (req, res, body) => {
   if (gate.error) return sendJSON(res, { error: gate.error }, gate.status);
   if (!body.id) return sendJSON(res, { error: 'معرّف السباح مطلوب' }, 400);
   body = normaliseIncoming(body);
+
+  /* رقم تعريف الولي: لا يُكتب نصف رقم. والفراغ مسموح لأنه يعني «ملف غير
+     مكتمل»، لا «رقم مجهول». والرقم نفسه يُقبل بمسافات أو شرطات كما يُقرأ من
+     البطاقة، ويُخزَّن ثمانية عشر رقمًا. */
+  const GUARDIAN_KEYS = {
+    guardian_first_name: 'guardian_first_name',
+    guardian_last_name: 'guardian_last_name',
+    guardian_relation: 'guardian_relation',
+    guardian_phone: 'guardian_phone',
+    guardian_national_id: 'guardian_national_id',
+    guardian_birth_date: 'guardian_birth_date',
+    guardian_card_issued: 'guardian_card_issued'
+  };
+  const guardianWrite = {};
+  for (const [key, field] of Object.entries(GUARDIAN_KEYS)) {
+    if (!(key in body)) continue;
+    const raw = body[key] === null || body[key] === undefined ? '' : String(body[key]).trim();
+    if (key === 'guardian_national_id') {
+      if (raw && !normalizeNIN(raw)) {
+        return sendJSON(res, {
+          error: 'رقم التعريف الوطني للولي يجب أن يكون 18 رقمًا بالضبط.'
+        }, 400);
+      }
+      guardianWrite[field] = normalizeNIN(raw);
+    } else {
+      guardianWrite[field] = raw;
+    }
+  }
 
   /* ما للمدير أن يغيّره في عضو، ولا شيء غيره. وتُكتب المفاتيح المُرسَلة فقط:
      استمارة تُغيّر رقم هاتف يجب ألّا تمحو الاسم. */
@@ -1243,6 +1629,9 @@ ROUTES['PUT /api/swimmers'] = async (req, res, body) => {
       ? 'suspended'
       : (body.status === 'active' || body.status === 'نشط' ? 'active' : String(body.status || 'active'));
   }
+  /* السباح نفسه يحمل مرجع وليّه، ولو لم يكن مولودًا من طلب: هذا ما يجعل
+     لوحة العائلة تعمل للبيانات القديمة بعد أن يُدخل المسير الرقم من البطاقة. */
+  Object.assign(write, guardianWrite);
   /* صورة أكبر من حدّها تُردّ باسمها لا تُسقط صامتة: صورة لا تُحفظ سرًّا هي
      الصورة التي قيل للأهل إنها حُفظت. */
   if ('photo' in write) {
@@ -1259,51 +1648,53 @@ ROUTES['PUT /api/swimmers'] = async (req, res, body) => {
   const existingRow = await D.one('select * from sadara.swimmers where firestore_path=$1', [path]);
   const existing = existingRow ? D.doc(existingRow) : {};
 
+  /* من بلغ 18 سنة وليٌّ على نفسه: لا تُكتب له بيانات وليّ، ورقم العائلة هو
+     رقمه الوطني. والبيانات القديمة لا تُمحى من `raw`، لكن لا تُعرض ولا تُعدَّل
+     من بطاقته. */
+  const adultAge = ageOnDate(body.birth_date || existing.birth_date);
+  if (adultAge !== null && adultAge >= 18) {
+    const own = normalizeNIN(body.national_id || existing.national_id || existing.guardian_national_id);
+    ['guardian_first_name', 'guardian_last_name', 'guardian_relation',
+      'guardian_phone', 'guardian_birth_date', 'guardian_card_issued'].forEach(k => {
+      delete guardianWrite[k];
+      delete write[k];
+    });
+    if (own) {
+      guardianWrite.guardian_national_id = own;
+      write.guardian_national_id = own;
+    }
+  }
+  if (!Object.keys(write).length) return sendJSON(res, { error: 'لا يوجد ما يُحفظ.' }, 400);
+
   await mergeRaw('swimmers', path, write);
   await writeTyped('swimmers', path, Object.assign({}, write, { updated_at: new Date().toISOString() }), SWIMMER_COLUMNS);
 
-  /* الولي ليس على بطاقة العضو: جاء في الطلب وهو يعيش هناك. فالتعديل يُكتب
-     رجوعًا إلى الطلب نفسه، ولا نسخة ثانية تختلف عن الأولى. */
-  const GUARDIAN = {
-    guardian_first_name: 'guardian_first_name',
-    guardian_last_name: 'guardian_last_name',
-    guardian_relation: 'guardian_relation',
-    guardian_phone: 'guardian_phone',
-    guardian_national_id: 'guardian_national_id',
-    guardian_birth_date: 'guardian_birth_date',
-    guardian_card_issued: 'guardian_card_issued'
-  };
+  /* وبجانب السباح، يُكتب تعديل الولي رجوعًا إلى الطلب الذي جاء منه -- إن
+     جاء من طلب. والطلب يُوسم ولا يُمحى: هو سجلّ النادي عن شخص تقدّم. أما
+     السباح الذي لم يُولد من طلب (بيانات قديمة) فمرجع وليّه على بطاقته وحدها،
+     وقد كُتب أعلاه. */
   const from = String(existing.from_application || '').replace(/^applications\//, '');
   let guardianWritten = 0;
-  if (from) {
-    const gWrite = {};
-    for (const [key, field] of Object.entries(GUARDIAN)) {
-      if (key in body) {
-        gWrite[field] = String(body[key] === null || body[key] === undefined ? '' : body[key]).trim();
-      }
-    }
-    if (Object.keys(gWrite).length) {
-      gWrite.edited_at = new Date().toISOString();
-      gWrite.edited_by = 'the club';
-      /* الطلب يُوسم ولا يُمحى: هو سجلّ النادي عن شخص تقدّم، والولي جزء منه. */
-      const appPath = 'applications/' + from;
-      await mergeRaw('applications', appPath, gWrite);
-      await writeTyped('applications', appPath,
-        Object.assign({}, gWrite, { updated_at: new Date().toISOString() }), APPLICATION_GUARDIAN_COLUMNS);
-      guardianWritten = Object.keys(gWrite).length - 2;
-    }
-  } else {
-    for (const key of Object.keys(GUARDIAN)) {
-      if (key in body) {
-        return sendJSON(res, {
-          error: 'هذا السباح لم يُسجَّل من طلب، فلا مكان لبيانات الولي فيه. '
-            + 'عدّله من الطلب نفسه.'
-        }, 400);
-      }
-    }
+  if (from && Object.keys(guardianWrite).length) {
+    const gWrite = Object.assign({}, guardianWrite, {
+      edited_at: new Date().toISOString(),
+      edited_by: 'the club'
+    });
+    const appPath = 'applications/' + from;
+    await mergeRaw('applications', appPath, gWrite);
+    await writeTyped('applications', appPath,
+      Object.assign({}, gWrite, { updated_at: new Date().toISOString() }), APPLICATION_GUARDIAN_COLUMNS);
+    guardianWritten = Object.keys(guardianWrite).length;
   }
 
-  sendJSON(res, { ok: true, fields: Object.keys(write).length, guardian_fields: guardianWritten });
+  sendJSON(res, {
+    ok: true,
+    fields: Object.keys(write).length,
+    guardian_fields: guardianWritten,
+    national_id_missing: !normalizeNIN(guardianWrite.guardian_national_id !== undefined
+      ? guardianWrite.guardian_national_id
+      : (existing.guardian_national_id || ''))
+  });
 };
 
 /* حذف سباح من القائمة: وسمٌ لا محو.
@@ -1362,8 +1753,41 @@ const noticeEditOrDelete = async (req, res, body) => {
 ROUTES['PUT /api/notices'] = noticeEditOrDelete;
 ROUTES['DELETE /api/notices'] = noticeEditOrDelete;
 
-/* ============================== البرنامج ============================== */
+/* ============================== البرنامج ==============================
+   البرنامج ليس جدولًا ثانيًا يُكتب بيد: هو قراءة من الأفواج. كل فوج يحمل
+   أيامه وساعته ومدربه ومسبحه، فتتغيّر الحصة بتغيّر الفوج ولا تتناقض نسختان.
+   والجدول القديم `schedules` يبقى احتياطًا للبيانات التي لم تُفوج بعد. */
 ROUTES['GET /api/schedule'] = async (req, res) => {
+  const groupRows = await D.all('select * from sadara.groups');
+  const groups = groupRows
+    .map(r => Object.assign({ id: D.idOf(r.firestore_path) }, D.doc(r)))
+    .filter(g => g && g.name && g.deleted !== true && g.active !== false);
+  const sessions = [];
+  for (const g of groups) {
+    const days = Array.isArray(g.days) && g.days.length
+      ? g.days
+      : (g.day ? [g.day] : []);
+    if (!days.length) continue;
+    const range = g.start && g.end ? String(g.start) + ' - ' + String(g.end) : (g.schedule || '');
+    for (const day of days) {
+      sessions.push({
+        id: String(g.id) + '@' + String(day),
+        day_name: String(day),
+        time_range: range,
+        start: g.start || '',
+        end: g.end || '',
+        group_id: g.id,
+        group_name: g.name,
+        category: g.category || '',
+        level: g.level || '',
+        coach: g.coach || '',
+        assistants: Array.isArray(g.assistants) ? g.assistants : [],
+        pool: g.pool || g.facility || 'مسبح الصدارة',
+        source: 'group'
+      });
+    }
+  }
+  if (sessions.length) return sendJSON(res, byDay(sessions));
   const rows = await D.all('select * from sadara.schedules');
   sendJSON(res, byDay(rows.map(r => Object.assign({ id: D.idOf(r.firestore_path) }, D.doc(r)))));
 };
@@ -1373,7 +1797,7 @@ const scheduleWrite = async (req, res, body) => {
   if (gate.error) return sendJSON(res, { error: gate.error }, gate.status);
   const payload = {
     day_name: body.day_name || 'السبت', time_range: body.time_range || '',
-    group_name: body.group_name || 'المبتدئون', coach: body.coach || '', pool: body.pool || 'مسبح الصدارة'
+    group_name: body.group_name || 'غير مفرز', coach: body.coach || '', pool: body.pool || 'مسبح الصدارة'
   };
   if (req.method === 'PUT' && body.id) await mergeRaw('schedules', 'schedules/' + String(body.id), payload);
   else await mergeRaw('schedules', 'schedules/' + newId(), payload);
@@ -1431,13 +1855,171 @@ ROUTES['POST /api/attendance'] = async (req, res, body) => {
 };
 
 /* ============================== الطلبات ==============================
-   قائمة المدير قائمة أشخاص: وثيقة تحمل اسمًا محجوزًا لا شخصًا تنتظر، فتُستثنى. */
+   الاستمارة العامة تُرسل بلا حساب، فالباب مفتوح للقراءة العامة للأسعار فقط،
+   وللكتابة هنا. والطلب لا يُنشئ حساب دخول: الحساب يبقى في Firebase Auth حتى
+   يُهاجَر، لكن رقم الولي يُحفظ ويُربط بالعائلة فورًا. */
+
+const APPLICATION_COLUMNS = new Set([
+  'application_no', 'application_type', 'status', 'category', 'applicant_uid',
+  'account_uid', 'owner_uid', 'first_name_ar', 'last_name_ar', 'first_name_fr',
+  'last_name_fr', 'birth_date', 'birth_place', 'gender', 'wilaya', 'national_id',
+  'birth_certificate_no', 'blood_group', 'level', 'phone', 'whatsapp', 'address',
+  'guardian_first_name', 'guardian_last_name', 'guardian_birth_date',
+  'guardian_relation', 'guardian_phone', 'guardian_national_id', 'guardian_consent',
+  'family_national_id', 'guardian_linked', 'guardian_account_uid',
+  'guardian_national_id_expiry', 'guardian_card_issued', 'guardian_child',
+  'selected_pool', 'facility', 'subscription_code', 'plan_name', 'sport',
+  'swimming_strokes', 'transport', 'uniform', 'transport_amount', 'uniform_amount',
+  'payment_method', 'expected_amount', 'membership_no', 'registration_id',
+  'national_id_key', 'duplicate_key', 'submitted_from', 'submitted_at',
+  'created_at', 'updated_at', 'notes', 'photo', 'returning_account'
+]);
+
+/* رقم طلب فريد بالشكل الذي تعرفه الصفحة: APP-YYYYMMDD-XXXX. */
+async function nextApplicationNo() {
+  const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  for (let i = 0; i < 20; i++) {
+    const no = 'APP-' + day + '-' + crypto.randomBytes(2).toString('hex').toUpperCase();
+    const seen = await D.one('select 1 from sadara.applications where application_no=$1 limit 1', [no]);
+    if (!seen) return no;
+  }
+  return 'APP-' + day + '-' + newId().slice(0, 6);
+}
+
+/* طلب تسجيل جديد. الرقم البيومتري هو أول ما يُفحص:
+   - للقاصر: رقم الولي إلزامي.
+   - للبالغ: رقمه هو، لأنه وليٌّ على نفسه.
+   وإن كان الرقم معروفًا من طلب سابق، تُنسخ بيانات الولي الناقصة ويُوسم الطلب
+   بأنه مرتبط بعائلة موجودة -- فلا يُطلب من الأب مستنداته مرة ثانية. */
+ROUTES['POST /api/applications'] = async (req, res, body) => {
+  body = normaliseIncoming(body || {});
+  const category = String(body.category || body.application_type || 'adult').toLowerCase() === 'minor'
+    ? 'minor' : 'adult';
+  if (String(body.application_type || 'swimmer') !== 'swimmer') {
+    return sendJSON(res, { error: 'طلبات المدربين لها مسارها المستقل.' }, 400);
+  }
+
+  const ownNin = normalizeNIN(body.national_id);
+  const statedGuardianNin = normalizeNIN(body.guardian_national_id);
+  /* البالغ وليٌّ على نفسه: رقمه هو مرجع عائلته، ولا يُقبل رقم وليّ آخر
+     يجرّه إلى عائلة ليست عائلته. */
+  const guardianNin = category === 'minor' ? statedGuardianNin : ownNin;
+  if (!guardianNin) {
+    return sendJSON(res, {
+      error: category === 'minor'
+        ? 'رقم التعريف الوطني للولي إلزامي، ويجب أن يكون 18 رقمًا.'
+        : 'رقم التعريف الوطني إلزامي، ويجب أن يكون 18 رقمًا.'
+    }, 400);
+  }
+  if (!String(body.first_name_ar || '').trim() || !String(body.last_name_ar || '').trim()) {
+    return sendJSON(res, { error: 'اسم السباح ولقبه مطلوبان.' }, 400);
+  }
+
+  body.guardian_national_id = guardianNin;
+  if (category === 'adult') {
+    /* البالغ وليٌّ على نفسه: الاسم والهاتف من بطاقته، لا من بطاقة أب.
+       وهكذا تظهر بطاقته في لوحة العائلة نفسها. */
+    body.guardian_first_name = body.guardian_first_name || body.first_name_ar;
+    body.guardian_last_name = body.guardian_last_name || body.last_name_ar;
+    body.guardian_phone = body.guardian_phone || body.phone || '';
+    body.guardian_relation = body.guardian_relation || 'نفسه';
+    body.guardian_child = body.guardian_child || (body.first_name_ar + ' ' + body.last_name_ar).trim();
+  }
+
+  /* العائلة الموجودة: حساب بالرقم، أو طلب سابق بالرقم نفسه. */
+  const account = await findGuardianByNIN(guardianNin);
+  const allApps = await D.all('select * from sadara.applications');
+  const prior = allApps
+    .map(r => Object.assign({ id: D.idOf(r.firestore_path) }, D.doc(r)))
+    .filter(a => normalizeNIN(a.guardian_national_id || a.family_national_id) === guardianNin)
+    .sort((a, b) => String(b.status || '') === 'approved' ? 1 : -1)[0] || null;
+  if (prior) {
+    for (const key of ['guardian_first_name', 'guardian_last_name', 'guardian_phone', 'guardian_relation']) {
+      if (!String(body[key] || '').trim() && prior[key]) body[key] = prior[key];
+    }
+  }
+  const familyAccountUid = (account && account.id)
+    || (prior && (prior.account_uid || prior.owner_uid || prior.applicant_uid)) || '';
+  const linked = !!(account || prior);
+
+  const application_no = String(body.application_no || '').trim() || await nextApplicationNo();
+  const id = newId();
+  const path = 'applications/' + id;
+  const now = new Date().toISOString();
+
+  /* المفتاح الذي تُقارَن به الطلبات: للبالغ رقمه، وللقاصر رقم وليّه مع شهادة
+     الميلاد والسنة والبلدية -- أخٌ ليس أخاه. */
+  const cert = String(body.birth_certificate_no || '').replace(/\D/g, '');
+  const year = String(body.birth_date || '').slice(0, 4);
+  const place = normId(body.birth_place);
+  const duplicateKey = category === 'minor' && cert && year && place
+    ? [guardianNin, cert, year, place].join('|') : '';
+
+  /* المبلغ: من الخطة المعتمدة، ولا يُخترع إن لم تكن هناك خطة. */
+  let expected = Number(body.expected_amount) || 0;
+  if (!expected && body.subscription_code) {
+    const planRows = await D.all('select * from sadara.subscription_plans');
+    const plan = planRows.map(r => D.doc(r) || {})
+      .find(p => String(p.code || p.id || '') === String(body.subscription_code));
+    expected = Number(plan && plan.amount) || 0;
+  }
+  const extras = (await readRaw('fee_settings', "firestore_path='fee_settings/extras'", [])) || {};
+  if (body.transport) expected += feeFor(extras, body, 'transport').amount;
+  if (body.uniform) expected += feeFor(extras, body, 'uniform').amount;
+
+  const record = Object.assign({}, body, {
+    application_no,
+    application_type: 'swimmer',
+    status: 'pending',
+    category,
+    applicant_uid: body.applicant_uid || (account ? account.id : ''),
+    account_uid: familyAccountUid,
+    owner_uid: familyAccountUid,
+    guardian_national_id: guardianNin,
+    family_national_id: guardianNin,
+    guardian_linked: linked,
+    guardian_account_uid: account ? account.id : '',
+    national_id: ownNin,
+    national_id_key: ownNin,
+    duplicate_key: duplicateKey,
+    submitted_from: body.submitted_from || 'public-form',
+    submitted_at: now,
+    created_at: now,
+    updated_at: now,
+    expected_amount: expected,
+    returning_account: linked || body.returning_account === true
+  });
+
+  await mergeRaw('applications', path, record);
+  await writeTyped('applications', path, record, APPLICATION_COLUMNS);
+
+  await mergeRaw('audit_logs', 'audit_logs/' + newId(), {
+    action: 'application_filed',
+    by: 'public-form',
+    target: id,
+    at: now,
+    guardian_linked: linked,
+    family_national_id: guardianNin
+  });
+
+  sendJSON(res, {
+    ok: true,
+    id,
+    application_no,
+    expected_amount: expected,
+    guardian_linked: linked,
+    family_national_id: guardianNin
+  }, 201);
+};
+
+/* قائمة المدير قائمة أشخاص: وثيقة تحمل اسمًا محجوزًا لا شخصًا تنتظر، فتُستثنى. */
 ROUTES['GET /api/applications'] = async (req, res) => {
   const gate = await managerGate(req, 'صلاحية رئيس النادي مطلوبة');
   if (gate.error) return sendJSON(res, { error: gate.error }, gate.status);
   const rows = await D.all('select * from sadara.applications');
   sendJSON(res, rows.map(r => Object.assign({ id: D.idOf(r.firestore_path) }, D.doc(r)))
-    .filter(row => !row.claim_only));
+    .filter(row => !row.claim_only)
+    .map(withoutGuardianApplication));
 };
 
 /* ==================== الحسابات التي هي شخص واحد ====================
@@ -1676,4 +2258,7 @@ if (require.main === module) {
   });
 }
 
-module.exports = { server, userView, loadUser, owners };
+module.exports = {
+  server, userView, loadUser, owners,
+  normalizeNIN, ageOnDate, isAdultPerson, withoutGuardian, withoutGuardianApplication
+};

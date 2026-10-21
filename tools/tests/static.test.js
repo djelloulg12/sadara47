@@ -27,6 +27,12 @@ for (const f of ISTIMARA) {
   }
 }
 
+// 1b. the club has one word for the senior category: أكابر. «كهول» is gone.
+const APP_TEXT = fs.readFileSync(path.join(PUBLIC, 'app.js'), 'utf8');
+if (APP_TEXT.includes('كهول')) {
+  problems.push('the word «كهول» is still in the page; the senior category is «أكابر» only');
+}
+
 // 2. every file a published page actually loads must be there to load.
 // Walked the way a browser walks it: relative to the page that asks for it, and
 // a directory meaning the index.html inside it. A <script src> that 404s is a

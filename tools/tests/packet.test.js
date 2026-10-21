@@ -142,6 +142,10 @@ const seed = (user, extra) => Object.assign({
   const set = (id, v) => { const n = w.document.querySelector(id); if (n) n.value = v; return n; };
   set('#reg-first-ar', 'أمين'); set('#reg-last-ar', 'بلعيد'); set('#reg-birth', '2013-05-04');
   set('#reg-phone', '0661000001'); set('#reg-address', 'غرداية'); set('#reg-plan', 'quarter');
+  /* القاصر لا يُرسل طلبه بلا رقم تعريف وليّ: 18 رقمًا، واسم الولي وهاتفه. */
+  set('#reg-guardian-first', 'صالح'); set('#reg-guardian-last', 'بلعيد');
+  set('#reg-guardian-phone', '0661000002');
+  set('#reg-guardian-nin', '123456789012345678');
   const t = w.document.querySelector('#reg-transport'); if (t) t.checked = true;
   const u = w.document.querySelector('#reg-uniform'); if (u) u.checked = true;
 

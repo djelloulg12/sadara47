@@ -169,11 +169,33 @@ const REGISTRATION_COLUMNS = [
   ['تاريخ الإرسال', a => (a.created_at && (a.created_at.toDate ? a.created_at.toDate() : a.created_at)) || a.created_date || '']
 ];
 
+/* 18 سنة فما فوق: لا بيانات وليّ في أي تصدير أو كشف. */
+function applicationIsAdult_(a) {
+  if (!a) return false;
+  if (String(a.category || '').toLowerCase() === 'adult') return true;
+  const raw = String(a.birth_date || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return false;
+  const b = new Date(raw + 'T00:00:00');
+  if (isNaN(b.getTime())) return false;
+  const now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  return age >= 18;
+}
+
 function registrationRows(list) {
   const rows = list || state.applications || [];
+  const adult = rows.map(applicationIsAdult_);
+  /* كل القائمة بالغون؟ تُحذف أعمدة الولي كلها. وفي قائمة مختلطة تبقى
+     الأعمدة للقاصرين، وتُترك خانات البالغ فارغة. */
+  const hideGuardian = rows.length > 0 && adult.every(Boolean);
+  const idx = REGISTRATION_COLUMNS.map((c, i) => i)
+    .filter(i => !(hideGuardian && i >= 24 && i <= 29));
   return {
-    headers: REGISTRATION_COLUMNS.map(c => c[0]),
-    rows: rows.map(a => REGISTRATION_COLUMNS.map(c => c[1](a)))
+    headers: idx.map(i => REGISTRATION_COLUMNS[i][0]),
+    rows: rows.map((a, ri) => idx.map(i =>
+      (adult[ri] && i >= 24 && i <= 29) ? '' : REGISTRATION_COLUMNS[i][1](a)))
   };
 }
 

@@ -305,12 +305,13 @@
     'national_id_expiry', 'guardian_national_id_expiry', 'guardian_card_issued'
   ];
 
-  /* A national identity card number is nine digits. Checked here rather than left
-     to the eye at the counter, because this is the number the club looks a member
-     up by: one written with eight is not the same member as one written with ten,
-     and it is also what the duplicate check compares -- a number written wrongly
-     here is how one person ends up on the list twice. */
-  var CARD_DIGITS = 9;
+  /* The biometric national identity card carries eighteen digits. Checked here
+     rather than left to the eye at the counter, because this is the number the
+     club looks a family up by: one written with seventeen is not the same member
+     as one written with eighteen, and it is also what the duplicate check
+     compares -- a number written wrongly here is how one person ends up on the
+     list twice. */
+  var CARD_DIGITS = 18;
   var cardNumberError = function (who) {
     return who + ' يجب أن يكون ' + CARD_DIGITS + ' أرقام، كما هو مكتوب على البطاقة.';
   };
@@ -1146,7 +1147,7 @@
 
   function payload() {
     var plan = selectedPlan();
-    return {
+    var data = {
       /* Which kind of file this is. The rules separate a coach's own request from
          a public sign-up, and the deployed rules require the field to be there
          -- a request that leaves it out is refused with "you do not have
@@ -1211,6 +1212,17 @@
       submitted_from: 'public-form',
       status: 'pending'
     };
+    /* An adult is their own guardian: the same eighteen-digit number is the
+       family reference, and the guardian block stays off the form. Sending it
+       explicitly keeps the public page and the platform on one rule. */
+    if (data.category === 'adult') {
+      data.guardian_national_id = data.national_id;
+      data.guardian_first_name = data.first_name_ar;
+      data.guardian_last_name = data.last_name_ar;
+      data.guardian_phone = data.phone;
+      data.guardian_relation = 'نفسه';
+    }
+    return data;
   }
 
   /* ---------------- the account ---------------- */

@@ -127,16 +127,16 @@
         </div>
 
         <div class="row two">
-          <!-- A national identity card number is nine digits and it expires. Both
-               are the club's business: the card is what is shown at the desk, and
-               a card that ran out last month is a different thing from one that
-               runs out next year. A child holds no card, so the field leaves the
-               form with the minors and the guardian's stays. -->
+          <!-- The biometric national identity card number is eighteen digits and
+               it expires. Both are the club's business: the card is what is shown
+               at the desk, and a card that ran out last month is a different thing
+               from one that runs out next year. A child holds no card, so the field
+               leaves the form with the minors and the guardian's stays. -->
           <label class="f" data-adult-only>
-            <span class="lbl">رقم بطاقة التعريف الوطني <i class="req">*</i></span>
+            <span class="lbl">رقم التعريف الوطني <i class="req">*</i></span>
             <input id="national_id" name="national_id" type="text" inputmode="numeric"
-                   dir="ltr" maxlength="9" pattern="[0-9]{9}" placeholder=" 123456789 "  required />
-            <small class="hint">تسعة أرقام، كما هي على البطاقة.</small>
+                   dir="ltr" maxlength="18" pattern="[0-9]{18}" placeholder="123456789012345678"  required />
+            <small class="hint">ثمانية عشر رقمًا، كما هي على البطاقة البيومترية.</small>
           </label>
           <label class="f" data-adult-only>
             <span class="lbl">تاريخ انتهاء البطاقة <i class="req">*</i></span>
@@ -234,11 +234,11 @@
             <input id="guardian_phone" name="guardian_phone" type="tel" inputmode="tel" dir="ltr" maxlength="20"  required />
           </label>
           <label class="f">
-            <span class="lbl">رقم بطاقة الولي <i class="req">*</i></span>
+            <span class="lbl">رقم التعريف الوطني للولي <i class="req">*</i></span>
             <input id="guardian_national_id" name="guardian_national_id" type="text"
-                   inputmode="numeric" dir="ltr" maxlength="9" pattern="[0-9]{9}"
-                   placeholder=" 123456789 "  required />
-            <small class="hint">تسعة أرقام — وهي التي تُكتب في استمارة النادي.</small>
+                   inputmode="numeric" dir="ltr" maxlength="18" pattern="[0-9]{18}"
+                   placeholder="123456789012345678"  required />
+            <small class="hint">ثمانية عشر رقمًا — وهو مرجع العائلة في النادي.</small>
           </label>
         </div>
 

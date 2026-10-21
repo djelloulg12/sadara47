@@ -44,12 +44,37 @@ const SWIMMER_EDIT_FIELDS = [
   { key: 'status', label: 'الحالة', type: 'status' }
 ];
 
+/* 18 سنة فما فوق: لا وليّ. الحساب يعرض بيانات السباح ورقمه الوطني وحده. */
+function swimmerIsAdult_(s) {
+  const value = s && s.birth_date;
+  let b;
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return false;
+    b = new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  } else {
+    const text = String(value === undefined || value === null ? '' : value).trim();
+    if (!text) return false;
+    const plain = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    if (plain) b = new Date(Number(plain[1]), Number(plain[2]) - 1, Number(plain[3]));
+    else {
+      const parsed = new Date(text);
+      if (isNaN(parsed.getTime())) return false;
+      b = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    }
+  }
+  const now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  return age >= 18;
+}
+
 const GUARDIAN_EDIT_FIELDS = [
   { key: 'guardian_first_name', label: 'اسم الولي', type: 'text' },
   { key: 'guardian_last_name', label: 'لقب الولي', type: 'text' },
   { key: 'guardian_relation', label: 'صلة القرابة', type: 'text' },
   { key: 'guardian_phone', label: 'هاتف الولي', type: 'tel', ltr: true },
-  { key: 'guardian_national_id', label: 'رقم تعريف الولي', type: 'text', ltr: true },
+  { key: 'guardian_national_id', label: 'رقم التعريف الوطني للولي (18 رقمًا)', type: 'text', ltr: true },
   { key: 'guardian_birth_date', label: 'تاريخ ميلاد الولي', type: 'date' }
 ];
 
@@ -69,7 +94,12 @@ function swimmerEditField(f, value) {
   }
 
   const inputType = f.type === 'date' ? 'date' : (f.type === 'tel' ? 'tel' : (f.type === 'email' ? 'email' : 'text'));
-  return '<label>' + esc(f.label) + '<input ' + common + ' type="' + inputType + '" value="' + esc(v) + '"></label>';
+  /* رقم الولي هو مفتاح العائلة: لا يُكتب نصفه. والحدّ في الحقل نفسه حتى يرى
+     المسير الخطأ قبل الحفظ، والخادم يرفضه أيضًا. */
+  const nin = f.key === 'guardian_national_id'
+    ? ' inputmode="numeric" maxlength="18" pattern="[0-9]{18}" placeholder="18 رقمًا"'
+    : '';
+  return '<label>' + esc(f.label) + '<input ' + common + nin + ' type="' + inputType + '" value="' + esc(v) + '"></label>';
 }
 
 /* A member's own photograph, drawn and changeable.
@@ -127,14 +157,27 @@ function swimmerModal(s) {
     '<label data-wide="' + (f.wide ? '1' : '') + '">' + swimmerEditField(f, s[f.key]).replace(/^<label>/, '').replace(/<\/label>$/, '') + '</label>'
   ).join('');
 
+  /* الولي يظهر دائمًا، ولو لم يُولد السباح من طلب. البيانات القديمة لم تكن
+     تحمل رقم وليّ، والمسير هو من يقرأ البطاقة الورقية ويُدخل الرقم من هنا --
+     وهذا هو المدخل الوحيد لربط عائلة قديمة بلوحة العائلة. */
+  const adult = swimmerIsAdult_(s);
+  const guardianMissing = !String(guardianValues.guardian_national_id || '')
+    .replace(/[^0-9]/g, '').match(/^[0-9]{18}$/);
+
   const body = swimmerPhotoBox(s)
     + '<div class="form-section-title">بيانات السباح</div>'
     + '<div class="form-two">' + fields + '</div>'
-    + '<div class="form-section-title">الولي'
-    + (fromRequest ? '<span class="swf-note"> — من الطلب ' + esc(String(fromRequest)) + '</span>' : '') + '</div>'
-    + (fromRequest
-      ? '<div class="form-two">' + GUARDIAN_EDIT_FIELDS.map(f => swimmerEditField(f, guardianValues[f.key])).join('') + '</div>'
-      : '<p class="empty-cell">هذا السباح لم يُسجَّل من طلب، فلا بيانات لوليّ فيه.</p>');
+    + (adult
+      ? '<div class="form-section-title">الولي</div>'
+        + '<p class="empty-cell">بلغ هذا السباح 18 سنة: هو وليّ على نفسه، ولا تُعرض بيانات وليّ. '
+        + 'رقم التعريف الوطني أعلاه هو مرجع عائلته.</p>'
+      : '<div class="form-section-title">الولي'
+        + (fromRequest ? '<span class="swf-note"> — من الطلب ' + esc(String(fromRequest)) + '</span>' : '') + '</div>'
+        + (guardianMissing
+          ? '<p class="swf-nin-missing" data-guardian-missing="1">ملف غير مكتمل: رقم التعريف الوطني للولي غير مسجّل. '
+            + 'أدخله من البطاقة البيومترية (18 رقمًا) لتظهر بطاقات العائلة في لوحة واحدة.</p>'
+          : '')
+        + '<div class="form-two">' + GUARDIAN_EDIT_FIELDS.map(f => swimmerEditField(f, guardianValues[f.key])).join('') + '</div>');
 
   return formModal('تعديل بيانات السباح', body, 'save-swimmer',
     ' data-id="' + esc(s.id) + '"'

@@ -145,7 +145,7 @@ function seed(user) {
 
 /* ---- 1) profile page with editable fields and custom details ---- */
 {
-  const user = { id: 12, name: 'أمين بلعيد', role: 'swimmer_adult', member_no: 'SDR-0001', phone: '0661000001' };
+  const user = { id: 12, name: 'أمين بلعيد', role: 'swimmer_adult', member_no: 'S202610001', phone: '0661000001' };
   const w = boot(seed(user));
   setRole(w, 'profile');
   w.__t.render();
@@ -158,7 +158,7 @@ function seed(user) {
   }
   if (!w.document.querySelector('.pf-readonly')) errors.push('[1] missing read-only identity block');
   const ro = w.document.querySelector('.pf-readonly') ? w.document.querySelector('.pf-readonly').textContent : '';
-  if (!ro.includes('SDR-0001')) errors.push('[1] membership number not shown');
+  if (!ro.includes('S202610001')) errors.push('[1] membership number not shown');
   if (!ro.includes('المبتدئون')) errors.push('[1] group not shown');
   if (!w.document.querySelector('[data-action="add-profile-extra"]')) errors.push('[1] no button to add a custom detail');
   if (!w.document.querySelector('[data-action="save-profile"]')) errors.push('[1] no save button');

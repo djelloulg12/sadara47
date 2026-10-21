@@ -19,7 +19,8 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const SCHEMA_FILES = ['001-schema.sql', '002-app-users.sql', '003-finish-schema.sql'];
+const SCHEMA_FILES = ['001-schema.sql', '002-app-users.sql', '003-finish-schema.sql',
+  '004-nin.sql', '005-membership.sql'];
 const SQL = SCHEMA_FILES
   .map(f => fs.readFileSync(path.join(ROOT, 'tools', 'neon', f), 'utf8'))
   .join('\n');
@@ -161,6 +162,59 @@ function tableColumns(table) {
       'birth_date', 'blood_group', 'facility', 'expected_amount', 'payment_method',
       'account_removed_at', 'account_removed_by', 'account_removed_reason', 'duplicate_key']) {
       if (!cols.has(f)) errors.push('[2] the applications table has no column for "' + f + '"');
+    }
+  }
+}
+
+/* رقم التعريف الوطني للولي: عمود على الحساب والسباح والطلب، وفهرس فريد
+   على الأرقام البيومترية وحدها. */
+{
+  const accountCols = tableColumns('app_users');
+  const swimmerCols = tableColumns('swimmers');
+  const applicationCols = tableColumns('applications');
+  if (!accountCols || !accountCols.has('national_id')) {
+    errors.push('[2] app_users has no national_id, so a guardian cannot be found by their NIN');
+  }
+  if (!swimmerCols || !swimmerCols.has('guardian_national_id')) {
+    errors.push('[2] swimmers has no guardian_national_id, so the family dashboard cannot group children');
+  }
+  if (!applicationCols || !applicationCols.has('guardian_national_id')) {
+    errors.push('[2] applications has no guardian_national_id, so a new request cannot link to its family');
+  }
+  if (!applicationCols || !applicationCols.has('family_national_id')) {
+    errors.push('[2] applications has no family_national_id, so a linked request has no family reference');
+  }
+  if (!/create\s+unique\s+index\s+if\s+not\s+exists\s+app_users_national_id_uniq/i.test(SQL)) {
+    errors.push('[2] the guardian NIN is not declared unique on app_users');
+  }
+}
+
+/* رقم الانخراط الموحّد: الموسم والرقم القديم على السباح والطلب والحساب،
+   وفهارس البحث. والترقيم نفسه يُكتب بسكربت مستقل، لا في المخطط. */
+{
+  const swimmerCols = tableColumns('swimmers');
+  const applicationCols = tableColumns('applications');
+  const accountCols = tableColumns('app_users');
+  for (const [table, cols] of [['swimmers', swimmerCols], ['applications', applicationCols],
+    ['app_users', accountCols]]) {
+    if (!cols) { errors.push('[2] there is no ' + table + ' table for membership numbering'); continue; }
+    if (!cols.has('membership_season')) {
+      errors.push('[2] ' + table + ' has no membership_season, so a number cannot be audited by season');
+    }
+  }
+  if (!swimmerCols || !swimmerCols.has('legacy_membership_no')) {
+    errors.push('[2] swimmers has no legacy_membership_no, so renumbering loses the old number');
+  }
+  if (!applicationCols || !applicationCols.has('legacy_membership_no')) {
+    errors.push('[2] applications has no legacy_membership_no, so renumbering loses the old number');
+  }
+  if (!accountCols || !accountCols.has('legacy_member_no')) {
+    errors.push('[2] app_users has no legacy_member_no, so renumbering loses the old staff number');
+  }
+  for (const index of ['swimmers_membership_no_idx', 'applications_membership_no_idx',
+    'app_users_member_no_idx']) {
+    if (!new RegExp('create\\s+index\\s+if\\s+not\\s+exists\\s+' + index, 'i').test(SQL)) {
+      errors.push('[2] the membership index ' + index + ' is missing');
     }
   }
 }

@@ -103,6 +103,35 @@ function scheduleSheet(){
         cells + '</section>';
     }).join('') + '</div>';
 
+  /* جدول تفصيلي واحد: كل حصة في سطر، باليوم والتوقيت والفوج والفئة والمستوى
+     والمدرب والمساعدين والمسبح. يُطبع هذا الجدول، وتبقى البطاقات عرضًا
+     بصريًا على الشاشة. */
+  const dayRank = d => {
+    const i = WEEK_DAYS.indexOf(String(d || '').trim());
+    return i === -1 ? 99 : i;
+  };
+  const detailRows = sessions.slice().sort((a, b) => {
+    const d = dayRank(a.day_name) - dayRank(b.day_name);
+    if (d) return d;
+    return String(a.time_range || '').localeCompare(String(b.time_range || ''));
+  });
+  const detail = '<div class="sch-table-wrap">'
+    + '<h2 class="sch-table-title">الجدول التفصيلي للحصص</h2>'
+    + '<table class="sch-table"><thead><tr>'
+    + '<th>اليوم</th><th>التوقيت</th><th>الفوج</th><th>الفئة</th><th>المستوى</th>'
+    + '<th>المدرب</th><th>المساعدون</th><th>المسبح</th></tr></thead><tbody>'
+    + (detailRows.length ? detailRows.map(s => '<tr>'
+      + '<td><b>' + esc(s.day_name || '—') + '</b></td>'
+      + '<td dir="ltr">' + esc(clubDigits(s.time_range || '—')) + '</td>'
+      + '<td><b>' + esc(s.group_name || '—') + '</b></td>'
+      + '<td>' + esc(s.category || '—') + '</td>'
+      + '<td>' + esc(s.level || '—') + '</td>'
+      + '<td>' + esc(s.coach || '—') + '</td>'
+      + '<td>' + esc((Array.isArray(s.assistants) ? s.assistants.join('، ') : '') || '—') + '</td>'
+      + '<td>' + esc(s.pool || '—') + '</td>'
+      + '</tr>').join('') : '<tr><td colspan="8">البرنامج قيد الإعداد.</td></tr>')
+    + '</tbody></table></div>';
+
   const legend = '<div class="sch-legend"><span class="sch-legend-t">الفوج:</span>' +
     [...new Set(sessions.map(s => String(s.group_name || '').trim()).filter(Boolean))].map(g =>
       '<span class="sch-chip g-' + g.slice(0, 6).replace(/\s/g, '') + '">' + esc(g) + '</span>').join('') +
@@ -116,7 +145,7 @@ function scheduleSheet(){
 
   const box = document.createElement('section');
   box.className = 'schedule-doc';
-  box.innerHTML = head + grid + legend + notes;
+  box.innerHTML = head + detail + grid + legend + notes;
   return box;
 }
 function printScheduleDoc(){

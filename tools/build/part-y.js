@@ -119,7 +119,7 @@
      going to type `president` into a box that says `رئيس النادي`. Both are
      searched, so either works. */
   const accountHaystack = a => [a.name, a.email, a.username, a.phone,
-    a.member_no, a.registration_id, a.role, label(a.role), held(a)]
+    a.member_no, a.registration_id, a.national_id, a.role, label(a.role), held(a)]
     .filter(Boolean).join(' ');
 
   const panel = (list, me) => {
@@ -152,11 +152,24 @@
           + '" data-name="' + esc(a.name || a.email || '') + '" data-email="' + esc(a.email || '')
           + '">كلمة مرور جديدة</button>'
         : '';
+      /* رقم التعريف الوطني هو مرجع العائلة. الحساب الذي لا رقم له «ملف غير
+         مكتمل» لا حساب معطوب: يدخل ويعمل، لكن أبناءه لا يُجمعون تحت رقمه. */
+      const nin = String(a.national_id || '').replace(/[^0-9]/g, '');
+      const ninLine = /^[0-9]{18}$/.test(nin)
+        ? '<small class="nin-value" dir="ltr">' + esc(nin) + '</small>'
+        : '<small class="nin-missing">ملف غير مكتمل — رقم التعريف الوطني</small>';
+      const editNin = (!locked && apiIsMine())
+        ? '<button class="check-btn" data-action="edit-account-nin" data-id="' + esc(a.id)
+          + '" data-nin="' + esc(nin) + '" data-name="' + esc(a.name || a.email || '')
+          + '">رقم التعريف</button>'
+        : '';
       return '<div class="requirement-row account-row">'
         + '<div class="account-who"><b>' + esc(a.name || a.email || 'حساب') + '</b>'
-        + '<span>' + esc(a.email || '') + who + pending + '</span></div>'
+        + '<span>' + esc(a.email || '') + who + pending + '</span>'
+        + ninLine + '</div>'
         + options
         + reset
+        + editNin
         + (locked ? '' : '<button class="check-btn ok" data-action="save-account-role" data-id="'
           + esc(a.id) + '">حفظ</button>')
         + '</div>';
@@ -181,7 +194,7 @@
       + '<button class="btn btn-outline" data-action="check-duplicate-accounts">فحص الحسابات المكررة</button>'
       + '<button class="btn btn-outline" data-action="reload-accounts">تحديث</button></div></div>'
       + '<div class="search">🔎<input id="accounts-search" '
-      + 'placeholder="ابحث بالاسم أو البريد أو رقم الهاتف أو رقم الانخراط…" '
+      + 'placeholder="ابحث بالاسم أو البريد أو رقم التعريف الوطني أو الهاتف أو رقم الانخراط…" '
       + 'aria-label="بحث في الحسابات" value="' + esc(q) + '" autocomplete="off"></div>'
       + tally
       + '<div id="accounts-list">' + (rows || empty) + '</div>'
@@ -366,6 +379,29 @@
     }
     if(a==='close-temp-password'){
       document.getElementById('temp-password-modal')?.remove();
+      return;
+    }
+    /* إدخال رقم التعريف الوطني أو تصحيحه من صفحة الحسابات. الرقم نفسه هو
+       الذي يجمع الأبناء، فلا يُقبل نصفه ولا يُحفظ مرتين. */
+    if(a==='edit-account-nin'){
+      const id = el.dataset.id;
+      const who = el.dataset.name || 'هذا الحساب';
+      const entered = prompt('رقم التعريف الوطني للولي (18 رقمًا بالضبط)\n'
+        + 'كما هو مكتوب على البطاقة البيومترية:', el.dataset.nin || '');
+      if (entered === null) return;
+      const nin = String(entered).replace(/[^0-9]/g, '');
+      if (!/^[0-9]{18}$/.test(nin)) {
+        showToast('رقم التعريف الوطني يجب أن يكون 18 رقمًا بالضبط.', 'error');
+        return;
+      }
+      const res = await api('/api/accounts', 'PUT', { id, national_id: nin })
+        .catch(e => ({ error: (e && e.message) || 'تعذّر حفظ الرقم.' }));
+      if (!res || res.error) { showToast((res && res.error) || 'تعذّر حفظ الرقم.', 'error'); return; }
+      const row = (state.accounts || []).find(x => String(x.id) === String(id));
+      if (row) { row.national_id = nin; row.national_id_missing = false; }
+      save();
+      render();
+      showToast('حُفظ رقم التعريف الوطني لـ«' + who + '».');
       return;
     }
     if(a==='save-account-role'){

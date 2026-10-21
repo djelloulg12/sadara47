@@ -42,6 +42,7 @@ const SUITES = [
   ['fix-groups', 'fix-groups.test.js', 'the group fixer unifies names without forcing a child into a group they never trained in'],
   ['table-labels', 'table-labels.test.js', 'the phone card is named from its column, on both render paths'],
   ['accounts-hierarchy', 'accounts-hierarchy.test.js', 'who may touch a manager’s password, and the phone card measured in a browser'],
+  ['nin-guardian', 'nin-guardian.test.js', 'the guardian NIN: sign-in, completion wall, family panel, adult privacy'],
   ['cards-roles', 'cards-roles.test.js', 'each card wears its holder’s rank: blue swimmer, red coach, black administrator'],
   ['column-tool', 'column-tool.test.js', 'the column tool opens, hides, remembers per person, locks the name'],
   ['resilience', 'resilience.test.js', 'a page that fails to draw shows a panel with a way back, and stale data says so'],
