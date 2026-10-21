@@ -31,6 +31,7 @@ const ADAPTER = fs.readFileSync(path.join(ROOT, 'firebase-adapter.js'), 'utf8');
 const RULES = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
 const LAYER = fs.readFileSync(path.join(ROOT, 'tools', 'build', 'part-groups.js'), 'utf8');
 const BASELINE = fs.readFileSync(path.join(ROOT, 'tools', 'build', 'baseline-201e0c8.js'), 'utf8');
+const SERVER = fs.readFileSync(path.join(ROOT, 'tools', 'neon', 'server', 'server.js'), 'utf8');
 const errors = [];
 
 function boot(seed) {
@@ -67,6 +68,11 @@ function server(w, options) {
     if (String(url) === '/api/groups' && method === 'GET') {
       if (opts.readFails) return { ok: false, status: 500, json: async () => ({ error: 'تعذّر' }) };
       return { ok: true, json: async () => ({ groups: opts.groups === undefined ? null : opts.groups, readable: true }) };
+    }
+    /* البرنامج مشتقّ من الأفواج، فلا يُخزَّن في المحاكي: كل قراءة تعيد
+       الحصص التي يراها الخادم بعد آخر تعديل على الأيام والتوقيت. */
+    if (String(url) === '/api/schedule' && method === 'GET') {
+      return { ok: true, json: async () => (Array.isArray(opts.schedules) ? opts.schedules : []) };
     }
     if (String(url) === '/api/swimmers' && method === 'PUT') {
       if (opts.refuseSwimmer) return { ok: false, status: 403, json: async () => ({ error: 'هذه العملية لرئيس النادي فقط' }) };
@@ -410,6 +416,91 @@ const callsTo = (w, url, method) => (w.__calls || []).filter(c => c.url === url 
     }
   }
 
+  /* ================= 5. البرنامج الآليّ وصورة المدرب ================= */
+
+  {
+    const group = {
+      id: 'g1', name: 'المبتدئون', coach: 'سليم',
+      coach_photo: 'data:image/jpeg;base64,AAAA',
+      days: ['السبت', 'الثلاثاء'], start: '16:00', end: '17:30'
+    };
+    const sessions = [
+      { id: 'g1-السبت', day_name: 'السبت', group_name: 'المبتدئون', coach: 'سليم', time_range: '16:00 – 17:30', source: 'group' },
+      { id: 'g1-الثلاثاء', day_name: 'الثلاثاء', group_name: 'المبتدئون', coach: 'سليم', time_range: '16:00 – 17:30', source: 'group' }
+    ];
+    const w = boot(seed({ groups: [group] }));
+    server(w, { groups: [group], schedules: sessions, writesBack: true });
+    await w.eval('syncApi()');
+    w.__t.state.page = 'groups';
+    w.__t.render();
+
+    const button = w.document.querySelector('[data-action="sync-schedule"]');
+    if (!button) {
+      errors.push('[5] the groups page has no button to refresh the weekly programme');
+    } else if (!/تحديث البرنامج/.test(button.textContent)) {
+      errors.push('[5] the refresh button does not say what it does');
+    }
+
+    const photo = w.document.querySelector('.group-card .group-coach-photo img');
+    if (!photo || !/^data:image\/jpeg/.test(photo.getAttribute('src') || '')) {
+      errors.push('[5] the group card does not show the coach photo that belongs to the group');
+    }
+
+    const strip = w.document.querySelector('.groups-week');
+    if (!strip) errors.push('[5] the groups page does not show the weekly distribution');
+    else if (!/2 حصة/.test(strip.textContent)) {
+      errors.push('[5] the weekly distribution does not count the two group sessions');
+    }
+
+    w.__calls = [];
+    await w.__t.action('sync-schedule', button);
+    if (!callsTo(w, '/api/schedule', 'GET').length) {
+      errors.push('[5] the refresh button did not read the derived schedule');
+    }
+    if ((w.__t.state.schedules || []).length !== 2) {
+      errors.push('[5] the refresh button did not keep the two sessions the server derived');
+    }
+    const after = w.document.querySelector('.groups-week');
+    if (!after || !/2 حصة/.test(after.textContent)) {
+      errors.push('[5] the weekly distribution did not update after the refresh');
+    }
+
+    /* الحفظ لا يُسقط الصورة: الحقل الجديد يسافر مع بقية حقول الفوج. */
+    await w.__t.action('edit-group', { dataset: { group: 'g1' } });
+    if (!w.document.querySelector('#g-coach-photo')) {
+      errors.push('[5] the group editor offers no coach photograph');
+    }
+    await w.__t.action('save-group', { dataset: {} });
+    const puts = callsTo(w, '/api/groups', 'PUT');
+    const saved = puts.length ? puts[puts.length - 1].body.groups[0] : null;
+    if (!saved || saved.coach_photo !== group.coach_photo) {
+      errors.push('[5] saving the group dropped the coach photograph');
+    }
+  }
+
+  /* وإن لم تُرفع صورة مع الفوج، تُقرأ من ملف المدرب بالاسم نفسه. */
+  {
+    const group = {
+      id: 'g2', name: 'المتوسطون', coach: 'المدرب سليم',
+      days: ['الأحد'], start: '17:00', end: '18:00'
+    };
+    const w = boot(seed({
+      groups: [group],
+      applications: [{
+        id: 'a1', application_type: 'coach', coach_name: 'سليم',
+        photo: 'data:image/png;base64,BBBB'
+      }]
+    }));
+    server(w, { groups: [group] });
+    await w.eval('syncApi()');
+    w.__t.state.page = 'groups';
+    w.__t.render();
+    const photo = w.document.querySelector('.group-card[data-group="g2"] .group-coach-photo img');
+    if (!photo || !/^data:image\/png/.test(photo.getAttribute('src') || '')) {
+      errors.push('[5] a coach photograph on the coach file is not used when the group has none');
+    }
+  }
+
   /* ================= الفحوص الثابتة ================= */
 
   {
@@ -462,9 +553,19 @@ const callsTo = (w, url, method) => (w.__calls || []).filter(c => c.url === url 
       errors.push('the old print-group route was removed, so anything still pointing at it does nothing');
     }
 
-    /* CSS: الخانة، والورقة، وموضع التوقيع. */
-    for (const sel of ['.group-inline', '.roster-sheet', '.roster-sign', '.groups-note']) {
+    /* CSS: الخانة، والورقة، وموضع التوقيع، وصورة المدرب، وشريط الأسبوع. */
+    for (const sel of ['.group-inline', '.roster-sheet', '.roster-sign', '.groups-note',
+      '.group-coach', '.group-coach-photo', '.groups-week', '.roster-coach-photo']) {
       if (!new RegExp(sel.replace(/\./g, '\\.') + '(?![\\w-])').test(CSS)) errors.push('CSS missing ' + sel);
+    }
+
+    /* والخادم لا يُسقط الحقل الجديد عند تطبيع قائمة الأفواج. */
+    if (!/coach_photo/.test(SERVER)) {
+      errors.push('the server drops coach_photo, so the photograph would disappear on save');
+    }
+    /* والبرنامج يقرأ القائمة التي يحفظها المسير، لا جدولًا لا يكتبه أحد. */
+    if (!/ROUTES\['GET \/api\/schedule'\][\s\S]{0,800}config\/groups/.test(SERVER)) {
+      errors.push('the schedule does not read config/groups, so the refresh button would find no sessions');
     }
   }
 

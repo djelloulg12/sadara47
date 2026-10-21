@@ -11,9 +11,9 @@
    وفرق نخبة تتحضّر للبطولات. والفوج الذي لا يُعرف فيه يومه ولا ساعته ولا
    سعته ولا من يعاونه في التدريب لا يكفي لجدول أسبوعي ولا لقاعة حوض.
 
-   والفوج الآن عشرة حقول:
+   والفوج الآن أحد عشر حقلًا:
      الاسم · الفئة · أيام التدريب · ساعة الدخول والخروج · الطاقة الاستيعابية
-     · المدرب الرئيسي · المساعدون · المسبح · ملاحظات
+     · المدرب الرئيسي · صورة المدرب · المساعدون · المسبح · ملاحظات
 
    ---------------------------------------------------------------------------
    والمبدأ الذي يحكم كل شيء هنا: **المعرّف هو الفوج، والاسم عنوانه.**
@@ -79,6 +79,7 @@ function cleanGroups_(list) {
     end: String((g && g.end) || ''),
     capacity: Number((g && g.capacity) || 0) || 0,
     coach: String((g && g.coach) || ''),
+    coach_photo: String((g && g.coach_photo) || ''),
     assistants: Array.isArray(g && g.assistants) ? g.assistants.slice() : [],
     pool: String((g && g.pool) || ''),
     notes: String((g && g.notes) || '')
@@ -91,7 +92,7 @@ function blankGroup_() {
   return {
     id: 'grp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
     name: '', category: '', days: [], start: '', end: '',
-    capacity: 0, coach: '', assistants: [], pool: '', notes: '', source: 'manager'
+    capacity: 0, coach: '', coach_photo: '', assistants: [], pool: '', notes: '', source: 'manager'
   };
 }
 
@@ -190,6 +191,7 @@ function adoptGroups_(served) {
       end: String((item && item.end) || ''),
       capacity: Number((item && item.capacity) || 0) || 0,
       coach: String((item && item.coach) || ''),
+      coach_photo: String((item && item.coach_photo) || ''),
       assistants: Array.isArray(item && item.assistants) ? item.assistants.slice() : [],
       pool: String((item && item.pool) || ''),
       notes: String((item && item.notes) || ''),
@@ -357,6 +359,99 @@ function groupCoachesLine_(g) {
   return [main].concat(helpers.map(h => h + ' (مساعد)')).join(' · ');
 }
 
+/* ---------------- صورة المدرب ----------------
+   الصورة أولًا من الفوج نفسه: المسير يرفعها مع بقية بيانات الفوج، فتبقى
+   على البطاقة حتى لو لم يكن للمدرب حساب أو ملف في المنصة. وإن لم تكن
+   مرفوعة، نبحث عن صورة المدرب في ملفه أو حسابه أو بطاقته. والاسم وحده لا
+   يكفي: «المدرب سليم» و«سليم» شخص واحد، فتُقارن الأسماء بعد تجريد اللقب. */
+function isPhotoValue_(v) {
+  return /^(data:image\/(jpeg|png|webp);base64,|https?:)/.test(String(v || '').trim());
+}
+
+function coachNameKey_(name) {
+  return String(name || '').trim()
+    .replace(/^(?:المدرب|مدرب|الأستاذ|استاذ)\s+/, '')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function coachPhotoByName_(name) {
+  const key = coachNameKey_(name);
+  if (!key) return '';
+  const candidates = [];
+  (state.applications || []).forEach(a => {
+    if (String((a && a.application_type) || '') !== 'coach') return;
+    candidates.push({ name: a.coach_name, photo: a.photo || a.photo_url || a.photo_data_url });
+  });
+  (state.accounts || []).forEach(a => {
+    if (String((a && a.role) || '') !== 'coach') return;
+    candidates.push({ name: a.name || a.display_name, photo: a.photo || a.photo_url });
+  });
+  (state.cards || []).forEach(c => {
+    if (String((c && c.role) || '') !== 'coach' && String((c && c.kind) || '') !== 'coach') return;
+    candidates.push({ name: c.coach_name || c.name, photo: c.photo || c.photo_url });
+  });
+  (state.swimmers || []).forEach(s => {
+    if (['coach', 'مدرب'].indexOf(String((s && s.role) || '')) === -1) return;
+    candidates.push({ name: s.name, photo: s.photo || s.photo_url });
+  });
+  const found = candidates.find(c => coachNameKey_(c.name) === key && isPhotoValue_(c.photo));
+  return found ? String(found.photo).trim() : '';
+}
+
+function groupCoachPhoto_(g) {
+  const own = String((g && g.coach_photo) || '').trim();
+  if (isPhotoValue_(own)) return own;
+  return coachPhotoByName_(g && g.coach);
+}
+
+/* صورة الفوج تُصغَّر في الصفحة قبل الحفظ: صورة هاتف ثلاث ميغابايت تجعل
+   قراءة قائمة الأفواج على كل جهاز ثقيلة. 320 بكسل تكفي لبطاقة دائريّة. */
+function readGroupCoachPhoto_(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return resolve('');
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
+      return reject(new Error('الصورة يجب أن تكون JPG أو PNG أو WebP.'));
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      return reject(new Error('الصورة كبيرة جدًا. اختر صورة أصغر.'));
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('تعذّرت قراءة الصورة.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('تعذّر فتح الصورة.'));
+      img.onload = () => {
+        const max = 320;
+        let w = img.naturalWidth || max, h = img.naturalHeight || max;
+        const scale = Math.min(1, max / w, max / h);
+        w = Math.max(1, Math.round(w * scale));
+        h = Math.max(1, Math.round(h * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function refreshGroupCoachPhotoPreview_(photo) {
+  const box = document.querySelector('#g-coach-photo-preview');
+  if (!box) return;
+  const value = String(photo || '').trim();
+  box.innerHTML = isPhotoValue_(value)
+    ? '<img src="' + esc(value) + '" alt="صورة المدرب">'
+    : '<span aria-hidden="true">؟</span>';
+  const remove = document.querySelector('#g-coach-photo-remove');
+  if (remove) remove.hidden = !isPhotoValue_(value);
+}
+
 function groupRosterDoc_(g) {
   const list = swimmersOf(g.name);
   const recorders = groupRosterRecorders_();
@@ -364,7 +459,10 @@ function groupRosterDoc_(g) {
   const box = document.createElement('section');
   box.className = 'roster group-roster';
   box.setAttribute('data-roster-group', String(g.id || ''));
-  box.innerHTML = '<div class="roster-head"><div><h3>قائمة فوج ' + esc(g.name) + '</h3>'
+  const coachPhoto = groupCoachPhoto_(g);
+  box.innerHTML = '<div class="roster-head">'
+    + (coachPhoto ? '<img class="roster-coach-photo" src="' + esc(coachPhoto) + '" alt="صورة المدرب">' : '')
+    + '<div><h3>قائمة فوج ' + esc(g.name) + '</h3>'
     + (g.category ? '<p>الفئة: ' + esc(categoryLabel_(g.category)) + '</p>' : '')
     + '<p>الطاقم التدريبي: ' + esc(groupCoachesLine_(g)) + ' · البرنامج: ' + esc(groupScheduleLine_(g)) + '</p></div>'
     + '<div class="roster-count"><b>' + clubDigits(list.length) + '</b><small>سباح</small></div></div>'
@@ -431,6 +529,7 @@ function dayCheckboxes_(selected) {
 function groupEditorHtml_(g) {
   const isNew = !g.id || !(managerGroups_().some(x => String(x.id) === String(g.id)));
   const cats = groupCategories_();
+  const photo = isPhotoValue_(g.coach_photo) ? String(g.coach_photo).trim() : '';
   return '<div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="بيانات الفوج">'
     + '<div class="modal group-modal">'
     + '<button class="close" data-action="close" aria-label="إغلاق">×</button>'
@@ -451,6 +550,18 @@ function groupEditorHtml_(g) {
     + '<label class="field"><span>إلى</span><input id="g-end" type="time" value="' + esc(g.end || '') + '"></label>'
     + '<label class="field"><span>المدرب الرئيسي</span>'
     + '<input id="g-coach" maxlength="120" value="' + esc(g.coach || '') + '"></label>'
+    + '<div class="field wide"><span>صورة المدرب الرئيسي</span>'
+    + '<div class="group-photo-edit">'
+    + '<div class="group-coach-photo" id="g-coach-photo-preview">'
+    + (photo ? '<img src="' + esc(photo) + '" alt="صورة المدرب">' : '<span aria-hidden="true">؟</span>')
+    + '</div>'
+    + '<div class="group-photo-actions">'
+    + '<label class="btn btn-outline">📷 اختيار صورة'
+    + '<input id="g-coach-photo" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>'
+    + '<button type="button" class="check-btn no" id="g-coach-photo-remove" data-action="remove-group-coach-photo"'
+    + (photo ? '' : ' hidden') + '>حذف الصورة</button>'
+    + '<p class="hint">تظهر على بطاقة الفوج وعلى قائمة الفوج المطبوعة. تُصغَّر الصورة تلقائيًا.</p>'
+    + '</div></div></div>'
     + '<label class="field"><span>المساعدون</span>'
     + '<input id="g-assistants" maxlength="240" value="' + esc((g.assistants || []).join('، ')) + '" placeholder="يفصل بينهم فاصلة"></label>'
     + '<label class="field wide"><span>المسبح</span>'
@@ -487,6 +598,7 @@ function readGroupForm_() {
     end: val('#g-end'),
     capacity: Number(val('#g-capacity')) || 0,
     coach: val('#g-coach'),
+    coach_photo: groupDraft_ && isPhotoValue_(groupDraft_.coach_photo) ? String(groupDraft_.coach_photo).trim() : '',
     assistants: val('#g-assistants').split(/[،,]/).map(s => s.trim()).filter(Boolean),
     pool: val('#g-pool'),
     notes: val('#g-notes'),
@@ -624,17 +736,26 @@ function groupCard_(g) {
 
   const helpers = Array.isArray(g.assistants) ? g.assistants.filter(Boolean) : [];
   const days = groupDaysLine_(g);
+  const coachPhoto = groupCoachPhoto_(g);
+  const coachName = String(g.coach || '').trim();
+  const coachInitial = coachName.replace(/^(?:المدرب|مدرب|الأستاذ|استاذ)\s+/, '').trim().charAt(0) || '؟';
 
   return '<article class="group-card" data-group="' + esc(g.id) + '">'
     + '<div class="group-card-head"><span class="stat-icon blue">♟</span>'
     + '<span class="status success">نشط</span>'
     + '</div>'
     + '<h3>' + esc(g.name) + '</h3>'
+    + '<div class="group-coach">'
+    + '<div class="group-coach-photo' + (coachPhoto ? '' : ' is-empty') + '">'
+    + (coachPhoto
+      ? '<img src="' + esc(coachPhoto) + '" alt="صورة المدرب ' + esc(coachName) + '">'
+      : '<span aria-hidden="true">' + esc(coachInitial) + '</span>')
+    + '</div>'
+    + '<div class="group-coach-meta"><small>المدرب الرئيسي</small><b>' + esc(coachName || '—') + '</b>'
+    + (helpers.length ? '<span>مساعدون: ' + esc(helpers.join('، ')) + '</span>' : '')
+    + '</div></div>'
     + (bits.length ? '<div class="group-badges">' + bits.join('') + '</div>' : '')
     + (days ? '<p><b>أيام التدريب:</b> ' + esc(days) + '</p>' : (g.schedule ? '<p><b>البرنامج:</b> ' + esc(g.schedule) + '</p>' : ''))
-    + '<p><b>المدرب الرئيسي:</b> ' + esc(g.coach || '—')
-    + (helpers.length ? ' <span class="group-helpers">· مساعدون: ' + esc(helpers.join('، ')) + '</span>' : '')
-    + '</p>'
     + '<p><b>عدد المنخرطين:</b> ' + clubDigits(members)
     + (capacity ? ' <span class="' + (full ? 'group-over' : 'group-cap') + '">/ السعة ' + clubDigits(capacity) + (full ? ' · تجاوز' : '') + '</span>' : '')
     + '</p>'
@@ -645,6 +766,31 @@ function groupCard_(g) {
     + '</div></article>';
 }
 
+/* توزيع الأسبوع كما تقرأه العين من صفحة الأفواج: عدد الحصص في كل يوم.
+   والبرنامج نفسه يبقى مشتقًّا من الأفواج، لا جدولًا ثانيًا يُكتب بيد. */
+function groupsScheduleSummary_() {
+  const sessions = Array.isArray(state.schedules) ? state.schedules : [];
+  const days = groupDays_();
+  const counts = {};
+  sessions.forEach(s => {
+    const d = String((s && s.day_name) || '').trim();
+    if (!d) return;
+    counts[d] = (counts[d] || 0) + 1;
+  });
+  const activeDays = days.filter(d => counts[d]).length;
+  return '<section class="groups-week" aria-label="التوزيع الأسبوعي للحصص">'
+    + '<div class="groups-week-head"><div><b>التوزيع الأسبوعي</b>'
+    + '<span>' + (sessions.length
+      ? clubDigits(sessions.length) + ' حصة على ' + clubDigits(activeDays) + ' أيام'
+      : 'لا توجد حصص بعد — حدّد أيام وتوقيت كل فوج ثم اضغط «تحديث البرنامج آليًا».')
+    + '</span></div>'
+    + '<button class="check-btn" data-page="schedule">فتح البرنامج ←</button></div>'
+    + '<div class="groups-week-days">' + days.map(d =>
+      '<div class="groups-week-day' + (counts[d] ? ' has' : '') + '">'
+      + '<b>' + esc(d) + '</b><span>' + (counts[d] ? clubDigits(counts[d]) + ' حصة' : '—') + '</span></div>').join('')
+    + '</div></section>';
+}
+
 /* الصفحة كاملة: الشريط، وقائمة الانتظار، والبطاقات، وجدول A4.
 
    والترتيب مقصود: شريط «غير مفرز» يعلو البطاقات، لأن فيه أطفالًا بلا فوج
@@ -653,8 +799,11 @@ pageGroups = function () {
   const all = managerGroups_();
 
   return '<div class="toolbar"><span class="page-description">عرّف الأفواج بفئاتها وأيامها وتوقيتها وطاقمها — وينتشر التعديل على بطاقات المنخرطين فورًا.</span>'
-    + '<div class="toolbar-group">' + printBtn('print-groups', 'طباعة قائمة الأفواج A4')
+    + '<div class="toolbar-group">'
+    + '<button class="btn btn-outline" data-action="sync-schedule">↻ تحديث البرنامج آليًا</button>'
+    + printBtn('print-groups', 'طباعة قائمة الأفواج A4')
     + '<button class="btn btn-primary" data-action="new-group">+ إضافة فوج</button></div></div>'
+    + groupsScheduleSummary_()
     + groupsSourceNote()
     + unassignedBanner_()
     + '<section class="group-grid">'
@@ -680,10 +829,43 @@ pageGroups = function () {
     + '</tbody></table></div></section>';
 };
 
+/* زرّ البرنامج: لا يكتب جدولًا ثانيًا، بل يعيد قراءة البرنامج المشتقّ من
+   الأفواج بعد أي تعديل على الأيام أو التوقيت أو المدرب. */
+async function syncScheduleFromGroups_(el) {
+  const button = el && el.dataset ? el : null;
+  const label = button ? button.textContent : '';
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'جارٍ التحديث…';
+  }
+  try {
+    await syncApi();
+    const count = Array.isArray(state.schedules) ? state.schedules.length : 0;
+    renderPageOnly();
+    showToast(count
+      ? 'تم تحديث البرنامج الأسبوعي آليًا: ' + clubDigits(count) + ' حصة موزعة حسب أيام الأفواج.'
+      : 'تم التحديث، لكن لا توجد حصص: حدّد أيام التدريب وتوقيتها لكل فوج.',
+      count ? 'success' : 'warn');
+  } catch (err) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = label;
+    }
+    showToast('تعذّر تحديث البرنامج — '
+      + ((err && err.message) ? err.message : 'تحقّق من الاتصال.'), 'error');
+  }
+}
+
 const coreActionGroups = action;
 action = async function (a, el) {
   const dataset = (el && el.dataset) || {};
 
+  if (a === 'sync-schedule') { await syncScheduleFromGroups_(el); return; }
+  if (a === 'remove-group-coach-photo') {
+    if (groupDraft_) groupDraft_.coach_photo = '';
+    refreshGroupCoachPhotoPreview_('');
+    return;
+  }
   if (a === 'add-group') { openGroupEditor_(''); return; }
 
   if (a === 'reset-swimmer-filters') {
@@ -730,6 +912,19 @@ action = async function (a, el) {
    و`api` في هذه الطبقة يضيف `group_id` من الاسم تلقائيًا، فلا يُنسى. */
 document.addEventListener('change', (e) => {
   const target = e.target;
+
+  /* صورة المدرب تُقرأ وتُصغَّر قبل الحفظ، وتُعرض في مكانها من الحوار. */
+  if (target && target.id === 'g-coach-photo') {
+    const file = target.files && target.files[0];
+    if (!file) return;
+    readGroupCoachPhoto_(file).then(dataUrl => {
+      if (groupDraft_) groupDraft_.coach_photo = dataUrl;
+      refreshGroupCoachPhotoPreview_(dataUrl);
+    }).catch(err => {
+      showToast((err && err.message) ? err.message : 'تعذّرت قراءة الصورة.', 'error');
+    });
+    return;
+  }
 
   /* حقول محرّر الفوج تُعيد حساب التنبيهات قبل الحفظ، لا بعده. */
   if (target && /^g-/.test(target.id || '')) { refreshDraftWarnings_(); return; }

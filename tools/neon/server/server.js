@@ -1276,6 +1276,11 @@ function normalizeGroup(item, index) {
     : String((item && item.days) || '').split(/[،,]/).map(d => d.trim()).filter(d => WEEKDAYS.includes(d));
   const hhmm = v => (/^\d{1,2}:\d{2}$/.test(String(v || '').trim()) ? String(v).trim() : '');
   const capacity = Number(item && item.capacity);
+  /* صورة المدرب اختيارية، وتُقبل كصورة مضمّنة أو رابط. والصورة المضمّنة
+     تُصغَّر في الصفحة قبل الإرسال، وهذا الحدّ يحمي القائمة من قيمة شاذّة. */
+  const coachPhoto = String((item && item.coach_photo) || '').trim();
+  const coachPhotoOk = /^(data:image\/(jpeg|png|webp);base64,|https?:)/.test(coachPhoto)
+    && coachPhoto.length <= 512 * 1024;
   return {
     id: String((item && item.id) || '').replace(/[^\w-]/g, '_') || ('grp-' + (index + 1)),
     name: name,
@@ -1285,6 +1290,7 @@ function normalizeGroup(item, index) {
     end: hhmm(item && item.end),
     capacity: Number.isFinite(capacity) && capacity > 0 ? Math.min(500, Math.round(capacity)) : 0,
     coach: String((item && item.coach) || '').trim().slice(0, 120),
+    coach_photo: coachPhotoOk ? coachPhoto : '',
     /* مساعد واحد على الأقل يُقبل مفردًا، والقائمة تُنظَّف من الفراغ والتكرار. */
     assistants: [...new Set(
       (Array.isArray(item && item.assistants)
@@ -1760,10 +1766,21 @@ ROUTES['DELETE /api/notices'] = noticeEditOrDelete;
    أيامه وساعته ومدربه ومسبحه، فتتغيّر الحصة بتغيّر الفوج ولا تتناقض نسختان.
    والجدول القديم `schedules` يبقى احتياطًا للبيانات التي لم تُفوج بعد. */
 ROUTES['GET /api/schedule'] = async (req, res) => {
-  const groupRows = await D.all('select * from sadara.groups');
-  const groups = groupRows
-    .map(r => Object.assign({ id: D.idOf(r.firestore_path) }, D.doc(r)))
-    .filter(g => g && g.name && g.deleted !== true && g.active !== false);
+  /* `config/groups` هو ما يكتبه المسير، وهو المرجع الوحيد للأفواج. والقراءة
+     من جدول `groups` وحده كانت تعطي برنامجًا فارغًا بعد كل حفظ، لأن الحفظ
+     يكتب القائمة في `config/groups` لا في الجدول. والجدول يبقى احتياطًا
+     للبيانات القديمة التي لم تُنقل بعد. */
+  const data = (await readRaw('config', "firestore_path='config/groups'", [])) || {};
+  const stored = Array.isArray(data.groups) ? data.groups : [];
+  let groups = stored
+    .filter(g => g && g.name && g.deleted !== true && g.active !== false)
+    .map(g => Object.assign({}, g));
+  if (!groups.length) {
+    const groupRows = await D.all('select * from sadara.groups');
+    groups = groupRows
+      .map(r => Object.assign({ id: D.idOf(r.firestore_path) }, D.doc(r)))
+      .filter(g => g && g.name && g.deleted !== true && g.active !== false);
+  }
   const sessions = [];
   for (const g of groups) {
     const days = Array.isArray(g.days) && g.days.length
