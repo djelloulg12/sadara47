@@ -1524,7 +1524,9 @@ const SWIMMER_COLUMNS = new Set([
   'membership_no', 'registration_id', 'name', 'first_name_ar', 'last_name_ar',
   'birth_date', 'gender', 'blood_group', 'level', 'phone', 'whatsapp', 'national_id',
   'guardian_national_id', 'guardian_account_uid',
+  'guardian_first_name', 'guardian_last_name', 'guardian_phone',
   'facility', 'group_name', 'group_id', 'address', 'email', 'photo', 'status', 'active',
+  'from_application', 'applicant_uid',
   'updated_at', 'created_at'
 ]);
 /* أعمدة الطلب التي يحملها الولي، تُحدَّث حين يُعدَّل الولي من بطاقة السباح. */
@@ -1872,7 +1874,9 @@ const APPLICATION_COLUMNS = new Set([
   'swimming_strokes', 'transport', 'uniform', 'transport_amount', 'uniform_amount',
   'payment_method', 'expected_amount', 'membership_no', 'registration_id',
   'national_id_key', 'duplicate_key', 'submitted_from', 'submitted_at',
-  'created_at', 'updated_at', 'notes', 'photo', 'returning_account'
+  'created_at', 'updated_at', 'notes', 'photo', 'returning_account',
+  'reviewed_by', 'decided_at', 'rejection_reason', 'decision_reason',
+  'transferred_to', 'transferred_at', 'scan_name', 'scan_path'
 ]);
 
 /* رقم طلب فريد بالشكل الذي تعرفه الصفحة: APP-YYYYMMDD-XXXX. */
@@ -2010,6 +2014,227 @@ ROUTES['POST /api/applications'] = async (req, res, body) => {
     guardian_linked: linked,
     family_national_id: guardianNin
   }, 201);
+};
+
+/* هل بقي للصاحب طلب مقبول آخر؟ رفض طلب مكرّر لا يُغلق الباب الذي فتحه
+   طلب سابق مقبول. */
+async function accountAcceptedElsewhere(uid, exceptId) {
+  if (!uid) return false;
+  const rows = await D.all(
+    'select firestore_path, raw from sadara.applications where applicant_uid=$1', [uid]);
+  return rows.some(row => {
+    const id = D.idOf(row.firestore_path);
+    const app = D.doc(row) || {};
+    return id !== exceptId && (app.status === 'approved' || !!app.transferred_to);
+  });
+}
+
+/* قرار المدير على طلب: اعتماد أو رفض، مع تسجيل من قرّر ومتى.
+   والاعتماد لا يغيّر الحالة وحدها: يصنع السباح تحت معرّف الطلب نفسه، فيكون
+   الاعتماد مرتين تحديثًا لشخص واحد لا سباحين. */
+ROUTES['PATCH /api/applications/:id'] = async (req, res, body, url) => {
+  const gate = await managerGate(req, 'صلاحية رئيس النادي مطلوبة');
+  if (gate.error) return sendJSON(res, { error: gate.error }, gate.status);
+
+  const id = decodeURIComponent(String(url.pathname.split('/').pop() || ''));
+  if (!id) return sendJSON(res, { error: 'معرّف الطلب مطلوب.' }, 400);
+  const appPath = 'applications/' + id;
+  const row = await D.one('select * from sadara.applications where firestore_path=$1', [appPath]);
+  if (!row) return sendJSON(res, { error: 'الطلب غير موجود.' }, 404);
+  const stored = Object.assign({ id: id }, D.doc(row));
+
+  body = normaliseIncoming(body || {});
+  const patch = Object.assign({}, body);
+  delete patch.id;
+  /* الصورة الموقّعة تُحفظ في مسارها، ولا يُكتب نسخها المضمّن في الصف. */
+  delete patch.scan_data_url;
+  /* من قرّر ومتى يُكتبان عند القرار فقط، لا مع كل تعديل. */
+  delete patch.reviewed_by;
+  delete patch.decided_at;
+  if (patch.status !== undefined
+    && ['pending', 'approved', 'rejected'].indexOf(String(patch.status)) === -1) {
+    return sendJSON(res, { error: 'حالة الطلب غير معروفة.' }, 400);
+  }
+
+  const now = new Date().toISOString();
+  const isDecision = patch.status === 'approved' || patch.status === 'rejected';
+  if (isDecision) {
+    patch.reviewed_by = gate.user.id;
+    patch.decided_at = now;
+  }
+
+  /* سبب الرفض شرط قبل أي كتابة: رفض بلا سبب يُردّ 400، ولا يجوز أن يكون
+     الطلب قد صار مرفوضًا في القاعدة رغم ذلك. */
+  if (patch.status === 'rejected') {
+    const why = String(patch.rejection_reason || stored.rejection_reason || '').trim();
+    if (!why) {
+      return sendJSON(res, {
+        error: 'اكتب سبب الرفض قبل رفض الطلب — صاحب الطلب يقرأه عند محاولته الدخول.'
+      }, 400);
+    }
+  }
+
+  /* المبلغ يُحسب على الطلب كما هو بعد التعديل، لا على الحقول المرسلة وحدها:
+     مدير يضيف خدمة إلى طلب قائم يجب أن يرى سعر الخطة الأصلية مضافًا إليها. */
+  if ('subscription_code' in patch || 'transport' in patch || 'uniform' in patch) {
+    const merged = Object.assign({}, stored, patch);
+    const planRows = await D.all('select * from sadara.subscription_plans');
+    const plans = planRows.map(r => Object.assign({ id: D.idOf(r.firestore_path) }, D.doc(r)));
+    const code = String(merged.subscription_code || '');
+    const plan = plans.find(p => String(p.code || p.id || '') === code)
+      || DEFAULT_PLANS.find(p => String(p.code) === code);
+    let expected = Number(plan && plan.amount) || 0;
+    const extras = (await readRaw('fee_settings', "firestore_path='fee_settings/extras'", [])) || {};
+    if (merged.transport) expected += feeFor(extras, merged, 'transport').amount;
+    if (merged.uniform) expected += feeFor(extras, merged, 'uniform').amount;
+    patch.expected_amount = expected;
+  }
+
+  if (patch.payment_status === 'paid') {
+    await mergeRaw('payments', 'payments/' + newId(), {
+      application_no: patch.application_no || stored.application_no || id,
+      amount: Number(patch.expected_amount !== undefined ? patch.expected_amount : stored.expected_amount) || 0,
+      method: patch.payment_method || stored.payment_method || 'cash',
+      paid_at: patch.paid_at || now.slice(0, 10),
+      cashier_name: patch.cashier_name || '',
+      recorded_by: gate.user.id,
+      created_at: now
+    });
+  }
+
+  const write = Object.assign({}, patch, { updated_at: now });
+  await mergeRaw('applications', appPath, write);
+  await writeTyped('applications', appPath, write, APPLICATION_COLUMNS);
+
+  if (patch.status === 'approved') {
+    const src = Object.assign({}, stored, write);
+    /* رقم الانخراط يُقرأ من الطلب إن كان صالحًا، وإلا يُولَّد الآن. والاعتماد
+       مرتين لا يستهلك رقمين: المسار واحد والرقم المحفوظ يُعاد استعماله. */
+    const membership = /^S[0-9]{4}[12][0-9]{4}$/.test(String(src.membership_no || ''))
+      ? String(src.membership_no)
+      : await nextSwimmerNumber(src.birth_date, src.category);
+    const adult = isAdultPerson(src);
+    const ownNin = normalizeNIN(src.national_id);
+    const guardianNin = adult
+      ? ownNin
+      : normalizeNIN(src.guardian_national_id || src.family_national_id);
+    const swimmerPath = 'swimmers/' + id;
+    const swimmer = {
+      membership_no: membership,
+      registration_id: membership,
+      name: [src.first_name_ar, src.last_name_ar].filter(Boolean).join(' '),
+      first_name_ar: src.first_name_ar || '',
+      last_name_ar: src.last_name_ar || '',
+      birth_date: src.birth_date || '',
+      gender: src.gender || '',
+      blood_group: src.blood_group || '',
+      level: src.level || '',
+      phone: src.phone || '',
+      whatsapp: src.whatsapp || '',
+      facility: src.facility || '',
+      group_name: src.group_name || 'غير مفرز',
+      group_id: src.group_id || '',
+      national_id: ownNin,
+      guardian_national_id: guardianNin,
+      guardian_account_uid: src.guardian_account_uid || src.account_uid || '',
+      guardian_first_name: adult ? '' : (src.guardian_first_name || ''),
+      guardian_last_name: adult ? '' : (src.guardian_last_name || ''),
+      guardian_phone: adult ? '' : (src.guardian_phone || ''),
+      photo: src.photo || src.photo_url || '',
+      status: 'active',
+      active: true,
+      from_application: id,
+      applicant_uid: src.applicant_uid || '',
+      created_at: now,
+      updated_at: now
+    };
+    if (adult) {
+      /* البالغ وليٌّ على نفسه: لا تُنسخ بيانات وليّه الشخصية إلى بطاقته. */
+      delete swimmer.guardian_first_name;
+      delete swimmer.guardian_last_name;
+      delete swimmer.guardian_phone;
+    }
+    await mergeRaw('swimmers', swimmerPath, swimmer);
+    await writeTyped('swimmers', swimmerPath, swimmer, SWIMMER_COLUMNS);
+
+    await mergeRaw('applications', appPath, {
+      membership_no: membership, registration_id: membership,
+      transferred_to: id, transferred_at: now, updated_at: now
+    });
+    await writeTyped('applications', appPath, {
+      membership_no: membership, registration_id: membership,
+      transferred_to: id, transferred_at: now, updated_at: now
+    }, APPLICATION_COLUMNS);
+
+    if (src.applicant_uid) {
+      await D.run(`update sadara.users
+          set request_status='accepted', member_no=$1, registration_id=$1,
+              decided_at=$2, raw = raw || $3::jsonb
+        where uid=$4`,
+        [membership, now, JSON.stringify({
+          request_status: 'accepted', member_no: membership,
+          registration_id: membership, decided_at: now,
+          rejection_reason: '', request_reason: ''
+        }), src.applicant_uid]);
+    }
+
+    await mergeRaw('audit_logs', 'audit_logs/' + newId(), {
+      action: 'application_approved', by: gate.user.id, target: id,
+      entity_type: 'application', entity_id: id,
+      details: { membership_no: membership, name: swimmer.name },
+      created_at: now
+    });
+    return sendJSON(res, {
+      ok: true, id: id, status: 'approved',
+      membership_no: membership,
+      expected_amount: patch.expected_amount !== undefined ? patch.expected_amount : stored.expected_amount
+    });
+  }
+
+  if (patch.status === 'rejected') {
+    const why = String(patch.rejection_reason || stored.rejection_reason || '').trim();
+    /* طلب كان مقبولًا ثم رُفض: لا يُمحى السباح. يُوسم مرفوضًا ويُخفى من
+       القوائم النشطة، لأن القاعدة هنا لا تحذف صفّ سباح أبدًا. */
+    if (stored.transferred_to) {
+      const swimmerPath = 'swimmers/' + stored.transferred_to;
+      const off = { status: 'rejected', active: false, updated_at: now };
+      await mergeRaw('swimmers', swimmerPath, off);
+      await writeTyped('swimmers', swimmerPath, off, SWIMMER_COLUMNS);
+      await mergeRaw('applications', appPath, {
+        transferred_to: '', transferred_at: null, updated_at: now
+      });
+      await writeTyped('applications', appPath, {
+        transferred_to: '', transferred_at: null, updated_at: now
+      }, APPLICATION_COLUMNS);
+    }
+    const accountStaysOpen = await accountAcceptedElsewhere(stored.applicant_uid, id);
+    if (stored.applicant_uid && !accountStaysOpen) {
+      await D.run(`update sadara.users
+          set request_status='rejected', request_reason=$1, decided_at=$2,
+              raw = raw || $3::jsonb
+        where uid=$4`,
+        [why, now, JSON.stringify({
+          request_status: 'rejected', rejection_reason: why, request_reason: why,
+          decided_at: now
+        }), stored.applicant_uid]);
+    }
+    await mergeRaw('audit_logs', 'audit_logs/' + newId(), {
+      action: 'application_rejected', by: gate.user.id, target: id,
+      entity_type: 'application', entity_id: id,
+      details: { reason: why, account_left_open: accountStaysOpen },
+      created_at: now
+    });
+    return sendJSON(res, {
+      ok: true, id: id, status: 'rejected',
+      expected_amount: patch.expected_amount !== undefined ? patch.expected_amount : stored.expected_amount,
+      account_left_open: accountStaysOpen
+    });
+  }
+
+  return sendJSON(res, {
+    ok: true, id: id,
+    expected_amount: patch.expected_amount !== undefined ? patch.expected_amount : stored.expected_amount
+  });
 };
 
 /* قائمة المدير قائمة أشخاص: وثيقة تحمل اسمًا محجوزًا لا شخصًا تنتظر، فتُستثنى. */
@@ -2203,10 +2428,13 @@ async function handleAPI(req, res, url) {
   /* المسارات الثابتة تُبحث أولًا، ثم ذوات المعامل. `DELETE /api/users/:uid`
      يحمل معرّف الحساب في العنوان نفسه، كما كان في المحوّل. */
   const handler = ROUTES[key]
+    || (req.method === 'PATCH' && /^\/api\/applications\/[^/]+$/.test(url.pathname)
+      ? ROUTES['PATCH /api/applications/:id'] : null)
     || (req.method === 'DELETE' && /^\/api\/users\/[^/]+$/.test(url.pathname)
       ? ROUTES['DELETE /api/users/:uid'] : null);
   if (!handler) return sendJSON(res, { error: 'مسار غير معروف' }, 404);
-  const body = (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE')
+  const body = (req.method === 'POST' || req.method === 'PUT'
+    || req.method === 'PATCH' || req.method === 'DELETE')
     ? await readBody(req) : {};
   try {
     await handler(req, res, body, url);

@@ -245,6 +245,16 @@ const baseSeed = user => ({
   check(SERVER_MODULE.normalizeNIN('109831491') === '',
     '[6] a legacy nine-digit number is treated as a complete NIN');
 
+  /* قرار المدير على الطلب: المسار موجود، ويقرأ جسم PATCH، ويصنع السباح. */
+  check(/ROUTES\['PATCH \/api\/applications\/:id'\]/.test(SERVER),
+    '[6] the manager decision route PATCH /api/applications/:id is missing');
+  check(/req\.method === 'PATCH'/.test(SERVER),
+    '[6] PATCH bodies are never read by the server');
+  check(/from_application: id/.test(SERVER) && /nextSwimmerNumber\(src\.birth_date/.test(SERVER),
+    '[6] approving an application does not create the swimmer and its number');
+  check(/اكتب سبب الرفض/.test(SERVER),
+    '[6] a request can be rejected without a reason');
+
   check(/const nin = normalizeNIN\(typed\)/.test(SERVER),
     '[6] sign-in does not normalise the typed identifier as a NIN');
   check(/where national_id=\$1/.test(SERVER),
