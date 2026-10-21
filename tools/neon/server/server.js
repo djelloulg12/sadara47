@@ -2167,15 +2167,25 @@ ROUTES['PATCH /api/applications/:id'] = async (req, res, body, url) => {
     }, APPLICATION_COLUMNS);
 
     if (src.applicant_uid) {
+      /* حساب الولي ليس بطاقة الابن: رقم الابن يُكتب على حسابه هو فقط حين
+         يكون مقدّم الطلب بالغًا يسجّل نفسه. أما وليٌّ سجّل قاصرًا فيبقى رقمه
+         (أو فراغه) كما هو، ولوحة العائلة هي التي تعرض رقم الابن. */
+      const selfApplicant = String(src.category || '').toLowerCase() === 'adult';
+      const accountRaw = {
+        request_status: 'accepted', decided_at: now,
+        rejection_reason: '', request_reason: ''
+      };
+      if (selfApplicant) {
+        accountRaw.member_no = membership;
+        accountRaw.registration_id = membership;
+      }
       await D.run(`update sadara.users
-          set request_status='accepted', member_no=$1, registration_id=$1,
+          set request_status='accepted',
+              member_no = case when $5 then $1 else member_no end,
+              registration_id = case when $5 then $1 else registration_id end,
               decided_at=$2, raw = raw || $3::jsonb
         where uid=$4`,
-        [membership, now, JSON.stringify({
-          request_status: 'accepted', member_no: membership,
-          registration_id: membership, decided_at: now,
-          rejection_reason: '', request_reason: ''
-        }), src.applicant_uid]);
+        [membership, now, JSON.stringify(accountRaw), src.applicant_uid, selfApplicant]);
     }
 
     await mergeRaw('audit_logs', 'audit_logs/' + newId(), {
