@@ -89,6 +89,16 @@ jobs:
       # written, reviewed, committed -- and a single missing brace would have sat
       # here until somebody deployed it and the database refused to start.
       #
+      # firebase-tools refuses any JDK below 21. The runner's preinstalled Java is
+      # older, so the emulator used to fail before it ever looked at the rules:
+      # every push was red and nothing reached Hosting. Install the JDK the tool
+      # actually supports, then compile the rules for real.
+      - name: Java 21 for the Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       # The Firestore emulator compiles the rules when it boots, so starting it and
       # stopping it again is the whole test. It is skipped, not failed, where there
       # is no Java, so a fork on a bare runner stays green rather than red for a
