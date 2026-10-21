@@ -1982,7 +1982,7 @@ ROUTES['POST /api/applications'] = async (req, res, body) => {
     guardian_national_id: guardianNin,
     family_national_id: guardianNin,
     guardian_linked: linked,
-    guardian_account_uid: account ? account.id : '',
+    guardian_account_uid: familyAccountUid,
     national_id: ownNin,
     national_id_key: ownNin,
     duplicate_key: duplicateKey,
