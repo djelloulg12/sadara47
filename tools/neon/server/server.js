@@ -2484,9 +2484,18 @@ const server = http.createServer(async (req, res) => {
      كذلك. */
   lastRequestAt_ = Date.now();
 
-  /* الملفات الثابتة: نفس مجلد النشر. */
+  /* الملفات الثابتة: نفس مجلد النشر.
+     والمجلد يُقدَّم بصفحته الافتراضية: `/istimara/` كان يصل إلى الخادم كمسار
+     مجلد، و`readFile` على مجلد يردّ 404. فيبقى رابط الاستمارة يعمل على Firebase
+     ولا يعمل على Render. والربط هنا يحلّ الأمر للمنصتين معًا. */
   let rel = decodeURIComponent(url.pathname);
   if (rel === '/') rel = '/index.html';
+  if (rel.endsWith('/')) {
+    rel += 'index.html';
+  } else if (!path.extname(rel)) {
+    const asIndex = rel + '/index.html';
+    if (fs.existsSync(path.join(PUBLIC_DIR, asIndex))) rel = asIndex;
+  }
   const file = path.join(PUBLIC_DIR, rel);
   if (!file.startsWith(PUBLIC_DIR)) { res.writeHead(403); res.end('forbidden'); return; }
 

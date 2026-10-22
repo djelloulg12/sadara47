@@ -127,6 +127,11 @@ const lock = JSON.parse(read('package-lock.json'));
     errors.push('the server no longer serves the site files, so it is not the single '
       + 'process this platform deploys as');
   }
+  /* والمجلد يُقدَّم بصفحته الافتراضية: `/istimara/` رابط الاستمارة الرسمي. */
+  if (!/rel\.endsWith\('\/'\)[\s\S]{0,160}index\.html/.test(server)) {
+    errors.push('the static server does not map a directory to its index page, so '
+      + 'the registration link /istimara/ returns 404 on Render');
+  }
   if (!/process\.env\.PORT/.test(server)) {
     errors.push('the server ignores PORT, so a host that assigns one cannot reach it');
   }
